@@ -13,8 +13,11 @@ export interface SessionState {
   hasProviderProfile: boolean;
   /** Client's last known position — Avondale by default, matching the handoff's seed. */
   location: LatLng;
+  /** Gates the one-time offline map-tile download (plan §5/§9 item 18) — stands in for "first login" until auth exists. */
+  hasDownloadedOfflinePack: boolean;
   setActiveRole: (role: ActiveRole) => void;
   setLocation: (location: LatLng) => void;
+  setHasDownloadedOfflinePack: (value: boolean) => void;
 }
 
 const AVONDALE: LatLng = { lat: -17.7955, lng: 31.033 };
@@ -30,8 +33,10 @@ export const useSessionStore = create<SessionState>()(
       activeRole: 'client',
       hasProviderProfile: false,
       location: AVONDALE,
+      hasDownloadedOfflinePack: false,
       setActiveRole: (activeRole) => set({ activeRole }),
       setLocation: (location) => set({ location }),
+      setHasDownloadedOfflinePack: (hasDownloadedOfflinePack) => set({ hasDownloadedOfflinePack }),
     }),
     {
       name: 'sc-session',
