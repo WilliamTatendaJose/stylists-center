@@ -11,15 +11,488 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ActiveRole {
+  client
+  provider
+}
+
+enum VerificationStatus {
+  unverified
+  pending
+  verified
+}
+
+/// Mirrors @sc/shared's PaymentMethod exactly — never drift these two.
+enum PaymentMethod {
+  ecocash
+  cash
+}
+
+/// Mirrors @sc/shared's BookingStatus exactly.
+enum BookingStatus {
+  awaiting_provider
+  confirmed
+  completed
+  declined
+  cancelled
+}
+
+/// Mirrors @sc/shared's MatchState exactly (domain/match.ts's canTransition table).
+enum MatchState {
+  pending
+  offered
+  accepted
+  confirmed
+  expired
+  declined
+  no_show
+}
+
+enum BudgetMode {
+  flex
+  fixed
+}
+
+/// Mirrors @sc/shared's ReportReason exactly.
+enum ReportReason {
+  no_show
+  misconduct
+  safety
+  other
+}
+
+enum ReportStatus {
+  open
+  reviewing
+  resolved
+}
+
+enum BanTrigger {
+  automatic
+  manual
+}
+
+enum AppealStatus {
+  none
+  requested
+  upheld
+  overturned
+}
+
+/// Mirrors @sc/shared's referralStatusSchema exactly.
+enum ReferralStatus {
+  pending
+  paid
+}
+
+enum WalletTxnType {
+  referral_coin
+  cash_out
+  adjustment
+}
+
+/// Mirrors @sc/shared's ProviderProfileDto priceDisplay field exactly.
+enum PriceDisplay {
+  list
+  from
+}
+
+/// A city-scoped deployment boundary (plan §6 multi-city NFR) — every geo
+/// query is scoped by cityId AND radius, so a future second city can't leak
+/// into another's search results by a shared coordinate space alone.
+model City {
+  id          String   @id @default(uuid())
+  name        String
+  timezone    String
+  centroidLat Float
+  centroidLng Float
+  bboxWest    Float
+  bboxSouth   Float
+  bboxEast    Float
+  bboxNorth   Float
+  createdAt   DateTime @default(now())
+
+  users     User[]
+  providers ProviderProfile[]
+
+  @@index([name])
+}
+
+/// Base identity. Phone-first, no email/password (plan §6 auth). `tokenVersion`
+/// is bumped on a ban so every live session's JWT is invalidated instantly
+/// without needing a revocation list lookup per request.
+model User {
+  id                 String             @id @default(uuid())
+  phone              String             @unique
+  displayName        String
+  activeRole         ActiveRole         @default(client)
+  verificationStatus VerificationStatus @default(unverified)
+  tokenVersion       Int                @default(0)
+  cityId             String
+  city               City               @relation(fields: [cityId], references: [id])
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  providerProfile ProviderProfile?
+  agent           Agent?
+
+  matchRequests       MatchRequest[]
+  bookingsAsClient    Booking[]           @relation("BookingClient")
+  reviewsGiven        Review[]            @relation("ReviewRater")
+  reviewsReceived     Review[]            @relation("ReviewRatee")
+  reportsFiled        Report[]            @relation("ReportReporter")
+  reportsReceived     Report[]            @relation("ReportReported")
+  noShowRecords       NoShowRecord[]
+  bans                Ban[]
+  conversationsAsA    Conversation[]      @relation("ConversationClient")
+  conversationsAsB    Conversation[]      @relation("ConversationProvider")
+  messages            Message[]
+  walletTransactions  WalletTransaction[]
+  refreshTokenRecords RefreshToken[]
+  auditLogEntries     AuditLog[]
+
+  @@index([cityId])
+}
+
+/// One row per user who has completed provider onboarding. `salonCreatedAt`
+/// feeds the 30-day new-salon-visibility cap (SRS §7 risk table); NULL for
+/// an individual (non-salon) provider, where that cap doesn't apply.
+///
+/// `latitude`/`longitude` are the only geo columns Prisma manages — the
+/// generated `location geography(Point,4326)` column and its GIST index are
+/// added by a hand-written migration (plan §6) precisely so the app can never
+/// write a `location` that disagrees with these two decimals.
+model ProviderProfile {
+  id                 String       @id @default(uuid())
+  userId             String       @unique
+  user               User         @relation(fields: [userId], references: [id])
+  displayName        String
+  tint               String
+  initials           String
+  categoryId         String
+  category           Category     @relation(fields: [categoryId], references: [id])
+  areaName           String
+  latitude           Float
+  longitude          Float
+  cityId             String
+  city               City         @relation(fields: [cityId], references: [id])
+  yearsExperience    Int          @default(0)
+  portfolioImageUrls String[]     @default([])
+  priceDisplay       PriceDisplay @default(list)
+  fromPriceUsdCents  Int?
+  workingHoursLabel  String
+  verified           Boolean      @default(false)
+  ratingAvg          Float        @default(0)
+  completedCount     Int          @default(0)
+  salonCreatedAt     DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  services Service[]
+  offers   MatchOffer[]
+  bookings Booking[]
+  trips    Trip[]
+
+  @@index([categoryId])
+  @@index([cityId])
+}
+
+model Service {
+  id              String          @id @default(uuid())
+  providerId      String
+  provider        ProviderProfile @relation(fields: [providerId], references: [id])
+  name            String
+  durationMinutes Int
+  priceUsdCents   Int
+  createdAt       DateTime        @default(now())
+
+  bookings Booking[]
+
+  @@index([providerId])
+}
+
+/// Self-referencing for a future hierarchical taxonomy (SRS §5.4); flat for
+/// every M1 category.
+model Category {
+  id       String     @id @default(uuid())
+  name     String
+  parentId String?
+  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children Category[] @relation("CategoryHierarchy")
+
+  providers ProviderProfile[]
+  matches   MatchRequest[]
+
+  @@index([parentId])
+}
+
+/// A client's smart-match search. `radiusKm` climbs the ladder [1,3,8] on
+/// retry; the server recomputes and rejects a client-supplied value that
+/// disagrees (plan §6) — this column just records what was actually used.
+model MatchRequest {
+  id                   String     @id @default(uuid())
+  clientId             String
+  client               User       @relation(fields: [clientId], references: [id])
+  categoryId           String
+  category             Category   @relation(fields: [categoryId], references: [id])
+  budgetMode           BudgetMode
+  budgetAmountUsdCents Int?
+  radiusKm             Int
+  state                MatchState @default(pending)
+  attempt              Int        @default(1)
+  expiresAt            DateTime
+  fanOutCount          Int        @default(0)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  offers   MatchOffer[]
+  bookings Booking[]
+
+  @@index([clientId])
+  @@index([state])
+}
+
+/// One row per provider fanned out to for a MatchRequest. `respondBy` is the
+/// per-offer 30s answer window (plan §6, OFFER_RESPONSE_TTL_SECONDS).
+model MatchOffer {
+  id             String          @id @default(uuid())
+  matchRequestId String
+  matchRequest   MatchRequest    @relation(fields: [matchRequestId], references: [id])
+  providerId     String
+  provider       ProviderProfile @relation(fields: [providerId], references: [id])
+  state          MatchState      @default(offered)
+  quoteUsdCents  Int
+  respondBy      DateTime
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([matchRequestId, providerId])
+  @@index([matchRequestId])
+  @@index([providerId])
+}
+
+/// `reference` is the client-facing "SC-4471" code (formatBookingReference in
+/// @sc/shared). Cash bookings sit in `confirmed` until both confirmation
+/// flags are true (needsCashReconciliation in @sc/shared) — that double
+/// confirmation is the only signal the platform has that a cash booking
+/// happened at all.
+model Booking {
+  id                  String          @id @default(uuid())
+  reference           String          @unique
+  clientId            String
+  client              User            @relation("BookingClient", fields: [clientId], references: [id])
+  providerId          String
+  provider            ProviderProfile @relation(fields: [providerId], references: [id])
+  serviceId           String
+  service             Service         @relation(fields: [serviceId], references: [id])
+  matchRequestId      String?
+  matchRequest        MatchRequest?   @relation(fields: [matchRequestId], references: [id])
+  startsAt            DateTime
+  paymentMethod       PaymentMethod
+  status              BookingStatus   @default(awaiting_provider)
+  priceUsdCents       Int
+  confirmedByClient   Boolean         @default(false)
+  confirmedByProvider Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  payments Payment[]
+  reviews  Review[]
+  reports  Report[]
+  trips    Trip[]
+
+  @@index([clientId])
+  @@index([providerId])
+  @@index([status])
+}
+
+/// Append-only escrow ledger (plan §6). Never mutate a row in place — a
+/// refund or release is a NEW row referencing the same booking, not an
+/// update, so the ledger stays a true audit trail.
+model Payment {
+  id             String   @id @default(uuid())
+  bookingId      String
+  booking        Booking  @relation(fields: [bookingId], references: [id])
+  provider       String // 'ecocash' (FakeEcoCashAdapter in M1) — a string, not an enum, so a second gateway is a new value, not a migration
+  status         String // held | released | refunded | failed
+  amountUsdCents Int
+  feeUsdCents    Int      @default(0)
+  externalRef    String?
+  createdAt      DateTime @default(now())
+
+  @@index([bookingId])
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  bookingId String
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  raterId   String
+  rater     User     @relation("ReviewRater", fields: [raterId], references: [id])
+  rateeId   String
+  ratee     User     @relation("ReviewRatee", fields: [rateeId], references: [id])
+  rating    Int
+  text      String?
+  createdAt DateTime @default(now())
+
+  @@index([bookingId])
+  @@index([rateeId])
+}
+
+model Report {
+  id         String       @id @default(uuid())
+  reporterId String
+  reporter   User         @relation("ReportReporter", fields: [reporterId], references: [id])
+  reportedId String
+  reported   User         @relation("ReportReported", fields: [reportedId], references: [id])
+  bookingId  String?
+  booking    Booking?     @relation(fields: [bookingId], references: [id])
+  reason     ReportReason
+  status     ReportStatus @default(open)
+  createdAt  DateTime     @default(now())
+
+  @@index([reportedId])
+}
+
+/// Counts toward the 5-strike automatic ban (trust.ts NO_SHOW_COUNT_FOR_AUTO_BAN)
+/// independent of admin review — a counted fact, not a judgement call.
+model NoShowRecord {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  bookingId String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Ban {
+  id           String       @id @default(uuid())
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  reason       String
+  trigger      BanTrigger
+  appealStatus AppealStatus @default(none)
+  createdAt    DateTime     @default(now())
+
+  @@index([userId])
+}
+
+/// One conversation per client/provider pair — the handoff's chat model is
+/// strictly 1:1, not a group thread.
+model Conversation {
+  id             String   @id @default(uuid())
+  clientId       String
+  client         User     @relation("ConversationClient", fields: [clientId], references: [id])
+  providerUserId String
+  providerUser   User     @relation("ConversationProvider", fields: [providerUserId], references: [id])
+  lastMessageAt  DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  messages Message[]
+
+  @@unique([clientId, providerUserId])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  authorId       String
+  author         User         @relation(fields: [authorId], references: [id])
+  text           String
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId])
+}
+
+/// A verified agent's referral identity. `status` gates whether the agent is
+/// currently allowed to earn (SRS §7: fraud mitigation can suspend an agent
+/// without deleting their history).
+model Agent {
+  id                 String             @id @default(uuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id])
+  referralCode       String             @unique
+  verificationStatus VerificationStatus @default(unverified)
+  status             String             @default("active") // active | suspended
+  createdAt          DateTime           @default(now())
+
+  referrals Referral[]
+}
+
+model Referral {
+  id           String         @id @default(uuid())
+  agentId      String
+  agent        Agent          @relation(fields: [agentId], references: [id])
+  referredName String
+  coinsAwarded Int
+  status       ReferralStatus @default(pending)
+  createdAt    DateTime       @default(now())
+
+  @@index([agentId])
+}
+
+/// Every coin movement, in and out — cash-out unlocks once the sum for a
+/// user exceeds CASH_OUT_MIN_USD_CENTS (@sc/shared/domain/money.ts).
+model WalletTransaction {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  type      WalletTxnType
+  coins     Int
+  usdCents  Int
+  reference String?
+  createdAt DateTime      @default(now())
+
+  @@index([userId])
+}
+
+/// Live trip state (plan risk R8 — Data Protection Act). Deliberately holds
+/// only the LATEST position, never a track history, and hard-terminates on
+/// check-in; foreground-only on the client, which is also what keeps this
+/// out of the Play Store's background-location policy review.
+model Trip {
+  id          String          @id @default(uuid())
+  bookingId   String
+  booking     Booking         @relation(fields: [bookingId], references: [id])
+  providerId  String
+  provider    ProviderProfile @relation(fields: [providerId], references: [id])
+  mode        String // 'client' | 'provider'
+  lastLat     Float?
+  lastLng     Float?
+  arrived     Boolean         @default(false)
+  etaSharedAt DateTime?
+  checkedInAt DateTime?
+  startedAt   DateTime        @default(now())
+
+  @@index([bookingId])
+}
+
+/// Rotated on every refresh-token use, with reuse detection (plan §6): a
+/// replayed token revokes the whole family by deleting every row sharing
+/// `familyId`.
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  familyId  String
+  tokenHash String   @unique
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([familyId])
+}
+
 /// Append-only audit trail (SRS NFR: "all admin actions logged with actor and
 /// timestamp"). Written by a global interceptor, never mutated after insert.
-/// The only model in the M1 scaffold — the full entity set (User,
-/// ProviderProfile, Booking, MatchRequest, ...) is Phase 3 work; this exists
-/// now purely to prove the Postgres connection and the audit interceptor work
-/// end to end.
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
   action     String
   targetType String?
   targetId   String?
