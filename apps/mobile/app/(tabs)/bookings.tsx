@@ -23,7 +23,7 @@ import {
   ReportSheet,
   EmptyPanel,
 } from '@sc/ui';
-import { useBookingsStore } from '../../src/state/index.js';
+import { useConfirmCompletion, useCreateReview, useMyBookings } from '../../src/api/hooks/useBookings.js';
 
 const STARS = [1, 2, 3, 4, 5];
 
@@ -49,13 +49,12 @@ const styles = StyleSheet.create({
 
 /** Bookings (handoff screen 9): awaiting-stylist, cash-reconciliation, and completed row states. */
 export default function Bookings() {
-  const bookings = useBookingsStore((s) => s.bookings);
-  const bookingProviderId = useBookingsStore((s) => s.bookingProviderId);
-  const confirmCashCompletion = useBookingsStore((s) => s.confirmCashCompletion);
+  const { data: bookings = [] } = useMyBookings();
+  const confirmCompletion = useConfirmCompletion();
+  const createReview = useCreateReview();
 
   const [rateTarget, setRateTarget] = useState<BookingRowDto | null>(null);
   const [rating, setRating] = useState(0);
-  const [ratedIds, setRatedIds] = useState<Record<string, boolean>>({});
   const [reportTarget, setReportTarget] = useState<BookingRowDto | null>(null);
   const [lastReportReason, setLastReportReason] = useState<ReportReason | null>(null);
 
@@ -69,8 +68,12 @@ export default function Bookings() {
   };
 
   const submitRating = () => {
-    if (rateTarget) {
-      setRatedIds((r) => ({ ...r, [rateTarget.id]: true }));
+    if (rateTarget && rating > 0) {
+      createReview.mutate(
+        { bookingId: rateTarget.id, input: { rating } },
+        { onSuccess: closeRate },
+      );
+      return;
     }
     closeRate();
   };
@@ -80,15 +83,11 @@ export default function Bookings() {
   };
 
   const goOnMyWay = (booking: BookingRowDto) => {
-    const providerId = bookingProviderId[booking.id];
-    if (!providerId) return;
-    router.push({ pathname: '/map/trip', params: { bookingId: booking.id, providerId } });
+    router.push({ pathname: '/map/trip', params: { bookingId: booking.id, providerId: booking.providerId } });
   };
 
   const goDirections = (booking: BookingRowDto) => {
-    const providerId = bookingProviderId[booking.id];
-    if (!providerId) return;
-    router.push({ pathname: '/map/directions', params: { id: providerId } });
+    router.push({ pathname: '/map/directions', params: { id: booking.providerId } });
   };
 
   return (
@@ -109,7 +108,7 @@ export default function Bookings() {
               ? 'Confirm it happened'
               : BOOKING_STATUS_LABELS[booking.status];
             const badgeTone = booking.status === 'awaiting_provider' ? 'accent' : 'neutral';
-            const rated = !!ratedIds[booking.id];
+            const rated = !booking.canRate;
 
             return (
               <Card key={booking.id} bordered style={styles.card}>
@@ -161,10 +160,10 @@ export default function Bookings() {
                     </Text>
                     <Button
                       label={booking.confirmedByClient ? 'Confirmed' : 'Yes, it happened'}
-                      disabled={booking.confirmedByClient}
+                      disabled={booking.confirmedByClient || confirmCompletion.isPending}
                       block
                       onPress={() => {
-                        confirmCashCompletion(booking.id);
+                        confirmCompletion.mutate(booking.id);
                       }}
                     />
                   </View>
@@ -224,7 +223,12 @@ export default function Bookings() {
             </Pressable>
           ))}
         </View>
-        <Button label="Submit rating" block disabled={rating === 0} onPress={submitRating} />
+        <Button
+          label={createReview.isPending ? 'Submitting…' : 'Submit rating'}
+          block
+          disabled={rating === 0 || createReview.isPending}
+          onPress={submitRating}
+        />
       </Sheet>
 
       <ReportSheet

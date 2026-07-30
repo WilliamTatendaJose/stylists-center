@@ -116,7 +116,10 @@ export default function Searching() {
   };
 
   const viewOffer = (providerId: string) => {
-    router.push({ pathname: '/provider/[id]', params: { id: providerId, back: '/request/searching' } });
+    router.push({
+      pathname: '/provider/[id]',
+      params: { id: providerId, back: '/request/searching', matchId: matchId ?? '' },
+    });
   };
 
   if (!matchId || !expiresAt) return null;

@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
  * correct for one of the three.
  */
 export default function ProviderProfile() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, matchId } = useLocalSearchParams<{ id: string; matchId?: string }>();
   const onBack = useBack('/(tabs)');
   const { data: provider } = useProvider(id);
   const setProvider = useBookingDraftStore((s) => s.setProvider);
@@ -83,7 +83,7 @@ export default function ProviderProfile() {
 
   const goBook = () => {
     if (!id) return;
-    setProvider(id);
+    setProvider(id, matchId ?? null);
     router.push('/book/slot');
   };
 

@@ -2,10 +2,11 @@ import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { color, space } from '@sc/tokens';
-import { formatBookingReference, formatBookingWhen, formatUsd, type BookingRowDto } from '@sc/shared';
+import { formatUsd } from '@sc/shared';
 import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
-import { useBookingDraftStore, useBookingsStore } from '../../src/state/index.js';
+import { useCreateBooking } from '../../src/api/hooks/useBookings.js';
+import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { formatSlotLabel, isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
 
@@ -29,10 +30,11 @@ export default function Payment() {
   const serviceId = useBookingDraftStore((s) => s.serviceId);
   const date = useBookingDraftStore((s) => s.date);
   const time = useBookingDraftStore((s) => s.time);
+  const matchId = useBookingDraftStore((s) => s.matchId);
   const paymentMethod = useBookingDraftStore((s) => s.paymentMethod);
   const setPaymentMethod = useBookingDraftStore((s) => s.setPaymentMethod);
   const resetDraft = useBookingDraftStore((s) => s.reset);
-  const addBooking = useBookingsStore((s) => s.addBooking);
+  const createBooking = useCreateBooking();
 
   const { data: provider } = useProvider(providerId ?? undefined);
   const service = provider?.services.find((s) => s.id === serviceId) ?? null;
@@ -50,42 +52,38 @@ export default function Payment() {
   const whenLabel = formatSlotLabel(date, time);
 
   const confirmBooking = () => {
-    // Mocked sequence number — Phase 3's POST /v1/bookings issues the real one.
-    const reference = formatBookingReference(Math.floor(1000 + Math.random() * 9000));
-    const booking: BookingRowDto = {
-      id: `booking-${String(Date.now())}`,
-      counterpartyName: provider.displayName,
-      tint: provider.tint,
-      initials: provider.initials,
-      serviceName: service.name,
-      whenLabel: formatBookingWhen(isoFromHarareSlot(date, time)),
-      paymentMethod,
-      priceUsdCents: service.priceUsdCents,
-      status: 'awaiting_provider',
-      confirmedByClient: false,
-      confirmedByProvider: false,
-      canTravel: true,
-      canRate: false,
-    };
-    addBooking(booking, provider.id);
-    resetDraft();
-    router.replace({
-      pathname: '/book/done',
-      params: {
-        reference,
+    createBooking.mutate(
+      {
         providerId: provider.id,
-        providerName: provider.displayName,
-        serviceName: service.name,
-        whenLabel,
-        areaName: provider.areaName,
-        paymentLabel:
-          paymentMethod === 'ecocash' ? 'EcoCash — held in escrow' : 'Cash — pay in person',
+        serviceId: service.id,
+        startsAt: isoFromHarareSlot(date, time),
+        paymentMethod,
+        ...(matchId ? { matchId } : {}),
       },
-    });
+      {
+        onSuccess: (created) => {
+          resetDraft();
+          router.replace({
+            pathname: '/book/done',
+            params: {
+              reference: created.reference,
+              providerId: provider.id,
+              providerName: provider.displayName,
+              serviceName: service.name,
+              whenLabel,
+              areaName: provider.areaName,
+              paymentLabel:
+                paymentMethod === 'ecocash' ? 'EcoCash — held in escrow' : 'Cash — pay in person',
+            },
+          });
+        },
+      },
+    );
   };
 
-  const ctaLabel =
-    paymentMethod === 'ecocash'
+  const ctaLabel = createBooking.isPending
+    ? 'Booking…'
+    : paymentMethod === 'ecocash'
       ? `Pay ${formatUsd(service.priceUsdCents)} with EcoCash`
       : 'Request booking — pay cash';
 
@@ -102,7 +100,16 @@ export default function Payment() {
           onBack={onBack}
         />
       }
-      footer={<Button label={ctaLabel} block size="lg" arrow onPress={confirmBooking} />}
+      footer={
+        <Button
+          label={ctaLabel}
+          block
+          size="lg"
+          arrow
+          disabled={createBooking.isPending}
+          onPress={confirmBooking}
+        />
+      }
     >
       <View style={styles.section}>
         <Text variant="sectionLabel" style={styles.sectionLabel}>
