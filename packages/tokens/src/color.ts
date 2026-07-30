@@ -72,6 +72,8 @@ export const color = {
 
   /** Map canvas, from the Leaflet reference. */
   mapBackground: '#f2f0ef',
+  /** The floating label chip behind the map's OSM attribution text. */
+  mapOverlayBg: 'rgba(255,255,255,0.85)',
 } as const;
 
 /**

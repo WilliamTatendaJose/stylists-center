@@ -23,6 +23,8 @@
     "@tanstack/react-query": "^5.101.4",
     "@turf/along": "^7.3.5",
     "@turf/circle": "^7.3.5",
+    "@turf/helpers": "^7.3.5",
+    "@turf/length": "^7.3.5",
     "expo": "~57.0.9",
     "expo-constants": "~57.0.8",
     "expo-dev-client": "~57.0.10",
