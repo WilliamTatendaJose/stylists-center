@@ -17,6 +17,7 @@ import {
   ReportSheet,
 } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
+import { useCreateReport } from '../../src/api/hooks/useReports.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -69,8 +70,11 @@ export default function ProviderProfile() {
 
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [lastReport, setLastReport] = useState<ReportReason | null>(null);
+  const createReport = useCreateReport();
 
   const submitReport = (reason: ReportReason) => {
+    if (!id) return;
+    createReport.mutate({ providerId: id, reason });
     setLastReport(reason);
   };
 

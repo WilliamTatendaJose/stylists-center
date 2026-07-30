@@ -1,19 +1,31 @@
-import { useQuery } from '@tanstack/react-query';
-import { REFERRAL_ROWS, WALLET } from '../../fixtures/index.js';
-import { mockDelay } from '../mockDelay.js';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { CashOutRequestResponse, ReferralRowDto, WalletDto } from '@sc/shared';
+import { apiFetch } from '../client.js';
 
-/** Swaps for `GET /v1/wallet` in Phase 3. */
+/** `GET /v1/wallet`. */
 export function useWallet() {
   return useQuery({
     queryKey: ['wallet'],
-    queryFn: () => mockDelay(WALLET),
+    queryFn: () => apiFetch<WalletDto>('/v1/wallet'),
   });
 }
 
-/** Swaps for `GET /v1/wallet/referrals` in Phase 3. */
+/** `GET /v1/wallet/referrals`. */
 export function useReferrals() {
   return useQuery({
     queryKey: ['wallet', 'referrals'],
-    queryFn: () => mockDelay(REFERRAL_ROWS),
+    queryFn: () => apiFetch<ReferralRowDto[]>('/v1/wallet/referrals'),
+  });
+}
+
+/** `POST /v1/wallet/cash-out` — the server recomputes the balance, never trusting a client-supplied amount. */
+export function useCashOut() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => apiFetch<CashOutRequestResponse>('/v1/wallet/cash-out', { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    },
   });
 }

@@ -24,6 +24,7 @@ import {
   EmptyPanel,
 } from '@sc/ui';
 import { useConfirmCompletion, useCreateReview, useMyBookings } from '../../src/api/hooks/useBookings.js';
+import { useCreateReport } from '../../src/api/hooks/useReports.js';
 
 const STARS = [1, 2, 3, 4, 5];
 
@@ -52,6 +53,7 @@ export default function Bookings() {
   const { data: bookings = [] } = useMyBookings();
   const confirmCompletion = useConfirmCompletion();
   const createReview = useCreateReview();
+  const createReport = useCreateReport();
 
   const [rateTarget, setRateTarget] = useState<BookingRowDto | null>(null);
   const [rating, setRating] = useState(0);
@@ -79,6 +81,9 @@ export default function Bookings() {
   };
 
   const submitReport = (reason: ReportReason) => {
+    if (reportTarget) {
+      createReport.mutate({ providerId: reportTarget.providerId, bookingId: reportTarget.id, reason });
+    }
     setLastReportReason(reason);
   };
 

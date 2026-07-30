@@ -2,7 +2,7 @@ import { Share, StyleSheet, View } from 'react-native';
 import { formatUsd } from '@sc/shared';
 import { Screen, ScreenHeader, Text, Badge, Card, Button } from '@sc/ui';
 import { color, space } from '@sc/tokens';
-import { useReferrals, useWallet } from '../../src/api/hooks/index.js';
+import { useCashOut, useReferrals, useWallet } from '../../src/api/hooks/index.js';
 
 const styles = StyleSheet.create({
   balanceBlock: { alignItems: 'flex-start', marginBottom: space.xxl },
@@ -41,6 +41,7 @@ const styles = StyleSheet.create({
 export default function WalletScreen() {
   const { data: wallet } = useWallet();
   const { data: referrals } = useReferrals();
+  const cashOut = useCashOut();
 
   if (!wallet) return null;
 
@@ -85,14 +86,18 @@ export default function WalletScreen() {
           = {formatUsd(wallet.usdCents)} · 1 coin = {formatUsd(wallet.coinUsdCents)}
         </Text>
         <Button
-          label={`Cash out ${formatUsd(wallet.usdCents)}`}
+          label={cashOut.isPending ? 'Submitting…' : `Cash out ${formatUsd(wallet.usdCents)}`}
           block
           size="lg"
-          disabled={!wallet.canCashOut}
+          disabled={!wallet.canCashOut || cashOut.isPending}
+          onPress={() => {
+            cashOut.mutate();
+          }}
         />
         <Text variant="metaSmall" color="neutral600" style={styles.cashOutNote}>
-          Cash-out unlocks above {formatUsd(wallet.cashOutMinUsdCents)}. Paid to your EcoCash
-          number.
+          {cashOut.isSuccess
+            ? 'Submitted — paid to your EcoCash number shortly.'
+            : `Cash-out unlocks above ${formatUsd(wallet.cashOutMinUsdCents)}. Paid to your EcoCash number.`}
         </Text>
       </View>
 
