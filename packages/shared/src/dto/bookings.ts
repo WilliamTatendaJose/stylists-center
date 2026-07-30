@@ -60,8 +60,14 @@ export type CreateReviewInput = z.infer<typeof createReviewSchema>;
 
 export const reportReasonSchema = z.enum(['no_show', 'misconduct', 'safety', 'other']);
 
+/**
+ * Every M1 report target is a provider (the report sheet only ever opens
+ * from a provider profile or a completed booking) — `providerId` is a
+ * ProviderProfile id, same as `startConversationSchema`, and the API
+ * resolves it to the real reportedId (a User id) server-side.
+ */
 export const createReportSchema = z.object({
-  reportedUserId: z.uuid(),
+  providerId: z.uuid(),
   bookingId: z.uuid().optional(),
   reason: reportReasonSchema,
 });

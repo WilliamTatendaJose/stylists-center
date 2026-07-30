@@ -15,6 +15,8 @@ import { MatchingModule } from './modules/matching/matching.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { WalletModule } from './modules/wallet/wallet.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { ChatModule } from './modules/chat/chat.module';
     PaymentsModule,
     BookingsModule,
     ChatModule,
+    WalletModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}
