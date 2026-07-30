@@ -1,0 +1,31 @@
+node_modules/
+dist/
+build/
+.turbo/
+.expo/
+web-build/
+*.tsbuildinfo
+
+# Env — .env.example is committed, real env files never are
+.env
+.env.*
+!.env.example
+
+# Native build output
+android/
+ios/
+*.apk
+*.aab
+*.keystore
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Test / coverage
+coverage/
+
+# Prisma generated client
+apps/api/src/generated/

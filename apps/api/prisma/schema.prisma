@@ -1,0 +1,31 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+// Prisma 7 moved the connection URL out of the schema entirely: migrations
+// read it from prisma.config.ts, and PrismaClient takes a driver `adapter`
+// at construction (see PrismaService) instead of reading DATABASE_URL itself.
+// This block only declares which SQL dialect to generate types for.
+datasource db {
+  provider = "postgresql"
+}
+
+/// Append-only audit trail (SRS NFR: "all admin actions logged with actor and
+/// timestamp"). Written by a global interceptor, never mutated after insert.
+/// The only model in the M1 scaffold — the full entity set (User,
+/// ProviderProfile, Booking, MatchRequest, ...) is Phase 3 work; this exists
+/// now purely to prove the Postgres connection and the audit interceptor work
+/// end to end.
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  action     String
+  targetType String?
+  targetId   String?
+  ip         String?
+  at         DateTime @default(now())
+
+  @@index([actorId])
+  @@index([at])
+}

@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: sc_db
+    environment:
+      POSTGRES_USER: sc
+      POSTGRES_PASSWORD: sc
+      POSTGRES_DB: sc_dev
+    # 5433/6380 on the host so a locally installed Postgres or Redis does not
+    # collide with these.
+    ports:
+      - '5433:5432'
+    volumes:
+      - sc_pg:/var/lib/postgresql/data
+      - ./infra/docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U sc -d sc_dev']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    container_name: sc_redis
+    # noeviction is deliberate: Redis holds BullMQ's delayed jobs, which are the
+    # authority for match expiry. An evicted job means a match request that never
+    # expires, so losing keys under memory pressure is not an acceptable
+    # degradation here.
+    command: ['redis-server', '--appendonly', 'yes', '--maxmemory-policy', 'noeviction']
+    ports:
+      - '6380:6379'
+    volumes:
+      - sc_redis:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  sc_pg:
+  sc_redis:
