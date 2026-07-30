@@ -14,6 +14,7 @@ import {
 import { queryClient } from '../src/api/queryClient.js';
 import { useSessionStore } from '../src/state/index.js';
 import { downloadAvondaleAreaPack } from '../src/offline/downloadAreaPack.js';
+import { useAuthGate } from '../src/auth/useAuthGate.js';
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -35,6 +36,7 @@ export default function RootLayout() {
   });
   const hasDownloadedOfflinePack = useSessionStore((s) => s.hasDownloadedOfflinePack);
   const setHasDownloadedOfflinePack = useSessionStore((s) => s.setHasDownloadedOfflinePack);
+  const isAuthHydrated = useAuthGate();
 
   // Stands in for "on first login" (plan §5/§9 item 18) until auth exists —
   // downloads the client's home-area tile pack once so the map screens work
@@ -50,7 +52,7 @@ export default function RootLayout() {
       });
   }, [hasDownloadedOfflinePack, setHasDownloadedOfflinePack]);
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded || !isAuthHydrated) return null;
 
   return (
     <GestureHandlerRootView style={styles.root}>
