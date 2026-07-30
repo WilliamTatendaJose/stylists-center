@@ -2,13 +2,12 @@ import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { color, space } from '@sc/tokens';
-import { formatBookingWhen, formatUsd, type BookingRowDto } from '@sc/shared';
+import { formatBookingReference, formatBookingWhen, formatUsd, type BookingRowDto } from '@sc/shared';
 import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useBookingDraftStore, useBookingsStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { formatSlotLabel, isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
-import { generateBookingReference } from '../../src/utils/bookingReference.js';
 
 const styles = StyleSheet.create({
   section: { marginBottom: space.xxl },
@@ -51,7 +50,8 @@ export default function Payment() {
   const whenLabel = formatSlotLabel(date, time);
 
   const confirmBooking = () => {
-    const reference = generateBookingReference();
+    // Mocked sequence number — Phase 3's POST /v1/bookings issues the real one.
+    const reference = formatBookingReference(Math.floor(1000 + Math.random() * 9000));
     const booking: BookingRowDto = {
       id: `booking-${String(Date.now())}`,
       counterpartyName: provider.displayName,
