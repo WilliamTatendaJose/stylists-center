@@ -238,6 +238,10 @@ model MatchRequest {
   budgetMode           BudgetMode
   budgetAmountUsdCents Int?
   radiusKm             Int
+  /// The client's location at request time — stored so a retry can re-run
+  /// the fan-out at the next radius without the client resending it.
+  latitude             Float
+  longitude            Float
   state                MatchState @default(pending)
   attempt              Int        @default(1)
   expiresAt            DateTime

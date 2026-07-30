@@ -10,6 +10,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { GeoModule } from './modules/geo/geo.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ProvidersModule } from './modules/providers/providers.module';
+import { RealtimeModule } from './modules/realtime/realtime.module';
+import { MatchingModule } from './modules/matching/matching.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { ProvidersModule } from './modules/providers/providers.module';
     GeoModule,
     CategoriesModule,
     ProvidersModule,
+    RealtimeModule,
+    MatchingModule,
   ],
 })
 export class AppModule {}

@@ -16,16 +16,21 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@nestjs/bullmq": "^11.0.3",
     "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.28",
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/platform-express": "^11.1.28",
+    "@nestjs/platform-socket.io": "^11.1.28",
     "@nestjs/swagger": "^11.4.6",
     "@nestjs/throttler": "^6.5.0",
+    "@nestjs/websockets": "^11.1.28",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@sc/shared": "workspace:*",
+    "@socket.io/redis-adapter": "^8.3.0",
+    "bullmq": "^5.81.2",
     "dotenv": "^17.4.2",
     "pg": "^8.22.0",
     "helmet": "^8.3.0",
@@ -33,6 +38,7 @@
     "nestjs-zod": "^5.5.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "socket.io": "^4.8.3",
     "zod": "^4.4.3"
   },
   "devDependencies": {
