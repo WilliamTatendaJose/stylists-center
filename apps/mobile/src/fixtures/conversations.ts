@@ -19,6 +19,11 @@ export const CONVERSATIONS: ConversationDto[] = [
   },
 ];
 
+/** Provider profile's MESSAGE button -> existing thread, where one exists (only Tariro in M1's fixtures); other providers fall back to their own id as a fresh thread. */
+export const PROVIDER_CONVERSATION_ID: Record<string, string> = {
+  [PROVIDER_IDS.tariro]: CONVERSATION_IDS.tariro,
+};
+
 export const MESSAGES: Record<string, MessageDto[]> = {
   [CONVERSATION_IDS.tariro]: [
     {
