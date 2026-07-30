@@ -391,6 +391,11 @@ model Conversation {
   providerUserId String
   providerUser   User     @relation("ConversationProvider", fields: [providerUserId], references: [id])
   lastMessageAt  DateTime @default(now())
+  /// Only the client role exists in M1 (Provider screens are a later
+  /// milestone), so this is the one read-receipt column needed: unreadCount
+  /// on the client's own inbox is just "messages from the provider after
+  /// this timestamp", bumped whenever the client fetches the thread.
+  clientLastReadAt DateTime @default(now())
   createdAt      DateTime @default(now())
 
   messages Message[]

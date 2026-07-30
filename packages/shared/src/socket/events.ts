@@ -45,5 +45,7 @@ export interface ClientToServerEvents {
   /** Joins `match:{matchId}` and acks with current state, covering the case
    *  where the request was created via HTTP just before the socket connected. */
   'match.subscribe': (payload: { matchId: string }, ack: (state: MatchRequestDto) => void) => void;
+  /** Joins `conversation:{conversationId}` — `message.created`/`message.typing` only ever reach a socket that's subscribed. */
+  'conversation.subscribe': (payload: { conversationId: string }) => void;
   'message.typing': (payload: { conversationId: string }) => void;
 }

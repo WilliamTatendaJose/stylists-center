@@ -26,3 +26,13 @@ export const sendMessageSchema = z.object({
   text: z.string().min(1).max(2000),
 });
 export type SendMessageInput = z.infer<typeof sendMessageSchema>;
+
+/**
+ * "Message" from a provider profile, booking row, Directions, or Trip only
+ * ever knows a providerId, never a conversation id — this finds-or-creates
+ * the 1:1 thread so the client never has to track conversation ids itself.
+ */
+export const startConversationSchema = z.object({
+  providerId: z.uuid(),
+});
+export type StartConversationInput = z.infer<typeof startConversationSchema>;

@@ -93,6 +93,15 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
     return getMatchRequestDto(this.prisma, payload.matchId);
   }
 
+  /** Joins `conversation:{conversationId}` — so `message.created`/`message.typing` reach this socket. */
+  @SubscribeMessage('conversation.subscribe')
+  async onConversationSubscribe(
+    @MessageBody() payload: { conversationId: string },
+    @ConnectedSocket() socket: Socket,
+  ): Promise<void> {
+    await socket.join(`conversation:${payload.conversationId}`);
+  }
+
   @SubscribeMessage('message.typing')
   onTyping(@MessageBody() payload: { conversationId: string }, @ConnectedSocket() socket: Socket): void {
     const { userId } = socket.data as SocketData;

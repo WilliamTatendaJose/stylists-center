@@ -31,4 +31,12 @@ export class SocketEmitterService {
   ): void {
     this.server?.to(`match:${matchId}`).emit(event, ...args);
   }
+
+  emitToConversation<E extends keyof ServerToClientEvents>(
+    conversationId: string,
+    event: E,
+    ...args: Parameters<ServerToClientEvents[E]>
+  ): void {
+    this.server?.to(`conversation:${conversationId}`).emit(event, ...args);
+  }
 }
