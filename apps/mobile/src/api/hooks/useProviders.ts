@@ -1,33 +1,49 @@
 import { useQuery } from '@tanstack/react-query';
-import {
-  PROVIDER_LIST,
-  PROVIDER_PROFILES,
-  getSlotsForProvider,
-} from '../../fixtures/index.js';
-import { mockDelay } from '../mockDelay.js';
+import type { ProviderListRowDto, ProviderProfileDto, ProviderSlotsResponse } from '@sc/shared';
+import { apiFetch } from '../client.js';
+import { useSessionStore } from '../../state/index.js';
 
-/** The Home screen's "Available now" list. Swaps for `GET /v1/providers/available` in Phase 3. */
+/** The Home screen's "Available now" list. `GET /v1/providers/available`. */
 export function useNearbyProviders() {
+  const location = useSessionStore((s) => s.location);
+
   return useQuery({
-    queryKey: ['providers', 'nearby'],
-    queryFn: () => mockDelay(PROVIDER_LIST),
+    queryKey: ['providers', 'nearby', location.lat, location.lng],
+    queryFn: () =>
+      apiFetch<ProviderListRowDto[]>(
+        `/v1/providers/available?${new URLSearchParams({
+          lat: String(location.lat),
+          lng: String(location.lng),
+        }).toString()}`,
+      ),
   });
 }
 
-/** Swaps for `GET /v1/providers/:id` in Phase 3. */
+/** `GET /v1/providers/:id`. */
 export function useProvider(id: string | undefined) {
+  const location = useSessionStore((s) => s.location);
+
   return useQuery({
-    queryKey: ['providers', id],
-    queryFn: () => mockDelay(id ? (PROVIDER_PROFILES[id] ?? null) : null),
+    queryKey: ['providers', id, location.lat, location.lng],
+    queryFn: () =>
+      apiFetch<ProviderProfileDto>(
+        `/v1/providers/${String(id)}?${new URLSearchParams({
+          lat: String(location.lat),
+          lng: String(location.lng),
+        }).toString()}`,
+      ),
     enabled: !!id,
   });
 }
 
-/** Swaps for `GET /v1/providers/:id/slots?date` in Phase 3. */
+/** `GET /v1/providers/:id/slots?date`. */
 export function useProviderSlots(id: string | undefined, date: string) {
   return useQuery({
     queryKey: ['providers', id, 'slots', date],
-    queryFn: () => mockDelay(id ? getSlotsForProvider(id, date) : null),
+    queryFn: () =>
+      apiFetch<ProviderSlotsResponse>(
+        `/v1/providers/${String(id)}/slots?${new URLSearchParams({ date }).toString()}`,
+      ),
     enabled: !!id,
   });
 }
