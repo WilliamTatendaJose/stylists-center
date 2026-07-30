@@ -1,11 +1,11 @@
 import { router } from 'expo-router';
 import { formatBookingWhen } from '@sc/shared';
 import { Screen, ScreenHeader, ListRow, Badge, EmptyPanel } from '@sc/ui';
-import { useChatStore } from '../../src/state/index.js';
+import { useConversations } from '../../src/api/hooks/useChat.js';
 
 /** Messages inbox (thread list; conversations open at /chat/[threadId]). */
 export default function Messages() {
-  const conversations = useChatStore((s) => s.conversations);
+  const { data: conversations = [] } = useConversations();
   const sorted = [...conversations].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
 
   const openThread = (threadId: string) => {

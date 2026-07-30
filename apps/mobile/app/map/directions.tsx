@@ -5,7 +5,7 @@ import { Screen, ScreenHeader, Text, Avatar, StatTile, ScMap, Button } from '@sc
 import { color, radius, space } from '@sc/tokens';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useRoute } from '../../src/api/hooks/useGeo.js';
-import { PROVIDER_CONVERSATION_ID, PROVIDER_LOCATIONS } from '../../src/fixtures/index.js';
+import { PROVIDER_LOCATIONS } from '../../src/fixtures/index.js';
 import { useSessionStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -48,8 +48,7 @@ export default function Directions() {
   const mapPaneStyle = { height: windowHeight * 0.44 };
 
   const goMessage = () => {
-    const threadId = PROVIDER_CONVERSATION_ID[providerId] ?? providerId;
-    router.push({ pathname: '/chat/[threadId]', params: { threadId } });
+    router.push({ pathname: '/chat/[threadId]', params: { threadId: providerId, providerId } });
   };
 
   const startNavigation = () => {

@@ -3,10 +3,15 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { ChevronLeft } from 'lucide-react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { color, space } from '@sc/tokens';
-import { formatInHarare, type MessageDto } from '@sc/shared';
+import { formatInHarare, type ConversationDto, type MessageDto } from '@sc/shared';
 import { Screen, Text, Pressable, Avatar, Composer } from '@sc/ui';
-import { useChatStore } from '../../src/state/index.js';
-import { PROVIDER_LIST } from '../../src/fixtures/index.js';
+import {
+  useChatRealtime,
+  useConversationMessages,
+  useConversations,
+  useSendMessage,
+  useStartConversation,
+} from '../../src/api/hooks/useChat.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
@@ -24,41 +29,46 @@ const styles = StyleSheet.create({
   centreNote: { textAlign: 'center', marginBottom: space.l, marginTop: space.s },
 });
 
-/** Chat (handoff screen 10). Reachable from a provider profile, a booking row, Directions, or Trip. */
+/**
+ * Chat (handoff screen 10). Reachable from a provider profile, a booking
+ * row, Directions, or Trip — those call sites only know a providerId, so
+ * they pass it as both `threadId` (expo-router's dynamic segment needs a
+ * value) and the separate `providerId` param, which is what tells this
+ * screen to resolve-or-create the real conversation via POST
+ * /v1/conversations rather than treating `threadId` as a conversation id
+ * directly. Messages' own inbox list passes a real conversation id with no
+ * `providerId` param.
+ */
 export default function Chat() {
-  const { threadId } = useLocalSearchParams<{ threadId: string }>();
+  const { threadId, providerId } = useLocalSearchParams<{ threadId: string; providerId?: string }>();
   const onBack = useBack('/(tabs)/messages');
-
-  const conversations = useChatStore((s) => s.conversations);
-  const messagesByConversation = useChatStore((s) => s.messagesByConversation);
-  const ensureConversation = useChatStore((s) => s.ensureConversation);
-  const sendMessage = useChatStore((s) => s.sendMessage);
+  const startConversation = useStartConversation();
+  const { data: conversations } = useConversations();
+  const [resolvedConversation, setResolvedConversation] = useState<ConversationDto | null>(null);
   const [draft, setDraft] = useState('');
 
-  const conversation = conversations.find((c) => c.id === threadId);
-
-  // A "Message" tap from a provider whose thread the fixtures never seeded —
-  // seed one from the provider's own record instead of dead-ending.
   useEffect(() => {
-    if (!threadId || conversation) return;
-    const provider = PROVIDER_LIST.find((p) => p.id === threadId);
-    if (!provider) return;
-    ensureConversation(threadId, {
-      counterpartyName: provider.displayName,
-      tint: provider.tint,
-      initials: provider.initials,
-    });
-  }, [threadId, conversation, ensureConversation]);
+    if (!providerId) return;
+    startConversation.mutate(providerId, { onSuccess: setResolvedConversation });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startConversation.mutate is stable; re-running only on a providerId change is intentional.
+  }, [providerId]);
+
+  const conversation =
+    resolvedConversation ?? (!providerId ? (conversations?.find((c) => c.id === threadId) ?? null) : null);
+  const conversationId = conversation?.id ?? null;
+
+  const { data: messages = [] } = useConversationMessages(conversationId);
+  useChatRealtime(conversationId);
+  const sendMessage = useSendMessage(conversationId);
 
   if (!threadId || !conversation) return null;
 
-  const messages = messagesByConversation[threadId] ?? [];
   const messagesNewestFirst = [...messages].reverse();
 
   const send = () => {
     const text = draft.trim();
     if (!text) return;
-    sendMessage(threadId, text);
+    sendMessage.mutate({ text });
     setDraft('');
   };
 

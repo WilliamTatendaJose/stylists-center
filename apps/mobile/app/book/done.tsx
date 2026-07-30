@@ -3,7 +3,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Check } from 'lucide-react-native';
 import { color, space } from '@sc/tokens';
 import { Screen, Text, RuleList, Button } from '@sc/ui';
-import { PROVIDER_CONVERSATION_ID } from '../../src/fixtures/index.js';
 import { withBack } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
@@ -37,9 +36,10 @@ export default function Booked() {
     }>();
 
   const goMessage = () => {
-    const threadId = providerId ? (PROVIDER_CONVERSATION_ID[providerId] ?? providerId) : undefined;
-    if (!threadId) return;
-    router.push(withBack('/chat/[threadId]', { threadId }, '/(tabs)/bookings'));
+    if (!providerId) return;
+    router.push(
+      withBack('/chat/[threadId]', { threadId: providerId, providerId }, '/(tabs)/bookings'),
+    );
   };
 
   const goBookings = () => {

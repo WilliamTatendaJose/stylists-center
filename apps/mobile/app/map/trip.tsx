@@ -9,7 +9,7 @@ import { formatInHarare } from '@sc/shared';
 import { Screen, Text, Pressable, Avatar, StatTile, ScMap, LiveDot, Button } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useRoute } from '../../src/api/hooks/useGeo.js';
-import { PROVIDER_CONVERSATION_ID, PROVIDER_LOCATIONS } from '../../src/fixtures/index.js';
+import { PROVIDER_LOCATIONS } from '../../src/fixtures/index.js';
 import { useSessionStore, useTripStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -150,8 +150,7 @@ export default function Trip() {
   };
 
   const goMessage = () => {
-    const threadId = PROVIDER_CONVERSATION_ID[providerId] ?? providerId;
-    router.push({ pathname: '/chat/[threadId]', params: { threadId } });
+    router.push({ pathname: '/chat/[threadId]', params: { threadId: providerId, providerId } });
   };
 
   return (

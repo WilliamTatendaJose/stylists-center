@@ -18,7 +18,6 @@ import {
 } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
-import { PROVIDER_CONVERSATION_ID } from '../../src/fixtures/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
@@ -76,9 +75,8 @@ export default function ProviderProfile() {
   };
 
   const goMessage = () => {
-    const threadId = id ? (PROVIDER_CONVERSATION_ID[id] ?? id) : undefined;
-    if (!threadId) return;
-    router.push({ pathname: '/chat/[threadId]', params: { threadId } });
+    if (!id) return;
+    router.push({ pathname: '/chat/[threadId]', params: { threadId: id, providerId: id } });
   };
 
   const goBook = () => {
