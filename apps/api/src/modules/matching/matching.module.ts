@@ -12,5 +12,6 @@ import { DevSimulateController } from './dev-simulate.controller';
   imports: [JobsModule, GeoModule, RealtimeModule, AuthModule],
   controllers: [MatchingController, DevSimulateController],
   providers: [MatchingService, MatchingProcessor],
+  exports: [MatchingService],
 })
 export class MatchingModule {}

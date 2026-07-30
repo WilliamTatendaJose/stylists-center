@@ -12,6 +12,8 @@ import { CategoriesModule } from './modules/categories/categories.module';
 import { ProvidersModule } from './modules/providers/providers.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { MatchingModule } from './modules/matching/matching.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { BookingsModule } from './modules/bookings/bookings.module';
 
 @Module({
   imports: [
@@ -36,6 +38,8 @@ import { MatchingModule } from './modules/matching/matching.module';
     ProvidersModule,
     RealtimeModule,
     MatchingModule,
+    PaymentsModule,
+    BookingsModule,
   ],
 })
 export class AppModule {}

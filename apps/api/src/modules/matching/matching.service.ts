@@ -12,6 +12,7 @@ import {
   type CreateMatchRequestResponse,
   type MatchOfferDto,
   type MatchRequestDto,
+  type MatchState,
   type RadiusKm,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -262,6 +263,57 @@ export class MatchingService {
 
     this.socketEmitter.emitToMatch(matchId, 'match.offer.accepted', dto);
     return dto;
+  }
+
+  /**
+   * Called by BookingsService when a booking is created from an accepted
+   * offer. `SELECT ... FOR UPDATE` locks the MatchRequest row so two
+   * concurrent booking attempts against the same match can't both win — the
+   * double-booking race plan §6 calls out — then transitions the match to
+   * 'confirmed' and declines every sibling accepted offer, removing their
+   * timeout jobs and notifying those providers via `match.offer.superseded`.
+   */
+  async confirmForBooking(matchId: string, clientId: string, providerId: string): Promise<void> {
+    const siblingsToNotify = await this.prisma.$transaction(async (tx) => {
+      const [locked] = await tx.$queryRaw<{ id: string; clientId: string; state: MatchState }[]>`
+        SELECT id, "clientId", state FROM "MatchRequest" WHERE id = ${matchId} FOR UPDATE
+      `;
+      if (!locked) throw new NotFoundException('Match not found');
+      if (locked.clientId !== clientId) throw new ForbiddenException();
+      if (!canTransition(locked.state, 'confirmed')) {
+        throw new BadRequestException(`Cannot confirm a match in state "${locked.state}"`);
+      }
+
+      const winningOffer = await tx.matchOffer.findFirst({
+        where: { matchRequestId: matchId, providerId, state: 'accepted' },
+      });
+      if (!winningOffer) {
+        throw new BadRequestException('No accepted offer from this provider for this match');
+      }
+
+      const siblings = await tx.matchOffer.findMany({
+        where: { matchRequestId: matchId, state: 'accepted', id: { not: winningOffer.id } },
+      });
+
+      await tx.matchRequest.update({ where: { id: matchId }, data: { state: 'confirmed' } });
+      if (siblings.length > 0) {
+        await tx.matchOffer.updateMany({
+          where: { id: { in: siblings.map((s) => s.id) } },
+          data: { state: 'declined' },
+        });
+      }
+
+      return siblings;
+    });
+
+    await this.removeJob(expireJobId(matchId));
+    for (const sibling of siblingsToNotify) {
+      await this.removeJob(offerTimeoutJobId(sibling.id));
+      this.socketEmitter.emitToMatch(matchId, 'match.offer.superseded', {
+        matchId,
+        offerId: sibling.id,
+      });
+    }
   }
 
   private async removeJob(jobId: string): Promise<void> {

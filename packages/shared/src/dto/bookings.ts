@@ -28,6 +28,8 @@ export type CreateBookingResponse = z.infer<typeof createBookingResponseSchema>;
 
 export const bookingRowSchema = z.object({
   id: z.uuid(),
+  /** The provider's ProviderProfile id — lets a screen route to that provider's directions/chat/trip without a separate client-side id map. */
+  providerId: z.uuid(),
   counterpartyName: z.string(),
   tint: z.string(),
   initials: z.string(),
