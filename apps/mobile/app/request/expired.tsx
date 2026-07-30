@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { color, space } from '@sc/tokens';
-import { MATCH_REQUEST_TTL_SECONDS, canRetry, nextRadiusKm, type RadiusKm } from '@sc/shared';
+import { canRetry, isRadiusKm, nextRadiusKm, type RadiusKm } from '@sc/shared';
 import { Screen, Text, Button } from '@sc/ui';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
+import { useMatch, useRetryMatch } from '../../src/api/hooks/useMatching.js';
 import { useRequestStore } from '../../src/state/index.js';
 
 const styles = StyleSheet.create({
@@ -29,25 +31,35 @@ const styles = StyleSheet.create({
 export default function Expired() {
   const { data: categories } = useCategories();
   const categoryId = useRequestStore((s) => s.categoryId);
-  const budget = useRequestStore((s) => s.budget);
-  const radiusKm = useRequestStore((s) => s.radiusKm);
-  const attempt = useRequestStore((s) => s.attempt);
-  const retry = useRequestStore((s) => s.retry);
-  const startMatch = useRequestStore((s) => s.startMatch);
+  const matchId = useRequestStore((s) => s.matchId);
   const reset = useRequestStore((s) => s.reset);
 
+  const { data: match } = useMatch(matchId);
+  const retryMatch = useRetryMatch();
+
+  // Cold-start / deep-link guard — this screen only makes sense right after a
+  // real expiry, and needs the server row to know the attempt/radius ladder.
+  useEffect(() => {
+    if (!matchId) {
+      router.replace('/(tabs)');
+    }
+  }, [matchId]);
+
+  if (!matchId || !match) return null;
+
   const categoryName = categories?.find((c) => c.id === categoryId)?.name ?? 'a stylist';
+  const { attempt, budget } = match;
+  const radiusKm: RadiusKm = isRadiusKm(match.radiusKm) ? match.radiusKm : 1;
   const canTryAgain = canRetry(attempt);
   const next: RadiusKm | null = nextRadiusKm(radiusKm, attempt);
   const budgetLabel = budget.mode === 'fixed' ? `Up to $${String(budget.amountUsd)}` : 'Flexible';
 
   const tryAgain = () => {
-    if (!next) return;
-    retry(next);
-    const matchId = `match-${String(Date.now())}`;
-    const expiresAt = new Date(Date.now() + MATCH_REQUEST_TTL_SECONDS * 1000).toISOString();
-    startMatch(matchId, expiresAt);
-    router.replace('/request/searching');
+    retryMatch.mutate(matchId, {
+      onSuccess: () => {
+        router.replace('/request/searching');
+      },
+    });
   };
 
   const browseInstead = () => {
@@ -89,7 +101,13 @@ export default function Expired() {
 
       <View style={styles.actions}>
         {canTryAgain && next ? (
-          <Button label={`Try again — attempt ${String(attempt + 1)}`} block arrow onPress={tryAgain} />
+          <Button
+            label={retryMatch.isPending ? 'Trying again…' : `Try again — attempt ${String(attempt + 1)}`}
+            block
+            arrow
+            disabled={retryMatch.isPending}
+            onPress={tryAgain}
+          />
         ) : null}
         <Button
           label="Browse stylists instead"

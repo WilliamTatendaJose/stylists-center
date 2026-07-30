@@ -21,7 +21,7 @@ function resolveBaseUrl(): string {
   return Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
 }
 
-const BASE_URL = resolveBaseUrl();
+export const BASE_URL = resolveBaseUrl();
 
 export class ApiError extends Error {
   constructor(

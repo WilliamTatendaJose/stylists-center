@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { BackHandler, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { color, space } from '@sc/tokens';
 import { MATCH_REQUEST_TTL_SECONDS } from '@sc/shared';
 import {
@@ -19,8 +20,13 @@ import {
 } from '@sc/ui';
 import Animated from 'react-native-reanimated';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
+import {
+  matchQueryKey,
+  useCancelMatch,
+  useMatch,
+  useMatchRealtime,
+} from '../../src/api/hooks/useMatching.js';
 import { useRequestStore } from '../../src/state/index.js';
-import { MOCK_OFFERS, MOCK_OFFER_DELAYS_MS } from '../../src/fixtures/index.js';
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start' },
@@ -37,25 +43,35 @@ const styles = StyleSheet.create({
 });
 
 export default function Searching() {
+  const queryClient = useQueryClient();
   const { data: categories } = useCategories();
   const categoryId = useRequestStore((s) => s.categoryId);
-  const budget = useRequestStore((s) => s.budget);
-  const attempt = useRequestStore((s) => s.attempt);
   const matchId = useRequestStore((s) => s.matchId);
-  const expiresAt = useRequestStore((s) => s.expiresAt);
-  const offers = useRequestStore((s) => s.offers);
-  const addOffer = useRequestStore((s) => s.addOffer);
   const reset = useRequestStore((s) => s.reset);
 
+  const { data: match } = useMatch(matchId);
+  useMatchRealtime(matchId);
+  const cancelMatch = useCancelMatch();
+
+  const expiresAt = match?.expiresAt ?? null;
   const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(() => (expiresAt ? secondsRemaining(expiresAt) : 0));
 
   // Cold-start / deep-link guard — this screen only makes sense mid-search.
   useEffect(() => {
-    if (!matchId || !expiresAt) {
+    if (!matchId) {
       router.replace('/(tabs)');
     }
-  }, [matchId, expiresAt]);
+  }, [matchId]);
+
+  // The server state is what actually navigates away from this screen — a
+  // socket event (or the safety-net refetch in handleExpire below) flips
+  // match.state to 'expired', never the client's own clock.
+  useEffect(() => {
+    if (match?.state === 'expired') {
+      router.replace('/request/expired');
+    }
+  }, [match?.state]);
 
   // Drives the 1s-linear progress track; the big numeral below has its own
   // 250ms self-contained tick (Countdown) — both derive from the same
@@ -70,21 +86,6 @@ export default function Searching() {
       clearInterval(interval);
     };
   }, [expiresAt]);
-
-  // Demo acceptances, per the handoff's t = 2s / 4s / 7s script. Scoped to
-  // matchId so a retry (new matchId) re-schedules but re-renders don't.
-  useEffect(() => {
-    if (!matchId) return;
-    const timers = MOCK_OFFERS.map((offer, i) => {
-      const delay = MOCK_OFFER_DELAYS_MS[i] ?? 0;
-      return setTimeout(() => {
-        addOffer(offer);
-      }, delay);
-    });
-    return () => {
-      timers.forEach(clearTimeout);
-    };
-  }, [matchId, addOffer]);
 
   const openCancel = () => {
     setCancelSheetOpen(true);
@@ -102,12 +103,16 @@ export default function Searching() {
 
   const confirmCancel = () => {
     setCancelSheetOpen(false);
+    if (matchId) cancelMatch.mutate(matchId);
     reset();
     router.replace('/(tabs)');
   };
 
+  // A safety net for a missed 'match.expired' socket event: force a refetch
+  // right as the client-side clock hits zero so the state transition still
+  // lands (the effect above is what actually navigates).
   const handleExpire = () => {
-    router.replace('/request/expired');
+    if (matchId) void queryClient.invalidateQueries({ queryKey: matchQueryKey(matchId) });
   };
 
   const viewOffer = (providerId: string) => {
@@ -117,8 +122,11 @@ export default function Searching() {
   if (!matchId || !expiresAt) return null;
 
   const categoryName = categories?.find((c) => c.id === categoryId)?.name ?? 'your service';
+  const budget = match?.budget ?? { mode: 'flex' as const };
   const budgetLabel =
     budget.mode === 'fixed' ? `Up to $${String(budget.amountUsd)}` : 'Flexible budget';
+  const attempt = match?.attempt ?? 1;
+  const offers = match?.offers ?? [];
   const progress = Math.min(1, Math.max(0, secondsLeft / MATCH_REQUEST_TTL_SECONDS));
   const offersHeading =
     offers.length === 0 ? 'Waiting for acceptances' : `${String(offers.length)} stylists accepted`;

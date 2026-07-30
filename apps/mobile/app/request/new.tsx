@@ -6,8 +6,6 @@ import {
   BUDGET_MAX_USD,
   BUDGET_MIN_USD,
   BUDGET_STEP_USD,
-  MATCH_REQUEST_TTL_SECONDS,
-  PLACEHOLDER_IN_RANGE_COUNT,
   RADIUS_LADDER_KM,
   type RadiusKm,
 } from '@sc/shared';
@@ -21,6 +19,7 @@ import {
   Button,
 } from '@sc/ui';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
+import { useCreateMatch } from '../../src/api/hooks/useMatching.js';
 import { useRequestStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -48,17 +47,18 @@ const styles = StyleSheet.create({
 
 export default function NewRequest() {
   const onBack = useBack('/(tabs)');
-  const { data: categories } = useCategories();
   const categoryId = useRequestStore((s) => s.categoryId);
   const budget = useRequestStore((s) => s.budget);
   const radiusKm = useRequestStore((s) => s.radiusKm);
   const setCategory = useRequestStore((s) => s.setCategory);
   const setBudget = useRequestStore((s) => s.setBudget);
   const setRadiusKm = useRequestStore((s) => s.setRadiusKm);
-  const startMatch = useRequestStore((s) => s.startMatch);
+  const setMatchId = useRequestStore((s) => s.setMatchId);
+  const { data: categories } = useCategories(radiusKm);
+  const createMatch = useCreateMatch();
 
   const [amount, setAmount] = useState(50);
-  const inRange = PLACEHOLDER_IN_RANGE_COUNT[radiusKm];
+  const inRange = categories?.find((c) => c.id === categoryId)?.nearbyCount ?? 0;
 
   const setBudgetMode = (mode: 'flex' | 'fixed') => {
     setBudget(mode === 'flex' ? { mode: 'flex' } : { mode: 'fixed', amountUsd: amount });
@@ -70,14 +70,16 @@ export default function NewRequest() {
   };
 
   const sendRequest = () => {
-    // Mocked: a real match ID + a real 5-minute expiry, computed client-side
-    // for now. Phase 3 replaces this call with POST /v1/matches, and the
-    // server-issued id/expiresAt slot into exactly these same store fields —
-    // nothing downstream (the searching screen) needs to change.
-    const matchId = `match-${String(Date.now())}`;
-    const expiresAt = new Date(Date.now() + MATCH_REQUEST_TTL_SECONDS * 1000).toISOString();
-    startMatch(matchId, expiresAt);
-    router.push('/request/searching');
+    if (!categoryId) return;
+    createMatch.mutate(
+      { categoryId, budget, radiusKm },
+      {
+        onSuccess: (created) => {
+          setMatchId(created.id);
+          router.push('/request/searching');
+        },
+      },
+    );
   };
 
   return (
@@ -85,11 +87,15 @@ export default function NewRequest() {
       header={<ScreenHeader title="New request" onBack={onBack} />}
       footer={
         <Button
-          label={`Send to ${String(inRange)} stylists`}
+          label={
+            createMatch.isPending
+              ? 'Sending…'
+              : `Send to ${String(inRange)} stylists`
+          }
           onPress={sendRequest}
           block
           size="lg"
-          disabled={!categoryId}
+          disabled={!categoryId || createMatch.isPending}
           arrow
         />
       }
