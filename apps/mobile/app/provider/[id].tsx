@@ -78,7 +78,7 @@ export default function ProviderProfile() {
   const goMessage = () => {
     const threadId = id ? (PROVIDER_CONVERSATION_ID[id] ?? id) : undefined;
     if (!threadId) return;
-    router.push({ pathname: '/chat/[threadId]', params: { threadId, back: '/provider/[id]' } });
+    router.push({ pathname: '/chat/[threadId]', params: { threadId } });
   };
 
   const goBook = () => {
