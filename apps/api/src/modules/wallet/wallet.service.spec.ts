@@ -47,12 +47,20 @@ describe('WalletService', () => {
     cityId = city.id;
 
     const plainUser = await prisma.user.create({
-      data: { phone: `+263779${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Plain User', cityId },
+      data: {
+        phone: `+263779${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Plain User',
+        cityId,
+      },
     });
     plainUserId = plainUser.id;
 
     const agentUser = await prisma.user.create({
-      data: { phone: `+263780${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Agent User', cityId },
+      data: {
+        phone: `+263780${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Agent User',
+        cityId,
+      },
     });
     agentUserId = agentUser.id;
     const agent = await prisma.agent.create({
@@ -69,15 +77,29 @@ describe('WalletService', () => {
       data: { agentId, referredName: 'Referred Salon', coinsAwarded: 6, status: 'paid' },
     });
     await prisma.walletTransaction.create({
-      data: { userId: agentUserId, type: 'referral_coin', coins: 6, usdCents: 300, reference: 'Referred Salon' },
+      data: {
+        userId: agentUserId,
+        type: 'referral_coin',
+        coins: 6,
+        usdCents: 300,
+        reference: 'Referred Salon',
+      },
     });
     await prisma.walletTransaction.create({
-      data: { userId: agentUserId, type: 'referral_coin', coins: 6, usdCents: 300, reference: 'Second Referral' },
+      data: {
+        userId: agentUserId,
+        type: 'referral_coin',
+        coins: 6,
+        usdCents: 300,
+        reference: 'Second Referral',
+      },
     });
   });
 
   afterAll(async () => {
-    await prisma.walletTransaction.deleteMany({ where: { userId: { in: [plainUserId, agentUserId] } } });
+    await prisma.walletTransaction.deleteMany({
+      where: { userId: { in: [plainUserId, agentUserId] } },
+    });
     await prisma.referral.deleteMany({ where: { agentId } });
     await prisma.agent.delete({ where: { id: agentId } });
     await prisma.user.deleteMany({ where: { id: { in: [plainUserId, agentUserId] } } });
@@ -119,7 +141,9 @@ describe('WalletService', () => {
     expect(after.coins).toBe(0);
     expect(after.usdCents).toBe(0);
 
-    const transactions = await prisma.walletTransaction.findMany({ where: { userId: agentUserId } });
+    const transactions = await prisma.walletTransaction.findMany({
+      where: { userId: agentUserId },
+    });
     expect(transactions).toHaveLength(3); // the two referral credits plus this cash_out debit
   });
 

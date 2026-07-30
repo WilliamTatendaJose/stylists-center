@@ -28,7 +28,11 @@ export class ChatService {
           throw new Error(`Conversation ${c.id} has no provider profile for its counterparty`);
         }
         const unreadCount = await this.prisma.message.count({
-          where: { conversationId: c.id, authorId: { not: clientId }, createdAt: { gt: c.clientLastReadAt } },
+          where: {
+            conversationId: c.id,
+            authorId: { not: clientId },
+            createdAt: { gt: c.clientLastReadAt },
+          },
         });
         return toConversationDto(c, profile, c.messages[0]?.text ?? '', unreadCount);
       }),
@@ -63,7 +67,9 @@ export class ChatService {
 
   /** Viewing the thread is what marks it read — plan §9's endpoint list has no separate "mark read" call. */
   async getMessages(conversationId: string, clientId: string): Promise<MessageDto[]> {
-    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
     if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.clientId !== clientId) throw new ForbiddenException();
 
@@ -80,14 +86,25 @@ export class ChatService {
     return messages.map((m) => toMessageDto(m, clientId));
   }
 
-  async sendMessage(conversationId: string, clientId: string, input: SendMessageInput): Promise<MessageDto> {
-    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId } });
+  async sendMessage(
+    conversationId: string,
+    clientId: string,
+    input: SendMessageInput,
+  ): Promise<MessageDto> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
     if (!conversation) throw new NotFoundException('Conversation not found');
     if (conversation.clientId !== clientId) throw new ForbiddenException();
 
     const [message] = await this.prisma.$transaction([
-      this.prisma.message.create({ data: { conversationId, authorId: clientId, text: input.text } }),
-      this.prisma.conversation.update({ where: { id: conversationId }, data: { lastMessageAt: new Date() } }),
+      this.prisma.message.create({
+        data: { conversationId, authorId: clientId, text: input.text },
+      }),
+      this.prisma.conversation.update({
+        where: { id: conversationId },
+        data: { lastMessageAt: new Date() },
+      }),
     ]);
 
     const dto = toMessageDto(message, clientId);
@@ -95,7 +112,10 @@ export class ChatService {
     // same client's other devices (multi-device sync), while the provider's
     // own `user:{id}` room needs the flag flipped for their eventual app.
     this.socketEmitter.emitToConversation(conversationId, 'message.created', dto);
-    this.socketEmitter.emitToUser(conversation.providerUserId, 'message.created', { ...dto, mine: false });
+    this.socketEmitter.emitToUser(conversation.providerUserId, 'message.created', {
+      ...dto,
+      mine: false,
+    });
 
     return dto;
   }

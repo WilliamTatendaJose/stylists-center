@@ -43,7 +43,10 @@ class FakeQueue {
 
   add(_name: string, _data: unknown, opts?: { jobId?: string }): Promise<FakeJob> {
     const id = opts?.jobId ?? `auto-${String(this.jobs.size)}`;
-    const job: FakeJob = { id, remove: async () => this.jobs.delete(id) as unknown as Promise<void> };
+    const job: FakeJob = {
+      id,
+      remove: async () => this.jobs.delete(id) as unknown as Promise<void>,
+    };
     this.jobs.set(id, job);
     return Promise.resolve(job);
   }
@@ -85,16 +88,26 @@ describe('BookingsService', () => {
     });
     cityId = city.id;
 
-    const category = await prisma.category.create({ data: { name: `BookingCat-${String(Date.now())}` } });
+    const category = await prisma.category.create({
+      data: { name: `BookingCat-${String(Date.now())}` },
+    });
     categoryId = category.id;
 
     const client = await prisma.user.create({
-      data: { phone: `+263773${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Booking Client', cityId },
+      data: {
+        phone: `+263773${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Booking Client',
+        cityId,
+      },
     });
     clientId = client.id;
 
     const providerAUser = await prisma.user.create({
-      data: { phone: `+263774${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Provider A', cityId },
+      data: {
+        phone: `+263774${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Provider A',
+        cityId,
+      },
     });
     providerAUserId = providerAUser.id;
     const providerA = await prisma.providerProfile.create({
@@ -119,7 +132,11 @@ describe('BookingsService', () => {
     serviceAId = firstService.id;
 
     const providerBUser = await prisma.user.create({
-      data: { phone: `+263775${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Provider B', cityId },
+      data: {
+        phone: `+263775${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Provider B',
+        cityId,
+      },
     });
     const providerB = await prisma.providerProfile.create({
       data: {
@@ -143,11 +160,15 @@ describe('BookingsService', () => {
     await prisma.review.deleteMany({ where: { bookingId: { in: createdBookingIds } } });
     await prisma.payment.deleteMany({ where: { bookingId: { in: createdBookingIds } } });
     await prisma.booking.deleteMany({ where: { id: { in: createdBookingIds } } });
-    await prisma.matchOffer.deleteMany({ where: { providerId: { in: [providerAId, providerBId] } } });
+    await prisma.matchOffer.deleteMany({
+      where: { providerId: { in: [providerAId, providerBId] } },
+    });
     await prisma.matchRequest.deleteMany({ where: { clientId } });
     await prisma.service.deleteMany({ where: { providerId: { in: [providerAId, providerBId] } } });
     await prisma.providerProfile.deleteMany({ where: { id: { in: [providerAId, providerBId] } } });
-    await prisma.user.deleteMany({ where: { id: { in: [clientId, providerAUserId, providerBUserId] } } });
+    await prisma.user.deleteMany({
+      where: { id: { in: [clientId, providerAUserId, providerBUserId] } },
+    });
     await prisma.category.delete({ where: { id: categoryId } });
     await prisma.city.delete({ where: { id: cityId } });
     await prisma.onModuleDestroy();
@@ -209,7 +230,12 @@ describe('BookingsService', () => {
     createdBookingIds.push(first.id);
 
     await expect(
-      bookings.create(clientId, { providerId: providerAId, serviceId: serviceAId, startsAt, paymentMethod: 'cash' }),
+      bookings.create(clientId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt,
+        paymentMethod: 'cash',
+      }),
     ).rejects.toThrow('no longer available');
   });
 
@@ -222,7 +248,9 @@ describe('BookingsService', () => {
     });
     createdBookingIds.push(created.id);
 
-    await expect(bookings.confirmCompletion(created.id, clientId)).rejects.toThrow('Cannot confirm completion');
+    await expect(bookings.confirmCompletion(created.id, clientId)).rejects.toThrow(
+      'Cannot confirm completion',
+    );
   });
 
   it('a cash booking needs both sides confirmed before it completes', async () => {
@@ -257,7 +285,10 @@ describe('BookingsService', () => {
     const result = await bookings.confirmCompletion(created.id, clientId);
     expect(result.status).toBe('completed');
 
-    const payments = await prisma.payment.findMany({ where: { bookingId: created.id }, orderBy: { createdAt: 'asc' } });
+    const payments = await prisma.payment.findMany({
+      where: { bookingId: created.id },
+      orderBy: { createdAt: 'asc' },
+    });
     expect(payments.map((p) => p.status)).toEqual(['held', 'released']);
   });
 
@@ -275,7 +306,9 @@ describe('BookingsService', () => {
     const provider = await prisma.providerProfile.findUniqueOrThrow({ where: { id: providerAId } });
     expect(provider.ratingAvg).toBe(5);
 
-    await expect(bookings.createReview(created.id, clientId, { rating: 4 })).rejects.toThrow('Already reviewed');
+    await expect(bookings.createReview(created.id, clientId, { rating: 4 })).rejects.toThrow(
+      'Already reviewed',
+    );
 
     const rows = await bookings.listForClient(clientId);
     const row = rows.find((r) => r.id === created.id);

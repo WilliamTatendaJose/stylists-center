@@ -50,7 +50,12 @@ const styles = StyleSheet.create({
   fromPanelBody: { marginTop: space.xs },
   reviewRow: { marginBottom: space.l },
   reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
-  directionsRow: { flexDirection: 'row', alignItems: 'center', gap: space.m, marginBottom: space.l },
+  directionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    marginBottom: space.l,
+  },
   directionsMiddle: { flex: 1 },
   footerRow: { flexDirection: 'row', gap: space.s },
   bookButton: { flex: 1 },
@@ -193,7 +198,9 @@ export default function ProviderProfile() {
             ))
           ) : (
             <View style={styles.fromPanel}>
-              <Text variant="h3">${((provider.fromPriceUsdCents ?? 0) / 100).toFixed(0)} and up</Text>
+              <Text variant="h3">
+                ${((provider.fromPriceUsdCents ?? 0) / 100).toFixed(0)} and up
+              </Text>
               <Text variant="meta" color="neutral700" style={styles.fromPanelBody}>
                 Final price agreed in chat before you pay.
               </Text>

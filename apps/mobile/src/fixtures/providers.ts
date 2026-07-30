@@ -154,7 +154,12 @@ export const PROVIDER_PROFILES: Record<string, ProviderProfileDto> = {
       { id: 'svc-relaxer', name: 'Relaxer touch-up', durationMinutes: 120, priceUsdCents: 2500 },
     ],
     reviews: [
-      { id: 'rev-1', authorName: 'Grace T.', rating: 4, text: 'Good work, salon gets busy on Saturdays.' },
+      {
+        id: 'rev-1',
+        authorName: 'Grace T.',
+        rating: 4,
+        text: 'Good work, salon gets busy on Saturdays.',
+      },
     ],
     workingHoursLabel: 'Tue–Sun, 09:00–19:00.',
   },
@@ -177,7 +182,9 @@ export const PROVIDER_PROFILES: Record<string, ProviderProfileDto> = {
       { id: 'svc-gel', name: 'Gel overlay', durationMinutes: 45, priceUsdCents: 1200 },
       { id: 'svc-acrylic', name: 'Full set acrylic', durationMinutes: 90, priceUsdCents: 2200 },
     ],
-    reviews: [{ id: 'rev-1', authorName: 'Nokutenda S.', rating: 5, text: 'Best nail tech in Belgravia.' }],
+    reviews: [
+      { id: 'rev-1', authorName: 'Nokutenda S.', rating: 5, text: 'Best nail tech in Belgravia.' },
+    ],
     workingHoursLabel: 'Mon–Sat, 08:30–17:30.',
   },
   [PROVIDER_IDS.nyasha]: {
@@ -199,7 +206,14 @@ export const PROVIDER_PROFILES: Record<string, ProviderProfileDto> = {
       { id: 'svc-bridal', name: 'Bridal makeup', durationMinutes: 90, priceUsdCents: 5000 },
       { id: 'svc-event', name: 'Event makeup', durationMinutes: 60, priceUsdCents: 3000 },
     ],
-    reviews: [{ id: 'rev-1', authorName: 'Fadzai N.', rating: 4, text: 'Lovely, natural look for my sister’s wedding.' }],
+    reviews: [
+      {
+        id: 'rev-1',
+        authorName: 'Fadzai N.',
+        rating: 4,
+        text: 'Lovely, natural look for my sister’s wedding.',
+      },
+    ],
     workingHoursLabel: 'By appointment, 7 days.',
   },
   [PROVIDER_IDS.rudo]: {
@@ -220,7 +234,14 @@ export const PROVIDER_PROFILES: Record<string, ProviderProfileDto> = {
       { id: 'svc-fade', name: 'Skin fade', durationMinutes: 30, priceUsdCents: 1000 },
       { id: 'svc-lineup', name: 'Line-up', durationMinutes: 15, priceUsdCents: 500 },
     ],
-    reviews: [{ id: 'rev-1', authorName: 'Tapiwa C.', rating: 5, text: 'Sharpest fade in Borrowdale, every time.' }],
+    reviews: [
+      {
+        id: 'rev-1',
+        authorName: 'Tapiwa C.',
+        rating: 5,
+        text: 'Sharpest fade in Borrowdale, every time.',
+      },
+    ],
     workingHoursLabel: 'Mon–Sat, 09:00–19:00.',
   },
 };

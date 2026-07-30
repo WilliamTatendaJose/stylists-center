@@ -1,6 +1,12 @@
 import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { color, motion } from '@sc/tokens';
 
 export interface LiveDotProps {

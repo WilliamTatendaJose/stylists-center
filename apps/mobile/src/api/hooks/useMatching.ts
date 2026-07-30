@@ -53,7 +53,8 @@ export function useRetryMatch() {
 /** `POST /v1/matches/:id/cancel`. */
 export function useCancelMatch() {
   return useMutation({
-    mutationFn: (matchId: string) => apiFetch<void>(`/v1/matches/${matchId}/cancel`, { method: 'POST' }),
+    mutationFn: (matchId: string) =>
+      apiFetch<void>(`/v1/matches/${matchId}/cancel`, { method: 'POST' }),
   });
 }
 

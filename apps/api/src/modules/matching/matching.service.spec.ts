@@ -44,7 +44,10 @@ class FakeQueue {
   add(name: string, data: unknown, opts?: { jobId?: string }): Promise<FakeJob> {
     const id = opts?.jobId ?? `auto-${String(this.added.length)}`;
     this.added.push({ name, data, ...(opts?.jobId ? { jobId: opts.jobId } : {}) });
-    const job: FakeJob = { id, remove: async () => this.jobs.delete(id) as unknown as Promise<void> };
+    const job: FakeJob = {
+      id,
+      remove: async () => this.jobs.delete(id) as unknown as Promise<void>,
+    };
     this.jobs.set(id, job);
     return Promise.resolve(job);
   }
@@ -82,11 +85,17 @@ describe('MatchingService', () => {
     });
     cityId = city.id;
 
-    const category = await prisma.category.create({ data: { name: `MatchCat-${String(Date.now())}` } });
+    const category = await prisma.category.create({
+      data: { name: `MatchCat-${String(Date.now())}` },
+    });
     categoryId = category.id;
 
     const client = await prisma.user.create({
-      data: { phone: `+263771${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Test Client', cityId },
+      data: {
+        phone: `+263771${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Test Client',
+        cityId,
+      },
     });
     clientId = client.id;
 
@@ -112,7 +121,11 @@ describe('MatchingService', () => {
           longitude: seed.lng,
           cityId,
           workingHoursLabel: 'Always',
-          services: { create: [{ name: 'Test service', durationMinutes: 30, priceUsdCents: seed.priceUsdCents }] },
+          services: {
+            create: [
+              { name: 'Test service', durationMinutes: 30, priceUsdCents: seed.priceUsdCents },
+            ],
+          },
         },
       });
       providerIds.push(provider.id);

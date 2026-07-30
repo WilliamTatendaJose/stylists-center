@@ -1,6 +1,6 @@
 import { Share, StyleSheet, View } from 'react-native';
 import { formatUsd } from '@sc/shared';
-import { Screen, ScreenHeader, Text, Badge, Card, Button } from '@sc/ui';
+import { Screen, ScreenHeader, Text, Badge, Card, Button, EmptyPanel } from '@sc/ui';
 import { color, space } from '@sc/tokens';
 import { useCashOut, useReferrals, useWallet } from '../../src/api/hooks/index.js';
 
@@ -39,11 +39,18 @@ const styles = StyleSheet.create({
 
 /** Agent wallet (handoff screen 11). Non-agents get an explicit "become an agent" CTA — unspecified in the handoff, but this tab needs some state for a client who hasn't verified yet. */
 export default function WalletScreen() {
-  const { data: wallet } = useWallet();
+  const { data: wallet, isError } = useWallet();
   const { data: referrals } = useReferrals();
   const cashOut = useCashOut();
 
-  if (!wallet) return null;
+  if (!wallet) {
+    if (!isError) return null; // still loading — Screen renders nothing rather than flash empty content
+    return (
+      <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} />}>
+        <EmptyPanel title="Couldn't load your wallet" body="Check your connection and try again." />
+      </Screen>
+    );
+  }
 
   if (!wallet.isVerifiedAgent) {
     return (

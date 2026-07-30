@@ -49,21 +49,35 @@ describe('ChatService', () => {
     });
     cityId = city.id;
 
-    const category = await prisma.category.create({ data: { name: `ChatCat-${String(Date.now())}` } });
+    const category = await prisma.category.create({
+      data: { name: `ChatCat-${String(Date.now())}` },
+    });
     categoryId = category.id;
 
     const client = await prisma.user.create({
-      data: { phone: `+263776${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Chat Client', cityId },
+      data: {
+        phone: `+263776${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Chat Client',
+        cityId,
+      },
     });
     clientId = client.id;
 
     const otherClient = await prisma.user.create({
-      data: { phone: `+263777${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Other Client', cityId },
+      data: {
+        phone: `+263777${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Other Client',
+        cityId,
+      },
     });
     otherClientId = otherClient.id;
 
     const providerUser = await prisma.user.create({
-      data: { phone: `+263778${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Chat Provider', cityId },
+      data: {
+        phone: `+263778${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Chat Provider',
+        cityId,
+      },
     });
     providerUserId = providerUser.id;
     const provider = await prisma.providerProfile.create({
@@ -87,7 +101,9 @@ describe('ChatService', () => {
     await prisma.message.deleteMany({ where: { conversation: { providerUserId } } });
     await prisma.conversation.deleteMany({ where: { providerUserId } });
     await prisma.providerProfile.delete({ where: { id: providerId } });
-    await prisma.user.deleteMany({ where: { id: { in: [clientId, otherClientId, providerUserId] } } });
+    await prisma.user.deleteMany({
+      where: { id: { in: [clientId, otherClientId, providerUserId] } },
+    });
     await prisma.category.delete({ where: { id: categoryId } });
     await prisma.city.delete({ where: { id: cityId } });
     await prisma.onModuleDestroy();
@@ -109,7 +125,9 @@ describe('ChatService', () => {
 
   it('sends a message, marks it "mine" for the sender, and shows it in the thread', async () => {
     const conversation = await chat.getOrCreateByProvider(clientId, providerId);
-    const sent = await chat.sendMessage(conversation.id, clientId, { text: 'Hi, are you free today?' });
+    const sent = await chat.sendMessage(conversation.id, clientId, {
+      text: 'Hi, are you free today?',
+    });
     expect(sent.mine).toBe(true);
     expect(sent.text).toBe('Hi, are you free today?');
 
@@ -129,7 +147,11 @@ describe('ChatService', () => {
     const conversation = await chat.getOrCreateByProvider(clientId, providerId);
     // Simulate the provider replying (no provider app in M1, so write it directly).
     await prisma.message.create({
-      data: { conversationId: conversation.id, authorId: providerUserId, text: 'Yes, come by at 4.' },
+      data: {
+        conversationId: conversation.id,
+        authorId: providerUserId,
+        text: 'Yes, come by at 4.',
+      },
     });
 
     const list = await chat.list(clientId);

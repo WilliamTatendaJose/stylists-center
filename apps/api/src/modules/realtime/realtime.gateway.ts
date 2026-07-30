@@ -103,8 +103,13 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
   }
 
   @SubscribeMessage('message.typing')
-  onTyping(@MessageBody() payload: { conversationId: string }, @ConnectedSocket() socket: Socket): void {
+  onTyping(
+    @MessageBody() payload: { conversationId: string },
+    @ConnectedSocket() socket: Socket,
+  ): void {
     const { userId } = socket.data as SocketData;
-    socket.to(`conversation:${payload.conversationId}`).emit('message.typing', { ...payload, userId });
+    socket
+      .to(`conversation:${payload.conversationId}`)
+      .emit('message.typing', { ...payload, userId });
   }
 }

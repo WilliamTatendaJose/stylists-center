@@ -106,9 +106,7 @@ export function RadioCard({
       onPress={onPress}
       style={[styles.base, cardStyle]}
     >
-      {dot ? (
-        <View style={[styles.dot, dotStyle, selected ? styles.dotFillInset : null]} />
-      ) : null}
+      {dot ? <View style={[styles.dot, dotStyle, selected ? styles.dotFillInset : null]} /> : null}
       <View style={styles.body}>
         <Text variant="cardTitle">{title}</Text>
         {description ? (

@@ -25,7 +25,11 @@ export class ChatController {
   }
 
   @Post(':id/messages')
-  sendMessage(@Param('id') id: string, @CurrentUser() user: { id: string }, @Body() dto: SendMessageDto) {
+  sendMessage(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Body() dto: SendMessageDto,
+  ) {
     return this.chat.sendMessage(id, user.id, dto);
   }
 }

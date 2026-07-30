@@ -115,7 +115,11 @@ describe('GeoRepository', () => {
   });
 
   it('returns all providers, unfiltered, when radiusKm is null (Home\'s "available" list)', async () => {
-    const rows = await geo.findProvidersWithinRadius(CLIENT_LOCATION.lat, CLIENT_LOCATION.lng, null);
+    const rows = await geo.findProvidersWithinRadius(
+      CLIENT_LOCATION.lat,
+      CLIENT_LOCATION.lng,
+      null,
+    );
     expect(rows.map((r) => r.displayName)).toContain('TestRudo');
   });
 

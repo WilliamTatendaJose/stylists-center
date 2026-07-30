@@ -23,7 +23,10 @@ function buildSteps(distanceKm: number): RouteStepDto[] {
       distanceLabel: `${(distanceKm * 0.5).toFixed(1)} km`,
       text: 'Continue straight until you reach the junction.',
     },
-    { distanceLabel: `${(distanceKm * 0.1).toFixed(1)} km`, text: 'Arrive at the destination on your right.' },
+    {
+      distanceLabel: `${(distanceKm * 0.1).toFixed(1)} km`,
+      text: 'Arrive at the destination on your right.',
+    },
   ];
 }
 

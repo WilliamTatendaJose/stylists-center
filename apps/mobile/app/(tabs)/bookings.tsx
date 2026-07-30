@@ -23,7 +23,11 @@ import {
   ReportSheet,
   EmptyPanel,
 } from '@sc/ui';
-import { useConfirmCompletion, useCreateReview, useMyBookings } from '../../src/api/hooks/useBookings.js';
+import {
+  useConfirmCompletion,
+  useCreateReview,
+  useMyBookings,
+} from '../../src/api/hooks/useBookings.js';
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
 
 const STARS = [1, 2, 3, 4, 5];
@@ -50,7 +54,7 @@ const styles = StyleSheet.create({
 
 /** Bookings (handoff screen 9): awaiting-stylist, cash-reconciliation, and completed row states. */
 export default function Bookings() {
-  const { data: bookings = [] } = useMyBookings();
+  const { data: bookings = [], isError, isLoading } = useMyBookings();
   const confirmCompletion = useConfirmCompletion();
   const createReview = useCreateReview();
   const createReport = useCreateReport();
@@ -82,13 +86,20 @@ export default function Bookings() {
 
   const submitReport = (reason: ReportReason) => {
     if (reportTarget) {
-      createReport.mutate({ providerId: reportTarget.providerId, bookingId: reportTarget.id, reason });
+      createReport.mutate({
+        providerId: reportTarget.providerId,
+        bookingId: reportTarget.id,
+        reason,
+      });
     }
     setLastReportReason(reason);
   };
 
   const goOnMyWay = (booking: BookingRowDto) => {
-    router.push({ pathname: '/map/trip', params: { bookingId: booking.id, providerId: booking.providerId } });
+    router.push({
+      pathname: '/map/trip',
+      params: { bookingId: booking.id, providerId: booking.providerId },
+    });
   };
 
   const goDirections = (booking: BookingRowDto) => {
@@ -104,8 +115,21 @@ export default function Bookings() {
           </Text>
         ) : null}
 
-        {bookings.length === 0 ? (
-          <EmptyPanel body="No bookings yet — find a stylist and send a request." />
+        {isError ? (
+          <EmptyPanel
+            title="Couldn't load your bookings"
+            body="Check your connection and try again — showing what we last had, if anything."
+          />
+        ) : null}
+
+        {!isError && bookings.length === 0 ? (
+          <EmptyPanel
+            body={
+              isLoading
+                ? 'Loading your bookings…'
+                : 'No bookings yet — find a stylist and send a request.'
+            }
+          />
         ) : (
           bookings.map((booking) => {
             const reconcile = needsCashReconciliation(booking);

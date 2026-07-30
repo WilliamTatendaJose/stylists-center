@@ -6,7 +6,10 @@ export type BookingWithRelations = Prisma.BookingGetPayload<{
   include: { provider: true; service: true };
 }>;
 
-export function toBookingRowDto(booking: BookingWithRelations, alreadyRated: boolean): BookingRowDto {
+export function toBookingRowDto(
+  booking: BookingWithRelations,
+  alreadyRated: boolean,
+): BookingRowDto {
   return {
     id: booking.id,
     providerId: booking.providerId,

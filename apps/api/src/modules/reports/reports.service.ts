@@ -8,7 +8,9 @@ export class ReportsService {
 
   /** Every M1 report target is a provider — `providerId` resolves to the real reportedId (a User id) here, so the client never needs to know it. */
   async create(reporterId: string, input: CreateReportInput): Promise<void> {
-    const provider = await this.prisma.providerProfile.findUnique({ where: { id: input.providerId } });
+    const provider = await this.prisma.providerProfile.findUnique({
+      where: { id: input.providerId },
+    });
     if (!provider) throw new NotFoundException('Provider not found');
 
     await this.prisma.report.create({

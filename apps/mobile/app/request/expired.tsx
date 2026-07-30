@@ -9,7 +9,13 @@ import { useMatch, useRetryMatch } from '../../src/api/hooks/useMatching.js';
 import { useRequestStore } from '../../src/state/index.js';
 
 const styles = StyleSheet.create({
-  bar: { width: 56, height: 5, borderRadius: 2.5, backgroundColor: color.accent, marginBottom: space.l },
+  bar: {
+    width: 56,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: color.accent,
+    marginBottom: space.l,
+  },
   title: { marginBottom: space.s },
   body: { marginBottom: space.xl },
   panel: {
@@ -102,7 +108,9 @@ export default function Expired() {
       <View style={styles.actions}>
         {canTryAgain && next ? (
           <Button
-            label={retryMatch.isPending ? 'Trying again…' : `Try again — attempt ${String(attempt + 1)}`}
+            label={
+              retryMatch.isPending ? 'Trying again…' : `Try again — attempt ${String(attempt + 1)}`
+            }
             block
             arrow
             disabled={retryMatch.isPending}

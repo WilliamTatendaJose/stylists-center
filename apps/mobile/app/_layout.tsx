@@ -4,14 +4,14 @@ import { Stack } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import {
   useFonts,
   Archivo_400Regular,
   Archivo_600SemiBold,
   Archivo_800ExtraBold,
 } from '@expo-google-fonts/archivo';
-import { queryClient } from '../src/api/queryClient.js';
+import { PERSIST_OPTIONS, queryClient } from '../src/api/queryClient.js';
 import { useSessionStore } from '../src/state/index.js';
 import { downloadAvondaleAreaPack } from '../src/offline/downloadAreaPack.js';
 import { useAuthGate } from '../src/auth/useAuthGate.js';
@@ -24,8 +24,10 @@ const styles = StyleSheet.create({
  * Root layout. GestureHandlerRootView must wrap everything for
  * react-native-gesture-handler (and by extension @gorhom/bottom-sheet, Tier 3)
  * to work at all; SafeAreaProvider is required by every Screen's
- * useSafeAreaInsets() call. QueryClientProvider makes the mock/future-HTTP
- * hooks in src/api/hooks available to every screen. BottomSheetModalProvider
+ * useSafeAreaInsets() call. PersistQueryClientProvider makes the HTTP hooks
+ * in src/api/hooks available to every screen, and restores the last-known
+ * -good server state from AsyncStorage on cold start (plan §7) so a screen
+ * still shows something before the first real fetch resolves. BottomSheetModalProvider
  * is required by @sc/ui's Sheet (the role switcher, report-a-problem).
  */
 export default function RootLayout() {
@@ -57,11 +59,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
+        <PersistQueryClientProvider client={queryClient} persistOptions={PERSIST_OPTIONS}>
           <BottomSheetModalProvider>
             <Stack screenOptions={{ headerShown: false }} />
           </BottomSheetModalProvider>
-        </QueryClientProvider>
+        </PersistQueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

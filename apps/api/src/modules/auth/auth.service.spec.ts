@@ -75,7 +75,9 @@ describe('AuthService', () => {
   });
 
   async function cleanup() {
-    await prisma.refreshToken.deleteMany({ where: { user: { phone: { startsWith: '+26377999' } } } });
+    await prisma.refreshToken.deleteMany({
+      where: { user: { phone: { startsWith: '+26377999' } } },
+    });
     await prisma.user.deleteMany({ where: { phone: { startsWith: '+26377999' } } });
     const keys = await redis.keys('otp:*');
     if (keys.length) await redis.del(...keys);
@@ -106,9 +108,13 @@ describe('AuthService', () => {
     for (let i = 0; i < 4; i++) {
       await expect(auth.verifyOtp(challengeId, '111111')).rejects.toThrow('Incorrect code');
     }
-    await expect(auth.verifyOtp(challengeId, '111111')).rejects.toThrow('Too many incorrect attempts');
+    await expect(auth.verifyOtp(challengeId, '111111')).rejects.toThrow(
+      'Too many incorrect attempts',
+    );
     // The challenge is now deleted — even the correct code no longer works.
-    await expect(auth.verifyOtp(challengeId, '000000')).rejects.toThrow('Challenge expired or not found');
+    await expect(auth.verifyOtp(challengeId, '000000')).rejects.toThrow(
+      'Challenge expired or not found',
+    );
   });
 
   it('rate-limits OTP requests per phone number', async () => {

@@ -42,7 +42,9 @@ export class GeoRepository {
       radiusKm === null
         ? Prisma.empty
         : Prisma.sql`AND ST_DWithin(p.location, ${point}, ${radiusKm * 1000})`;
-    const categoryFilter = categoryId ? Prisma.sql`AND p."categoryId" = ${categoryId}` : Prisma.empty;
+    const categoryFilter = categoryId
+      ? Prisma.sql`AND p."categoryId" = ${categoryId}`
+      : Prisma.empty;
 
     return this.prisma.$queryRaw<ProviderGeoRow[]>`
       SELECT
@@ -95,7 +97,11 @@ export class GeoRepository {
   }
 
   /** Provider count per category within radius — Home/New-request's live "N near you" figures. */
-  async countProvidersByCategory(lat: number, lng: number, radiusKm: number): Promise<Map<string, number>> {
+  async countProvidersByCategory(
+    lat: number,
+    lng: number,
+    radiusKm: number,
+  ): Promise<Map<string, number>> {
     const point = Prisma.sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`;
     const rows = await this.prisma.$queryRaw<{ categoryId: string; count: bigint }[]>`
       SELECT p."categoryId", COUNT(*) AS count

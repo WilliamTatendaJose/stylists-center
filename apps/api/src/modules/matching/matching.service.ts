@@ -1,4 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
 import {
@@ -41,7 +46,10 @@ export class MatchingService {
     @InjectQueue(MATCHING_QUEUE) private readonly queue: Queue,
   ) {}
 
-  async createMatch(clientId: string, input: CreateMatchRequestInput): Promise<CreateMatchRequestResponse> {
+  async createMatch(
+    clientId: string,
+    input: CreateMatchRequestInput,
+  ): Promise<CreateMatchRequestResponse> {
     const expiresAt = new Date(Date.now() + MATCH_REQUEST_TTL_SECONDS * 1000);
 
     const match = await this.prisma.matchRequest.create({
@@ -49,7 +57,8 @@ export class MatchingService {
         clientId,
         categoryId: input.categoryId,
         budgetMode: input.budget.mode,
-        budgetAmountUsdCents: input.budget.mode === 'fixed' ? Math.round(input.budget.amountUsd * 100) : null,
+        budgetAmountUsdCents:
+          input.budget.mode === 'fixed' ? Math.round(input.budget.amountUsd * 100) : null,
         radiusKm: input.radiusKm,
         latitude: input.location.lat,
         longitude: input.location.lng,
@@ -89,7 +98,10 @@ export class MatchingService {
             matchRequestId: matchId,
             providerId: p.id,
             state: 'offered',
-            quoteUsdCents: p.priceDisplay === 'from' ? (p.fromPriceUsdCents ?? 0) : (p.minServicePriceUsdCents ?? 0),
+            quoteUsdCents:
+              p.priceDisplay === 'from'
+                ? (p.fromPriceUsdCents ?? 0)
+                : (p.minServicePriceUsdCents ?? 0),
             respondBy,
           },
         }),
@@ -122,7 +134,9 @@ export class MatchingService {
           : { mode: 'flex' },
       );
       for (const provider of providers) {
-        const profile = await this.prisma.providerProfile.findUnique({ where: { id: provider.id } });
+        const profile = await this.prisma.providerProfile.findUnique({
+          where: { id: provider.id },
+        });
         if (!profile) continue;
         this.socketEmitter.emitToUser(profile.userId, 'match.offered', {
           matchId,
@@ -246,7 +260,10 @@ export class MatchingService {
 
     await this.prisma.matchOffer.update({ where: { id: offer.id }, data: { state: 'accepted' } });
     if (match.state === 'pending' || match.state === 'offered') {
-      await this.prisma.matchRequest.update({ where: { id: matchId }, data: { state: 'accepted' } });
+      await this.prisma.matchRequest.update({
+        where: { id: matchId },
+        data: { state: 'accepted' },
+      });
     }
 
     const dto: MatchOfferDto = {

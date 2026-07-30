@@ -10,7 +10,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type Redis from 'ioredis';
-import { normalizePhone, type ActiveRole, type AuthTokens, type Me, type RequestOtpResponse } from '@sc/shared';
+import {
+  normalizePhone,
+  type ActiveRole,
+  type AuthTokens,
+  type Me,
+  type RequestOtpResponse,
+} from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CLIENT } from '../redis/redis.module';
 import type { Env } from '../../config/env';
@@ -73,7 +79,11 @@ export class AuthService {
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
 
     const challenge: OtpChallenge = { phone, codeHash: sha256Hex(code), attempts: 0 };
-    await this.redis.setex(`otp:challenge:${challengeId}`, OTP_TTL_SECONDS, JSON.stringify(challenge));
+    await this.redis.setex(
+      `otp:challenge:${challengeId}`,
+      OTP_TTL_SECONDS,
+      JSON.stringify(challenge),
+    );
 
     // Real SMS/WhatsApp delivery is a later milestone (plan risk R4) — in
     // dev, `code` already equals AUTH_DEV_OTP, so there's nothing to send.

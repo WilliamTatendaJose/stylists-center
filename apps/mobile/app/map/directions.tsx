@@ -11,7 +11,12 @@ import { useBack } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
   mapPane: { borderRadius: radius.card, overflow: 'hidden', marginBottom: space.xxl },
-  destinationRow: { flexDirection: 'row', gap: space.m, alignItems: 'center', marginBottom: space.xxl },
+  destinationRow: {
+    flexDirection: 'row',
+    gap: space.m,
+    alignItems: 'center',
+    marginBottom: space.xxl,
+  },
   destinationMiddle: { flex: 1, minWidth: 0 },
   statRow: { flexDirection: 'row', gap: space.s, marginBottom: space.xxl },
   section: { marginBottom: space.xxl },
@@ -70,7 +75,12 @@ export default function Directions() {
       }
       footer={
         <View style={styles.footerRow}>
-          <Button label="Message" variant="secondary" style={styles.footerButton} onPress={goMessage} />
+          <Button
+            label="Message"
+            variant="secondary"
+            style={styles.footerButton}
+            onPress={goMessage}
+          />
           <Button
             label="Start navigation"
             arrow

@@ -27,7 +27,12 @@ const styles = StyleSheet.create({
   wordmark: { marginRight: 'auto' },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   hero: { marginBottom: space.l },
-  searchRow: { flexDirection: 'row', gap: space.s, alignItems: 'center', marginBottom: layout.section },
+  searchRow: {
+    flexDirection: 'row',
+    gap: space.s,
+    alignItems: 'center',
+    marginBottom: layout.section,
+  },
   mapButton: {
     width: 42,
     height: 42,
@@ -52,11 +57,12 @@ const styles = StyleSheet.create({
   sheetTitle: { marginBottom: space.s },
   sheetBody: { marginBottom: space.xl },
   sheetActions: { gap: space.s },
+  errorNote: { marginBottom: space.m },
 });
 
 export default function Find() {
-  const { data: categories } = useCategories();
-  const { data: providers } = useNearbyProviders();
+  const { data: categories, isError: categoriesError } = useCategories();
+  const { data: providers, isError: providersError } = useNearbyProviders();
   const activeRole = useSessionStore((s) => s.activeRole);
   const hasProviderProfile = useSessionStore((s) => s.hasProviderProfile);
   const setCategory = useRequestStore((s) => s.setCategory);
@@ -104,6 +110,12 @@ export default function Find() {
         <Text variant="h2" style={styles.hero}>
           Book the hands{'\n'}you actually want.
         </Text>
+
+        {categoriesError || providersError ? (
+          <Text variant="meta" color={color.accent700} style={styles.errorNote}>
+            Couldn&apos;t load the latest listings — showing what we last had, if anything.
+          </Text>
+        ) : null}
 
         <View style={styles.searchRow}>
           <SearchField placeholder="Looking for a good braider…" onPress={goMap} />
@@ -167,8 +179,8 @@ export default function Find() {
             Don&apos;t browse. Let them come to you.
           </Text>
           <Text variant="meta" color="neutral700" style={styles.promoBody}>
-            Tell us the service and your budget. Every available stylist within your radius gets
-            the request — you pick from whoever accepts.
+            Tell us the service and your budget. Every available stylist within your radius gets the
+            request — you pick from whoever accepts.
           </Text>
           <Button label="Post a request" onPress={openRequest} block arrow />
         </Card>

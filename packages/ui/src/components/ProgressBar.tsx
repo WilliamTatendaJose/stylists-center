@@ -1,6 +1,11 @@
 import { useEffect } from 'react';
 import { StyleSheet, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming, Easing } from 'react-native-reanimated';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { color, motion } from '@sc/tokens';
 
 export interface ProgressBarProps {

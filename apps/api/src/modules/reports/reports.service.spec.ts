@@ -49,16 +49,26 @@ describe('ReportsService', () => {
     });
     cityId = city.id;
 
-    const category = await prisma.category.create({ data: { name: `ReportCat-${String(Date.now())}` } });
+    const category = await prisma.category.create({
+      data: { name: `ReportCat-${String(Date.now())}` },
+    });
     categoryId = category.id;
 
     const reporter = await prisma.user.create({
-      data: { phone: `+263781${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Reporter', cityId },
+      data: {
+        phone: `+263781${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Reporter',
+        cityId,
+      },
     });
     reporterId = reporter.id;
 
     const providerUser = await prisma.user.create({
-      data: { phone: `+263782${String(Math.floor(Math.random() * 900000) + 100000)}`, displayName: 'Reported Provider', cityId },
+      data: {
+        phone: `+263782${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Reported Provider',
+        cityId,
+      },
     });
     providerUserId = providerUser.id;
     const provider = await prisma.providerProfile.create({
@@ -131,7 +141,10 @@ describe('ReportsService', () => {
 
   it('rejects a report against a provider that does not exist', async () => {
     await expect(
-      reports.create(reporterId, { providerId: '00000000-0000-4000-8000-000000000000', reason: 'other' }),
+      reports.create(reporterId, {
+        providerId: '00000000-0000-4000-8000-000000000000',
+        reason: 'other',
+      }),
     ).rejects.toThrow('Provider not found');
   });
 });

@@ -65,7 +65,9 @@ export class ProvidersService {
         durationMinutes: s.durationMinutes,
         priceUsdCents: s.priceUsdCents,
       })),
-      ...(provider.fromPriceUsdCents !== null ? { fromPriceUsdCents: provider.fromPriceUsdCents } : {}),
+      ...(provider.fromPriceUsdCents !== null
+        ? { fromPriceUsdCents: provider.fromPriceUsdCents }
+        : {}),
       reviews: reviews.map((r) => ({
         id: r.id,
         authorName: r.rater.displayName,
@@ -77,7 +79,10 @@ export class ProvidersService {
   }
 
   async getSlots(providerId: string, date: string): Promise<ProviderSlotsResponse> {
-    const candidates = CANDIDATE_TIMES.map((time) => ({ time, instant: harareSlotToUtc(date, time) }));
+    const candidates = CANDIDATE_TIMES.map((time) => ({
+      time,
+      instant: harareSlotToUtc(date, time),
+    }));
 
     const bookings = await this.prisma.booking.findMany({
       where: {

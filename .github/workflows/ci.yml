@@ -29,8 +29,11 @@ jobs:
           --health-retries 20
       redis:
         image: redis:7-alpine
+        # Every apps/api/**/*.spec.ts hardcodes redis://localhost:6380 (matching
+        # docker-compose.yml's own port choice, so local dev and CI agree) —
+        # keep this mapping in sync with those, not with Redis's default 6379.
         ports:
-          - 6379:6379
+          - 6380:6379
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
@@ -39,7 +42,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://sc:sc@localhost:5432/sc_test
-      REDIS_URL: redis://localhost:6379
+      REDIS_URL: redis://localhost:6380
       JWT_ACCESS_SECRET: ci-secret-value-at-least-32-characters-long
       JWT_REFRESH_PEPPER: ci-pepper-value-at-least-32-characters-long
 
@@ -63,5 +66,12 @@ jobs:
           restore-keys: turbo-
 
       - run: pnpm format:check
+
+      # apps/api's test suite is integration-style against real tables (see
+      # apps/api/README notes on migrations) — without this the fresh sc_test
+      # database has no schema at all and every test fails with "relation does
+      # not exist". Always `deploy`, never `dev` — see the hand-written
+      # migrations for why.
+      - run: pnpm --filter @sc/api prisma:migrate
 
       - run: pnpm turbo run typecheck lint test --cache-dir=.turbo

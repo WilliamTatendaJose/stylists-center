@@ -9,15 +9,7 @@ import {
   RADIUS_LADDER_KM,
   type RadiusKm,
 } from '@sc/shared';
-import {
-  Screen,
-  ScreenHeader,
-  Text,
-  Chip,
-  SegmentedPills,
-  RangeInput,
-  Button,
-} from '@sc/ui';
+import { Screen, ScreenHeader, Text, Chip, SegmentedPills, RangeInput, Button } from '@sc/ui';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
 import { useCreateMatch } from '../../src/api/hooks/useMatching.js';
 import { useRequestStore } from '../../src/state/index.js';
@@ -40,7 +32,12 @@ const styles = StyleSheet.create({
     padding: space.l,
     marginTop: space.m,
   },
-  amountHeader: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: space.s },
+  amountHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginBottom: space.s,
+  },
   summary: { borderTopWidth: 1, borderTopColor: color.divider, paddingTop: space.ml },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 3 },
 });
@@ -87,11 +84,7 @@ export default function NewRequest() {
       header={<ScreenHeader title="New request" onBack={onBack} />}
       footer={
         <Button
-          label={
-            createMatch.isPending
-              ? 'Sending…'
-              : `Send to ${String(inRange)} stylists`
-          }
+          label={createMatch.isPending ? 'Sending…' : `Send to ${String(inRange)} stylists`}
           onPress={sendRequest}
           block
           size="lg"
@@ -122,7 +115,11 @@ export default function NewRequest() {
         <Text variant="sectionLabel" style={styles.sectionLabelSpace}>
           Budget
         </Text>
-        <SegmentedPills options={BUDGET_MODE_OPTIONS} value={budget.mode} onChange={setBudgetMode} />
+        <SegmentedPills
+          options={BUDGET_MODE_OPTIONS}
+          value={budget.mode}
+          onChange={setBudgetMode}
+        />
         {budget.mode === 'fixed' ? (
           <View style={styles.amountPanel}>
             <View style={styles.amountHeader}>

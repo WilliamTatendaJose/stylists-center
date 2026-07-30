@@ -32,7 +32,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start' },
   headerText: { flex: 1, gap: 3 },
   progressWrap: { marginTop: space.l, marginBottom: space.xl },
-  radarBlock: { height: 230, alignItems: 'center', justifyContent: 'center', marginBottom: space.xl },
+  radarBlock: {
+    height: 230,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.xl,
+  },
   countdownOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center' },
   offersHeading: { marginBottom: space.s },
   offerCard: { marginBottom: space.s },
@@ -55,7 +60,9 @@ export default function Searching() {
 
   const expiresAt = match?.expiresAt ?? null;
   const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(() => (expiresAt ? secondsRemaining(expiresAt) : 0));
+  const [secondsLeft, setSecondsLeft] = useState(() =>
+    expiresAt ? secondsRemaining(expiresAt) : 0,
+  );
 
   // Cold-start / deep-link guard — this screen only makes sense mid-search.
   useEffect(() => {
@@ -190,7 +197,12 @@ export default function Searching() {
         ) : (
           offers.map((offer) => (
             <Animated.View key={offer.id} entering={scOffer()} style={styles.offerCard}>
-              <OfferCard offer={offer} onView={() => { viewOffer(offer.providerId); }} />
+              <OfferCard
+                offer={offer}
+                onView={() => {
+                  viewOffer(offer.providerId);
+                }}
+              />
             </Animated.View>
           ))
         )}

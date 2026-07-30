@@ -11,7 +11,14 @@ export interface RangeInputProps {
 }
 
 /** The budget slider (New request's "Up to $NN" panel) — accent thumb, 10-120 step 5. */
-export function RangeInput({ min, max, step, value, onChange, accessibilityLabel }: RangeInputProps) {
+export function RangeInput({
+  min,
+  max,
+  step,
+  value,
+  onChange,
+  accessibilityLabel,
+}: RangeInputProps) {
   return (
     <Slider
       accessibilityLabel={accessibilityLabel}

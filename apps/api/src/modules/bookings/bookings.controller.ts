@@ -25,7 +25,11 @@ export class BookingsController {
   }
 
   @Post(':id/reviews')
-  review(@Param('id') id: string, @CurrentUser() user: { id: string }, @Body() dto: CreateReviewDto) {
+  review(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Body() dto: CreateReviewDto,
+  ) {
     return this.bookings.createReview(id, user.id, dto);
   }
 }

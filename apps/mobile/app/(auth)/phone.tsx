@@ -35,7 +35,9 @@ export default function PhoneEntry() {
         params: { challengeId: response.challengeId, phone: phone.trim() },
       });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't send a code — check your connection.");
+      setError(
+        err instanceof ApiError ? err.message : "Couldn't send a code — check your connection.",
+      );
     } finally {
       setLoading(false);
     }

@@ -1,10 +1,5 @@
 import { createZodDto } from 'nestjs-zod';
-import {
-  requestOtpSchema,
-  verifyOtpSchema,
-  refreshSchema,
-  setActiveRoleSchema,
-} from '@sc/shared';
+import { requestOtpSchema, verifyOtpSchema, refreshSchema, setActiveRoleSchema } from '@sc/shared';
 
 /**
  * Wraps @sc/shared's zod schemas as nestjs-zod DTO classes — the global

@@ -1,7 +1,13 @@
 import { useMemo } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import type { StyleSpecification } from '@maplibre/maplibre-gl-style-spec';
-import { Map as MapLibreMap, Camera, GeoJSONSource, Layer, Marker } from '@maplibre/maplibre-react-native';
+import {
+  Map as MapLibreMap,
+  Camera,
+  GeoJSONSource,
+  Layer,
+  Marker,
+} from '@maplibre/maplibre-react-native';
 import { circle } from '@turf/circle';
 import { along } from '@turf/along';
 import { length as turfLength } from '@turf/length';
@@ -100,7 +106,15 @@ const styles = StyleSheet.create({
   },
 });
 
-function PinMarker({ initials, tint, inverted }: { initials?: string; tint?: string; inverted: boolean }) {
+function PinMarker({
+  initials,
+  tint,
+  inverted,
+}: {
+  initials?: string;
+  tint?: string;
+  inverted: boolean;
+}) {
   const pillStyle = inverted ? styles.markerPillAccent : styles.markerPillDark;
   const discStyle = inverted ? styles.markerDiscOnAccent : styles.markerDiscTintedByProvider;
   const discFill = !inverted && tint ? { backgroundColor: tint } : null;
@@ -132,7 +146,15 @@ function DotMarker() {
  * native attribution button, since a licence requirement needs to be
  * something a unit test can assert on.
  */
-export function ScMap({ center, zoom = 15, markers = [], radiusKm, routeCoordinates, tripProgress, style }: ScMapProps) {
+export function ScMap({
+  center,
+  zoom = 15,
+  markers = [],
+  radiusKm,
+  routeCoordinates,
+  tripProgress,
+  style,
+}: ScMapProps) {
   const radiusFeature = useMemo(() => {
     if (radiusKm === undefined) return null;
     return circle(center, radiusKm, { steps: 64, units: 'kilometers' });
@@ -154,7 +176,13 @@ export function ScMap({ center, zoom = 15, markers = [], radiusKm, routeCoordina
 
   return (
     <View style={[styles.fill, style]}>
-      <MapLibreMap mapStyle={RASTER_STYLE} style={styles.map} attribution={false} logo={false} compass={false}>
+      <MapLibreMap
+        mapStyle={RASTER_STYLE}
+        style={styles.map}
+        attribution={false}
+        logo={false}
+        compass={false}
+      >
         <Camera center={center} zoom={zoom} />
 
         {radiusFeature ? (
@@ -164,7 +192,11 @@ export function ScMap({ center, zoom = 15, markers = [], radiusKm, routeCoordina
               type="fill"
               paint={{ 'fill-color': color.accent, 'fill-opacity': 0.05 }}
             />
-            <Layer id="sc-radius-line" type="line" paint={{ 'line-color': color.accent, 'line-width': 1 }} />
+            <Layer
+              id="sc-radius-line"
+              type="line"
+              paint={{ 'line-color': color.accent, 'line-width': 1 }}
+            />
           </GeoJSONSource>
         ) : null}
 

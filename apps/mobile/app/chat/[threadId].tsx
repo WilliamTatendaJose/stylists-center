@@ -40,7 +40,10 @@ const styles = StyleSheet.create({
  * `providerId` param.
  */
 export default function Chat() {
-  const { threadId, providerId } = useLocalSearchParams<{ threadId: string; providerId?: string }>();
+  const { threadId, providerId } = useLocalSearchParams<{
+    threadId: string;
+    providerId?: string;
+  }>();
   const onBack = useBack('/(tabs)/messages');
   const startConversation = useStartConversation();
   const { data: conversations } = useConversations();
@@ -54,7 +57,8 @@ export default function Chat() {
   }, [providerId]);
 
   const conversation =
-    resolvedConversation ?? (!providerId ? (conversations?.find((c) => c.id === threadId) ?? null) : null);
+    resolvedConversation ??
+    (!providerId ? (conversations?.find((c) => c.id === threadId) ?? null) : null);
   const conversationId = conversation?.id ?? null;
 
   const { data: messages = [] } = useConversationMessages(conversationId);

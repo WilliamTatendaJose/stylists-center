@@ -5,6 +5,7 @@ import { apiFetch } from '../client.js';
 /** `POST /v1/reports`. */
 export function useCreateReport() {
   return useMutation({
-    mutationFn: (input: CreateReportInput) => apiFetch<void>('/v1/reports', { method: 'POST', body: input }),
+    mutationFn: (input: CreateReportInput) =>
+      apiFetch<void>('/v1/reports', { method: 'POST', body: input }),
   });
 }

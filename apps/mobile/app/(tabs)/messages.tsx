@@ -5,7 +5,7 @@ import { useConversations } from '../../src/api/hooks/useChat.js';
 
 /** Messages inbox (thread list; conversations open at /chat/[threadId]). */
 export default function Messages() {
-  const { data: conversations = [] } = useConversations();
+  const { data: conversations = [], isError, isLoading } = useConversations();
   const sorted = [...conversations].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
 
   const openThread = (threadId: string) => {
@@ -14,8 +14,21 @@ export default function Messages() {
 
   return (
     <Screen hasTabBar header={<ScreenHeader title="Messages" showBack={false} />}>
-      {sorted.length === 0 ? (
-        <EmptyPanel body="No conversations yet — message a stylist from their profile to start one." />
+      {isError ? (
+        <EmptyPanel
+          title="Couldn't load your messages"
+          body="Check your connection and try again — showing what we last had, if anything."
+        />
+      ) : null}
+
+      {!isError && sorted.length === 0 ? (
+        <EmptyPanel
+          body={
+            isLoading
+              ? 'Loading your conversations…'
+              : 'No conversations yet — message a stylist from their profile to start one.'
+          }
+        />
       ) : (
         sorted.map((conversation) => (
           <ListRow

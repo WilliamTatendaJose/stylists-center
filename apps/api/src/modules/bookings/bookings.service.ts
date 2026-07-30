@@ -1,4 +1,10 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   BookingRowDto,
   BookingStatus,
@@ -109,7 +115,9 @@ export class BookingsService {
     // -> completed — completion only makes sense once the provider has
     // confirmed the appointment, never while still awaiting them.
     if (booking.status !== 'confirmed') {
-      throw new BadRequestException(`Cannot confirm completion for a booking in status "${booking.status}"`);
+      throw new BadRequestException(
+        `Cannot confirm completion for a booking in status "${booking.status}"`,
+      );
     }
 
     if (booking.confirmedByClient) {
@@ -163,7 +171,9 @@ export class BookingsService {
       throw new BadRequestException('Can only review a completed booking');
     }
 
-    const existing = await this.prisma.review.findFirst({ where: { bookingId, raterId: clientId } });
+    const existing = await this.prisma.review.findFirst({
+      where: { bookingId, raterId: clientId },
+    });
     if (existing) throw new BadRequestException('Already reviewed this booking');
 
     const providerUserId = booking.provider.userId;
@@ -223,7 +233,9 @@ export class BookingsService {
 
   /** Race-free monotonic counter for the "SC-4471" reference (plan §9 — a real Postgres sequence, not a row count). */
   private async nextBookingSequence(): Promise<number> {
-    const [row] = await this.prisma.$queryRaw<{ nextval: bigint }[]>`SELECT nextval('booking_reference_seq')`;
+    const [row] = await this.prisma.$queryRaw<
+      { nextval: bigint }[]
+    >`SELECT nextval('booking_reference_seq')`;
     return Number(row?.nextval ?? 0);
   }
 }

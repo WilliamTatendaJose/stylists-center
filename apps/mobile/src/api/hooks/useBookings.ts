@@ -37,7 +37,9 @@ export function useConfirmCompletion() {
 
   return useMutation({
     mutationFn: (bookingId: string) =>
-      apiFetch<ConfirmCompletionResponse>(`/v1/bookings/${bookingId}/confirm-completion`, { method: 'POST' }),
+      apiFetch<ConfirmCompletionResponse>(`/v1/bookings/${bookingId}/confirm-completion`, {
+        method: 'POST',
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: BOOKINGS_KEY });
     },

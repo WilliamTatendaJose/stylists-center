@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AuthTokens } from '@sc/shared';
 import { clearStoredTokens, getStoredTokens, setStoredTokens } from '../auth/tokenStorage.js';
+import { queryClient } from '../api/queryClient.js';
 
 export interface AuthState {
   accessToken: string | null;
@@ -25,5 +26,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   signOut: async () => {
     await clearStoredTokens();
     set({ accessToken: null });
+    // Clears the persisted cache too — otherwise a different account signing
+    // in on the same device would see the previous user's cached bookings,
+    // wallet balance, etc. before their own first fetch resolves.
+    queryClient.clear();
   },
 }));

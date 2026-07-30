@@ -416,7 +416,9 @@ async function main() {
   }
 
   // eslint-disable-next-line no-console
-  console.log('Seed complete: 1 city, 7 categories, 6 users, 5 providers, 3 bookings, 1 conversation, 1 agent.');
+  console.log(
+    'Seed complete: 1 city, 7 categories, 6 users, 5 providers, 3 bookings, 1 conversation, 1 agent.',
+  );
 }
 
 main()

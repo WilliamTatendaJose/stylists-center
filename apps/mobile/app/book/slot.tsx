@@ -74,14 +74,26 @@ export default function ChooseSlot() {
 
   return (
     <Screen
-      header={<ScreenHeader title="Choose a slot" subtitle={<Text variant="meta" color="neutral600">Step 1 of 2</Text>} onBack={onBack} />}
+      header={
+        <ScreenHeader
+          title="Choose a slot"
+          subtitle={
+            <Text variant="meta" color="neutral600">
+              Step 1 of 2
+            </Text>
+          }
+          onBack={onBack}
+        />
+      }
       footer={
         <View>
           <View style={styles.footerSummary}>
             <Text variant="body" color="neutral700">
               {selectedService?.name ?? 'Choose a service'}
             </Text>
-            <Text variant="h3">{selectedService ? formatUsd(selectedService.priceUsdCents) : '—'}</Text>
+            <Text variant="h3">
+              {selectedService ? formatUsd(selectedService.priceUsdCents) : '—'}
+            </Text>
           </View>
           <Button
             label="Continue to payment"
@@ -124,8 +136,8 @@ export default function ChooseSlot() {
         </Text>
         <TimeGrid slots={slotsResponse?.slots ?? []} value={time} onChange={chooseTime} />
         <Text variant="meta" color="neutral600" style={styles.note}>
-          Greyed slots are already taken. {provider?.displayName ?? 'The stylist'} confirms or declines
-          within the hour.
+          Greyed slots are already taken. {provider?.displayName ?? 'The stylist'} confirms or
+          declines within the hour.
         </Text>
       </View>
     </Screen>

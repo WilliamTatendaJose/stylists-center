@@ -24,7 +24,9 @@ export class WalletService {
       referralCode: agent?.referralCode ?? '',
       canCashOut: canCashOut(balance.usdCents),
       cashOutMinUsdCents: CASH_OUT_MIN_USD_CENTS,
-      isVerifiedAgent: agent ? agent.verificationStatus === 'verified' && agent.status === 'active' : false,
+      isVerifiedAgent: agent
+        ? agent.verificationStatus === 'verified' && agent.status === 'active'
+        : false,
     };
   }
 
@@ -48,7 +50,9 @@ export class WalletService {
   async cashOut(userId: string): Promise<CashOutRequestResponse> {
     const balance = await this.balance(userId);
     if (!canCashOut(balance.usdCents)) {
-      throw new BadRequestException(`Balance must exceed $${String(CASH_OUT_MIN_USD_CENTS / 100)} to cash out`);
+      throw new BadRequestException(
+        `Balance must exceed $${String(CASH_OUT_MIN_USD_CENTS / 100)} to cash out`,
+      );
     }
 
     const txn = await this.prisma.walletTransaction.create({
