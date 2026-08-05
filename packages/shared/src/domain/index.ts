@@ -6,3 +6,5 @@ export * from './eta.js';
 export * from './trust.js';
 export * from './phone.js';
 export * from './booking.js';
+export * from './order.js';
+export * from './avatar.js';

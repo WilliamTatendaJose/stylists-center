@@ -12,7 +12,7 @@ import type { Env } from '../../config/env';
  * distance and exclude Rudo (Borrowdale, ~8.5km), proving the generated
  * geography column + GIST index are actually wired, not just present.
  */
-const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5432/sc_test';
+const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
@@ -24,6 +24,7 @@ const BASE_ENV: Env = {
   PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
+  OSRM_BASE_URL: 'https://router.project-osrm.org',
 };
 
 const CLIENT_LOCATION = { lat: -17.7955, lng: 31.033 }; // Avondale
@@ -107,7 +108,11 @@ describe('GeoRepository', () => {
   });
 
   it('returns only providers within the radius, nearest first', async () => {
-    const rows = await geo.findProvidersWithinRadius(CLIENT_LOCATION.lat, CLIENT_LOCATION.lng, 3);
+    const rows = await geo.findProvidersWithinRadius({
+      lat: CLIENT_LOCATION.lat,
+      lng: CLIENT_LOCATION.lng,
+      radiusKm: 3,
+    });
     const names = rows.map((r) => r.displayName);
 
     expect(names).toEqual(['TestTariro', 'TestKudzai', 'TestChiedza']);
@@ -115,21 +120,21 @@ describe('GeoRepository', () => {
   });
 
   it('returns all providers, unfiltered, when radiusKm is null (Home\'s "available" list)', async () => {
-    const rows = await geo.findProvidersWithinRadius(
-      CLIENT_LOCATION.lat,
-      CLIENT_LOCATION.lng,
-      null,
-    );
+    const rows = await geo.findProvidersWithinRadius({
+      lat: CLIENT_LOCATION.lat,
+      lng: CLIENT_LOCATION.lng,
+      radiusKm: null,
+    });
     expect(rows.map((r) => r.displayName)).toContain('TestRudo');
   });
 
   it('filters by category alongside radius', async () => {
-    const rows = await geo.findProvidersWithinRadius(
-      CLIENT_LOCATION.lat,
-      CLIENT_LOCATION.lng,
-      3,
-      nailsId,
-    );
+    const rows = await geo.findProvidersWithinRadius({
+      lat: CLIENT_LOCATION.lat,
+      lng: CLIENT_LOCATION.lng,
+      radiusKm: 3,
+      categoryId: nailsId,
+    });
     expect(rows.map((r) => r.displayName)).toEqual(['TestKudzai']);
   });
 

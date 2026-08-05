@@ -27,6 +27,7 @@ import {
   useMatchRealtime,
 } from '../../src/api/hooks/useMatching.js';
 import { useRequestStore } from '../../src/state/index.js';
+import { describeError } from '../../src/api/errorMessage.js';
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start' },
@@ -60,6 +61,7 @@ export default function Searching() {
 
   const expiresAt = match?.expiresAt ?? null;
   const [cancelSheetOpen, setCancelSheetOpen] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [secondsLeft, setSecondsLeft] = useState(() =>
     expiresAt ? secondsRemaining(expiresAt) : 0,
   );
@@ -108,11 +110,33 @@ export default function Searching() {
     };
   }, []);
 
+  /**
+   * Leaves only once the server has actually cancelled.
+   *
+   * This used to fire the mutation and navigate away in the same breath, so a
+   * failed cancel left the request live — still fanning out to stylists and
+   * still able to produce offers — while the user had been shown it was
+   * called off.
+   */
   const confirmCancel = () => {
-    setCancelSheetOpen(false);
-    if (matchId) cancelMatch.mutate(matchId);
-    reset();
-    router.replace('/(tabs)');
+    if (!matchId) {
+      setCancelSheetOpen(false);
+      reset();
+      router.replace('/(tabs)');
+      return;
+    }
+
+    setCancelError(null);
+    cancelMatch.mutate(matchId, {
+      onSuccess: () => {
+        setCancelSheetOpen(false);
+        reset();
+        router.replace('/(tabs)');
+      },
+      onError: (error) => {
+        setCancelError(describeError(error, "Couldn't cancel that request. Try again."));
+      },
+    });
   };
 
   // A safety net for a missed 'match.expired' socket event: force a refetch
@@ -225,15 +249,35 @@ export default function Searching() {
           We&apos;ll stop searching. Any stylist who already accepted will be let know it&apos;s no
           longer available.
         </Text>
+        {cancelError ? (
+          <Text
+            variant="meta"
+            color={color.accent700}
+            style={styles.sheetBody}
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
+            {cancelError}
+          </Text>
+        ) : null}
+
         <View style={styles.sheetActions}>
           <Button
             label="Keep searching"
             block
+            disabled={cancelMatch.isPending}
             onPress={() => {
+              setCancelError(null);
               setCancelSheetOpen(false);
             }}
           />
-          <Button label="Cancel request" variant="ghost" block onPress={confirmCancel} />
+          <Button
+            label={cancelMatch.isPending ? 'Cancelling…' : 'Cancel request'}
+            variant="ghost"
+            block
+            disabled={cancelMatch.isPending}
+            onPress={confirmCancel}
+          />
         </View>
       </Sheet>
     </>

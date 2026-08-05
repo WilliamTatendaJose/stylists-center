@@ -35,7 +35,7 @@ export { Sheet, type SheetProps } from './Sheet.js';
 export { ProgressBar, type ProgressBarProps } from './ProgressBar.js';
 export { RadarPulse, type RadarPulseProps } from './RadarPulse.js';
 export { Countdown, type CountdownProps } from './Countdown.js';
-export { secondsRemaining, formatMmSs } from './countdown.js';
+export { secondsRemaining, formatMmSs } from './countdownTime.js';
 export { LiveDot, type LiveDotProps } from './LiveDot.js';
 export { OfferCard, type OfferCardProps } from './OfferCard.js';
 export { EmptyPanel, type EmptyPanelProps } from './EmptyPanel.js';

@@ -3,18 +3,37 @@ import { ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
 import { ChevronLeft, MessageCircle } from 'lucide-react-native';
 import { color, layout, radius, space } from '@sc/tokens';
 import { formatInHarare } from '@sc/shared';
 import { Screen, Text, Pressable, Avatar, StatTile, ScMap, LiveDot, Button } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useRoute } from '../../src/api/hooks/useGeo.js';
-import { PROVIDER_LOCATIONS } from '../../src/fixtures/index.js';
 import { useSessionStore, useTripStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
-const SIM_TICK_MS = 200;
-const SIM_STEP = 0.02;
+/** Balanced accuracy and a 15 m/4 s floor are plenty for a walking/kombi trip and easier on battery than High. */
+const LOCATION_ACCURACY = Location.Accuracy.Balanced;
+const LOCATION_UPDATE_INTERVAL_MS = 4000;
+const LOCATION_UPDATE_DISTANCE_M = 15;
+/** Real GPS won't land exactly on the destination coordinate — this close counts as arrived. */
+const ARRIVAL_RADIUS_KM = 0.15;
+
+interface LatLng {
+  lat: number;
+  lng: number;
+}
+
+function haversineKm(a: LatLng, b: LatLng): number {
+  const EARTH_RADIUS_KM = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: color.bg },
@@ -96,28 +115,45 @@ export default function Trip() {
   const { data: provider } = useProvider(providerId);
   const { data: route } = useRoute(providerId);
 
-  // M1 simulation hook (plan §5): a timer advances this 0..1 progress value.
-  // Phase 3 feeds the same ScMap `tripProgress` prop from `trip.location`
-  // socket events instead — the map component itself doesn't change.
-  const [progress, setProgress] = useState(0);
+  // The device's own real position, watched for as long as this screen is
+  // mounted — not a simulation. Null until the first fix lands, so every
+  // consumer below falls back to the last known session location.
+  const [liveLocation, setLiveLocation] = useState<LatLng | null>(null);
 
   useEffect(() => {
-    if (arrived) return;
-    const interval = setInterval(() => {
-      setProgress((p) => {
-        const next = p + SIM_STEP;
-        if (next >= 1) {
-          clearInterval(interval);
-          setArrived(true);
-          return 1;
-        }
-        return next;
-      });
-    }, SIM_TICK_MS);
+    let subscription: Location.LocationSubscription | undefined;
+    let cancelled = false;
+
+    void (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== Location.PermissionStatus.GRANTED || cancelled) return;
+      subscription = await Location.watchPositionAsync(
+        {
+          accuracy: LOCATION_ACCURACY,
+          timeInterval: LOCATION_UPDATE_INTERVAL_MS,
+          distanceInterval: LOCATION_UPDATE_DISTANCE_M,
+        },
+        (position) => {
+          setLiveLocation({ lat: position.coords.latitude, lng: position.coords.longitude });
+        },
+      );
+    })();
+
     return () => {
-      clearInterval(interval);
+      cancelled = true;
+      subscription?.remove();
     };
-  }, [arrived, setArrived]);
+  }, []);
+
+  // Tolerates `route`/`liveLocation` still being unset — the render-time
+  // values below the loading guard are what actually display progress; this
+  // only flips `arrived` the moment a real fix lands within the radius.
+  useEffect(() => {
+    if (!route || !liveLocation || arrived) return;
+    if (haversineKm(liveLocation, route.destination) <= ARRIVAL_RADIUS_KM) {
+      setArrived(true);
+    }
+  }, [route, liveLocation, arrived, setArrived]);
 
   useEffect(() => resetTrip, [resetTrip]);
 
@@ -131,10 +167,13 @@ export default function Trip() {
     );
   }
 
-  const destination = PROVIDER_LOCATIONS[providerId] ?? { lat: location.lat, lng: location.lng };
+  const destination = route.destination;
+  const currentPosition = liveLocation ?? location;
   const firstName = provider.displayName.split(' ')[0] ?? provider.displayName;
+  const remainingKm = arrived ? 0 : haversineKm(currentPosition, destination);
+  const progress = Math.min(1, Math.max(0, 1 - remainingKm / Math.max(route.distanceKm, 0.001)));
   const toGoMinutes = Math.max(0, Math.round(route.etaMinutes * (1 - progress)));
-  const arriveAtIso = new Date(Date.now() + route.etaMinutes * 60_000).toISOString();
+  const arriveAtIso = new Date(Date.now() + toGoMinutes * 60_000).toISOString();
 
   const shareEta = () => {
     setEtaShared(true);
@@ -158,14 +197,15 @@ export default function Trip() {
       <StatusBar style="dark" />
       <View style={[styles.mapPane, { height: windowHeight * 0.46 }]}>
         <ScMap
-          center={[location.lng, location.lat]}
+          center={[currentPosition.lng, currentPosition.lat]}
           zoom={13}
-          routeCoordinates={[
-            [location.lng, location.lat],
-            [destination.lng, destination.lat],
-          ]}
-          tripProgress={progress}
+          routeCoordinates={route.coordinates}
           markers={[
+            {
+              id: 'self',
+              lngLat: [currentPosition.lng, currentPosition.lat],
+              variant: 'dot',
+            },
             {
               id: providerId,
               lngLat: [destination.lng, destination.lat],
@@ -184,12 +224,14 @@ export default function Trip() {
         >
           <ChevronLeft size={20} strokeWidth={1.9} color={color.text} />
         </Pressable>
-        <View style={[styles.livePill, { top: insets.top + 12 }]}>
-          <LiveDot onDark />
-          <Text variant="metaSmall" color={color.onDark.text}>
-            Live
-          </Text>
-        </View>
+        {liveLocation ? (
+          <View style={[styles.livePill, { top: insets.top + 12 }]}>
+            <LiveDot onDark />
+            <Text variant="metaSmall" color={color.onDark.text}>
+              Live
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>

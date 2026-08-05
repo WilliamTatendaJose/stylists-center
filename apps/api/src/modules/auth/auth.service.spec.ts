@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import Redis from 'ioredis';
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { AuthService } from './auth.service';
+import { TrustService } from '../trust/trust.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
 
@@ -15,7 +16,7 @@ import type { Env } from '../../config/env';
  * migrate deploy against DATABASE_URL=.../sc_test), never seeded, so a test
  * run never touches demo data.
  */
-const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5432/sc_test';
+const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
 const TEST_PHONE = '+263779999001';
 
 const BASE_ENV: Env = {
@@ -29,6 +30,7 @@ const BASE_ENV: Env = {
   PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
+  OSRM_BASE_URL: 'https://router.project-osrm.org',
 };
 
 // Two configs: `plainConfig` has no AUTH_DEV_OTP (exercises the real
@@ -43,17 +45,20 @@ describe('AuthService', () => {
   let redis: Redis;
   let plainAuth: AuthService;
   let auth: AuthService;
+  let cityId: string;
+  let categoryId: string;
 
   beforeAll(async () => {
     prisma = new PrismaService(plainConfig);
     await prisma.onModuleInit();
     redis = new Redis('redis://localhost:6380');
-    plainAuth = new AuthService(prisma, new JwtService(), plainConfig, redis);
-    auth = new AuthService(prisma, new JwtService(), devConfig, redis);
+    const trust = new TrustService(prisma);
+    plainAuth = new AuthService(prisma, new JwtService(), plainConfig, trust, redis);
+    auth = new AuthService(prisma, new JwtService(), devConfig, trust, redis);
 
-    const city = await prisma.city.findFirst();
-    if (!city) {
-      await prisma.city.create({
+    const city =
+      (await prisma.city.findFirst()) ??
+      (await prisma.city.create({
         data: {
           name: 'Harare',
           timezone: 'Africa/Harare',
@@ -64,17 +69,27 @@ describe('AuthService', () => {
           bboxEast: 31.2,
           bboxNorth: -17.6,
         },
-      });
-    }
+      }));
+    cityId = city.id;
+
+    const category = await prisma.category.create({ data: { name: 'auth-spec-category' } });
+    categoryId = category.id;
   });
 
   afterAll(async () => {
     await cleanup();
+    await prisma.category.delete({ where: { id: categoryId } });
     await prisma.onModuleDestroy();
     redis.disconnect();
   });
 
   async function cleanup() {
+    await prisma.service.deleteMany({
+      where: { provider: { user: { phone: { startsWith: '+26377999' } } } },
+    });
+    await prisma.providerProfile.deleteMany({
+      where: { user: { phone: { startsWith: '+26377999' } } },
+    });
     await prisma.refreshToken.deleteMany({
       where: { user: { phone: { startsWith: '+26377999' } } },
     });
@@ -137,7 +152,7 @@ describe('AuthService', () => {
     await expect(auth.refresh(second.refreshToken)).rejects.toThrow('reuse detected');
   });
 
-  it('me() reflects hasProviderProfile and setActiveRole() persists the toggle', async () => {
+  it('me() reflects hasProviderProfile, and setActiveRole() refuses provider without a stylist page', async () => {
     const { challengeId } = await auth.requestOtp(TEST_PHONE, '127.0.0.1');
     const tokens = await auth.verifyOtp(challengeId, '000000');
 
@@ -145,6 +160,30 @@ describe('AuthService', () => {
     const me = await auth.me(id);
     expect(me.hasProviderProfile).toBe(false);
     expect(me.activeRole).toBe('client');
+
+    // No stylist page yet — the switch must be refused, not silently allowed
+    // into a provider side of the app with nothing behind it.
+    await expect(auth.setActiveRole(id, 'provider')).rejects.toThrow(
+      'This account does not have a stylist page yet',
+    );
+
+    await prisma.providerProfile.create({
+      data: {
+        userId: id,
+        displayName: 'Auth Spec Stylist',
+        tint: '#ec3013',
+        initials: 'AS',
+        categoryId,
+        areaName: 'Avondale',
+        latitude: -17.8,
+        longitude: 31.03,
+        cityId,
+        workingHoursLabel: 'Mon-Sat, 8am-6pm',
+      },
+    });
+
+    const withProfile = await auth.me(id);
+    expect(withProfile.hasProviderProfile).toBe(true);
 
     const updated = await auth.setActiveRole(id, 'provider');
     expect(updated.activeRole).toBe('provider');

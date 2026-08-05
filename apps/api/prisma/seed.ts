@@ -415,9 +415,81 @@ async function main() {
     }
   }
 
+  /**
+   * Marketplace stock. Deliberately spread across sellers and includes one
+   * low-stock and one sold-out line, because "2 left" and "sold out" are
+   * states the buy flow has to handle and an all-plentiful catalogue never
+   * exercises them.
+   */
+  const PRODUCTS: {
+    id: string;
+    providerId: string;
+    name: string;
+    description: string;
+    priceUsdCents: number;
+    stockQty: number;
+  }[] = [
+    {
+      id: '66666666-6666-4666-8666-666666666601',
+      providerId: PROVIDER_IDS.tariro,
+      name: 'Brazilian braiding hair — 3 pack',
+      description: 'Pre-stretched, 26 inch. Enough for a full head of knotless braids.',
+      priceUsdCents: 1500,
+      stockQty: 12,
+    },
+    {
+      id: '66666666-6666-4666-8666-666666666602',
+      providerId: PROVIDER_IDS.tariro,
+      name: 'Edge control gel — 120ml',
+      description: 'Strong hold, no flaking. Lasts a full week of braids.',
+      priceUsdCents: 600,
+      stockQty: 2,
+    },
+    {
+      id: '66666666-6666-4666-8666-666666666603',
+      providerId: PROVIDER_IDS.chiedza,
+      name: 'Human hair wig — shoulder length',
+      description: 'Lace front, natural black. Can be dyed and heat-styled.',
+      priceUsdCents: 8500,
+      stockQty: 3,
+    },
+    {
+      id: '66666666-6666-4666-8666-666666666604',
+      providerId: PROVIDER_IDS.kudzai,
+      name: 'Gel polish set — 6 colours',
+      description: 'Salon-grade, UV cure. The set she uses for full overlays.',
+      priceUsdCents: 3200,
+      stockQty: 5,
+    },
+    {
+      id: '66666666-6666-4666-8666-666666666605',
+      providerId: PROVIDER_IDS.kudzai,
+      name: 'Nail care kit',
+      description: 'Cuticle oil, buffer, and a pusher — the aftercare set for a fresh set.',
+      priceUsdCents: 1200,
+      stockQty: 0,
+    },
+    {
+      id: '66666666-6666-4666-8666-666666666606',
+      providerId: PROVIDER_IDS.rudo,
+      name: 'Beard oil — 50ml',
+      description: 'Argan and jojoba. Softens coarse growth without a greasy finish.',
+      priceUsdCents: 900,
+      stockQty: 8,
+    },
+  ];
+
+  for (const product of PRODUCTS) {
+    await prisma.product.upsert({
+      where: { id: product.id },
+      update: {},
+      create: product,
+    });
+  }
+
   // eslint-disable-next-line no-console
   console.log(
-    'Seed complete: 1 city, 7 categories, 6 users, 5 providers, 3 bookings, 1 conversation, 1 agent.',
+    `Seed complete: 1 city, 7 categories, 6 users, 5 providers, 3 bookings, 1 conversation, 1 agent, ${String(PRODUCTS.length)} products.`,
   );
 }
 

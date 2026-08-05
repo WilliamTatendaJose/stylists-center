@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { ScrollView, StyleSheet, View, type ScrollViewProps, type ViewStyle } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
@@ -51,6 +51,12 @@ export interface ScreenProps {
   footer?: ReactNode;
   /** false for screens that manage their own scrolling/layout (e.g. the map screens). */
   scroll?: boolean;
+  /**
+   * A `<RefreshControl>` for pull-to-refresh. Screen owns the ScrollView, so
+   * a screen cannot attach one itself — and a list of bookings is exactly
+   * where a user's reflex is to pull down.
+   */
+  refreshControl?: ScrollViewProps['refreshControl'];
   /** Plays the scIn enter animation. Off for screens replaced via router.replace, where a re-entrance animation would be visually wrong (e.g. Bookings after Booked). */
   enter?: boolean;
   contentStyle?: ViewStyle | ViewStyle[];
@@ -78,6 +84,7 @@ export function Screen({
   hasTabBar = false,
   footer,
   scroll = true,
+  refreshControl,
   enter = true,
   contentStyle,
   children,
@@ -127,7 +134,11 @@ export function Screen({
         <View style={[headerStyle, headerBordered ? styles.headerBorder : null]}>{header}</View>
       ) : null}
       {scroll ? (
-        <ScrollView style={styles.flexOne} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.flexOne}
+          showsVerticalScrollIndicator={false}
+          refreshControl={refreshControl}
+        >
           {body}
         </ScrollView>
       ) : (

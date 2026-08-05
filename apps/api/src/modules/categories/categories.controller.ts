@@ -1,8 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CategoriesService } from './categories.service';
 import { CategoriesQueryDto } from './dto';
 
+/** Signed-in only — `nearbyCount` is a live density map of where providers are. */
 @Controller('categories')
+@UseGuards(JwtAuthGuard)
 export class CategoriesController {
   constructor(private readonly categories: CategoriesService) {}
 

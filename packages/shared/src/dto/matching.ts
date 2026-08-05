@@ -1,9 +1,15 @@
 import { z } from 'zod';
-import { RADIUS_LADDER_KM, isValidBudgetAmount, MATCH_STATES } from '../domain/index.js';
+import {
+  isMatchRadiusKm,
+  isValidBudgetAmount,
+  MATCH_STATES,
+  MAX_MATCH_RADIUS_KM,
+  MIN_MATCH_RADIUS_KM,
+} from '../domain/index.js';
 
-const radiusKmSchema = z.union(
-  RADIUS_LADDER_KM.map((km) => z.literal(km)) as [z.ZodLiteral<number>, ...z.ZodLiteral<number>[]],
-);
+const radiusKmSchema = z.number().refine(isMatchRadiusKm, {
+  message: `radiusKm must be between ${String(MIN_MATCH_RADIUS_KM)} and ${String(MAX_MATCH_RADIUS_KM)}`,
+});
 
 const budgetSchema = z
   .discriminatedUnion('mode', [

@@ -26,6 +26,10 @@ function buildDateStrip(): DateStripItem[] {
 const styles = StyleSheet.create({
   section: { marginBottom: space.xxl },
   sectionLabel: { marginBottom: space.m },
+  // RadioCard has no margin of its own (by design — a single static card,
+  // like Payment's EcoCash/cash pair, needs none). Mapping a dynamic list of
+  // them with no wrapper gap left every service card touching the next.
+  serviceList: { gap: space.s },
   note: { marginTop: space.m },
   footerSummary: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: space.ml },
 });
@@ -110,17 +114,19 @@ export default function ChooseSlot() {
         <Text variant="sectionLabel" style={styles.sectionLabel}>
           Service
         </Text>
-        {provider?.services.map((service) => (
-          <RadioCard
-            key={service.id}
-            title={service.name}
-            description={`${String(service.durationMinutes)} min · ${formatUsd(service.priceUsdCents)}`}
-            selected={service.id === serviceId}
-            onPress={() => {
-              setService(service.id);
-            }}
-          />
-        ))}
+        <View style={styles.serviceList}>
+          {provider?.services.map((service) => (
+            <RadioCard
+              key={service.id}
+              title={service.name}
+              description={`${String(service.durationMinutes)} min · ${formatUsd(service.priceUsdCents)}`}
+              selected={service.id === serviceId}
+              onPress={() => {
+                setService(service.id);
+              }}
+            />
+          ))}
+        </View>
       </View>
 
       <View style={styles.section}>

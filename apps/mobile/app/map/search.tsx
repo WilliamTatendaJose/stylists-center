@@ -5,14 +5,12 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, LocateFixed } from 'lucide-react-native';
 import { color, radius, space } from '@sc/tokens';
-import { isRadiusKm, type RadiusKm } from '@sc/shared';
+import { isBrowseRadiusKm } from '@sc/shared';
 import { ScMap, Text, Pressable, ListRow, Button } from '@sc/ui';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
 import { useGeoSearch } from '../../src/api/hooks/useGeo.js';
 import { useSessionStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
-
-const DEFAULT_RADIUS_KM: RadiusKm = 3;
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -87,10 +85,17 @@ export default function MapSearch() {
   const onBack = useBack('/(tabs)');
   const insets = useSafeAreaInsets();
   const location = useSessionStore((s) => s.location);
+  const areaLabel = useSessionStore((s) => s.areaLabel);
+  // The same "within N km" preference as Find/Market (DistanceFilter),
+  // not a hardcoded 3 km — this screen used to ignore that setting
+  // entirely, so widening it everywhere else never changed what the map
+  // itself searched. An explicit radiusKm param (e.g. a future deep link)
+  // still wins if present and valid.
+  const maxDistanceKm = useSessionStore((s) => s.maxDistanceKm);
   const { data: categories } = useCategories();
 
   const parsedRadius = radiusKmParam ? Number(radiusKmParam) : NaN;
-  const radiusKm: RadiusKm = isRadiusKm(parsedRadius) ? parsedRadius : DEFAULT_RADIUS_KM;
+  const radiusKm = isBrowseRadiusKm(parsedRadius) ? parsedRadius : maxDistanceKm;
   const { data: geo } = useGeoSearch(radiusKm, categoryIdParam);
   const [expanded, setExpanded] = useState(false);
 
@@ -134,8 +139,11 @@ export default function MapSearch() {
           <ChevronLeft size={20} strokeWidth={1.9} color={color.text} />
         </Pressable>
         <View style={styles.pill}>
+          {/* Was a literal "near Avondale" regardless of where the device
+              actually was — areaLabel is the same real, reverse-geocoded
+              place name the Find header shows. */}
           <Text variant="bodyStrong" numberOfLines={1}>
-            {categoryName} near Avondale
+            {categoryName} near {areaLabel ?? 'you'}
           </Text>
           <Text variant="metaSmall" color={color.accent}>
             {radiusKm} km

@@ -35,6 +35,12 @@ export const bookingRowSchema = z.object({
   initials: z.string(),
   serviceName: z.string(),
   whenLabel: z.string(),
+  /**
+   * ISO-8601 UTC. `whenLabel` is pre-formatted for display and cannot be
+   * reasoned about — without this the client could not split upcoming from
+   * past, sort, or say how long until an appointment.
+   */
+  startsAt: z.iso.datetime(),
   paymentMethod: paymentMethodSchema,
   priceUsdCents: z.number().int(),
   status: bookingStatusSchema,
@@ -42,6 +48,8 @@ export const bookingRowSchema = z.object({
   confirmedByProvider: z.boolean(),
   canTravel: z.boolean(),
   canRate: z.boolean(),
+  /** Whether this booking can still be called off. The server decides; the screen must not infer it from status. */
+  canCancel: z.boolean(),
 });
 export type BookingRowDto = z.infer<typeof bookingRowSchema>;
 

@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import {
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Inject,
@@ -19,6 +20,7 @@ import {
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CLIENT } from '../redis/redis.module';
+import { TrustService } from '../trust/trust.service';
 import type { Env } from '../../config/env';
 
 const OTP_TTL_SECONDS = 300;
@@ -61,6 +63,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
+    private readonly trust: TrustService,
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
@@ -125,6 +128,18 @@ export class AuthService {
     await this.redis.del(key);
 
     const user = await this.findOrCreateUser(challenge.phone);
+
+    /**
+     * Bumping `tokenVersion` kills a banned user's live sessions, but nothing
+     * stopped them signing in again a second later — the ban would have been
+     * a speed bump. The message carries the stated reason, because a user who
+     * cannot tell why they were removed cannot appeal.
+     */
+    const ban = await this.trust.findActiveBan(user.id);
+    if (ban) {
+      throw new ForbiddenException(`Your account has been removed: ${ban.reason}`);
+    }
+
     return this.issueTokens(user.id, user.tokenVersion);
   }
 
@@ -230,6 +245,19 @@ export class AuthService {
   }
 
   async setActiveRole(userId: string, role: ActiveRole): Promise<Me> {
+    if (role === 'provider') {
+      // The mobile client already hides the switch when there is no provider
+      // page, but that is a UI convenience, not a boundary — this is the one
+      // that actually matters. Every real /v1/provider/* route is separately
+      // guarded by ProviderGuard, so setting the role alone could not act on
+      // anyone else's behalf; without this check it would only mislabel the
+      // account as a stylist it isn't, which is worth refusing outright.
+      const profile = await this.prisma.providerProfile.findUnique({ where: { userId } });
+      if (!profile) {
+        throw new BadRequestException('This account does not have a stylist page yet');
+      }
+    }
+
     await this.prisma.user.update({ where: { id: userId }, data: { activeRole: role } });
     return this.me(userId);
   }
@@ -240,9 +268,21 @@ export class AuthService {
    * instantly, without a per-request revocation-list lookup.
    */
   async verifyAccessToken(token: string): Promise<{ id: string }> {
-    const payload = await this.jwt.verifyAsync<{ sub: string; ver: number }>(token, {
-      secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }),
-    });
+    let payload: { sub: string; ver: number };
+    try {
+      payload = await this.jwt.verifyAsync<{ sub: string; ver: number }>(token, {
+        secret: this.config.get('JWT_ACCESS_SECRET', { infer: true }),
+      });
+    } catch {
+      /**
+       * jsonwebtoken throws TokenExpiredError/JsonWebTokenError, neither of
+       * which is an HttpException — so an expired or malformed token used to
+       * surface as a 500. That is not just a wrong status code: the mobile
+       * client only runs its refresh-and-retry on a 401, so every expired
+       * session failed permanently instead of silently refreshing.
+       */
+      throw new UnauthorizedException('Session no longer valid');
+    }
 
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
     if (user?.tokenVersion !== payload.ver) {

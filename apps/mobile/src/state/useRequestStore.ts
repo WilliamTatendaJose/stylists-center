@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Budget, RadiusKm } from '@sc/shared';
+import { clampMatchRadiusKm, DEFAULT_MATCH_RADIUS_KM, type Budget } from '@sc/shared';
 
 /**
  * Smart-match request flow state (New request -> Searching -> Expired). Holds
@@ -14,11 +14,11 @@ import type { Budget, RadiusKm } from '@sc/shared';
 export interface RequestState {
   categoryId: string | null;
   budget: Budget;
-  radiusKm: RadiusKm;
+  radiusKm: number;
   matchId: string | null;
   setCategory: (categoryId: string) => void;
   setBudget: (budget: Budget) => void;
-  setRadiusKm: (radiusKm: RadiusKm) => void;
+  setRadiusKm: (radiusKm: number) => void;
   setMatchId: (matchId: string | null) => void;
   reset: () => void;
 }
@@ -26,7 +26,7 @@ export interface RequestState {
 const INITIAL = {
   categoryId: null,
   budget: { mode: 'flex' } as Budget,
-  radiusKm: 3 as RadiusKm,
+  radiusKm: DEFAULT_MATCH_RADIUS_KM,
   matchId: null,
 };
 
@@ -34,7 +34,7 @@ export const useRequestStore = create<RequestState>((set) => ({
   ...INITIAL,
   setCategory: (categoryId) => set({ categoryId }),
   setBudget: (budget) => set({ budget }),
-  setRadiusKm: (radiusKm) => set({ radiusKm }),
+  setRadiusKm: (radiusKm) => set({ radiusKm: clampMatchRadiusKm(radiusKm) }),
   setMatchId: (matchId) => set({ matchId }),
   reset: () => set(INITIAL),
 }));

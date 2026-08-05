@@ -47,19 +47,44 @@ export class WalletService {
   }
 
   /** Server recomputes the balance rather than trusting a client-supplied amount — the same rule matching's retry ladder follows. */
+  /**
+   * Cashing out drains the whole balance to a single negative ledger row.
+   *
+   * Reading the balance and then writing that row were two separate
+   * statements with nothing between them, so two requests arriving together —
+   * a double tap, or a client retry after a response was lost — could both
+   * read the same positive balance, both pass the minimum check, and both
+   * write a withdrawal. That pays the same money out twice.
+   *
+   * The row lock makes the read-check-write one atomic step per user: the
+   * second request waits, then re-reads a zero balance and is correctly
+   * rejected. Locking the User row rather than the ledger because the thing
+   * being serialised is "this user's balance", and the rows being counted do
+   * not all exist yet at lock time.
+   */
   async cashOut(userId: string): Promise<CashOutRequestResponse> {
-    const balance = await this.balance(userId);
-    if (!canCashOut(balance.usdCents)) {
-      throw new BadRequestException(
-        `Balance must exceed $${String(CASH_OUT_MIN_USD_CENTS / 100)} to cash out`,
-      );
-    }
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
 
-    const txn = await this.prisma.walletTransaction.create({
-      data: { userId, type: 'cash_out', coins: -balance.coins, usdCents: -balance.usdCents },
+      const agg = await tx.walletTransaction.aggregate({
+        where: { userId },
+        _sum: { coins: true, usdCents: true },
+      });
+      const coins = agg._sum.coins ?? 0;
+      const usdCents = agg._sum.usdCents ?? 0;
+
+      if (!canCashOut(usdCents)) {
+        throw new BadRequestException(
+          `Balance must exceed $${String(CASH_OUT_MIN_USD_CENTS / 100)} to cash out`,
+        );
+      }
+
+      const txn = await tx.walletTransaction.create({
+        data: { userId, type: 'cash_out', coins: -coins, usdCents: -usdCents },
+      });
+
+      return { id: txn.id, amountUsdCents: usdCents, status: 'pending' as const };
     });
-
-    return { id: txn.id, amountUsdCents: balance.usdCents, status: 'pending' };
   }
 
   /** The ledger is append-only (plan §6) — balance is always a live sum, never a stored counter. */

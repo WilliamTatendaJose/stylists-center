@@ -24,7 +24,7 @@ describe('createMatchRequestSchema', () => {
     location: { lat: -17.7955, lng: 31.033 },
   };
 
-  it('accepts a flexible-budget request at a ladder radius', () => {
+  it('accepts a flexible-budget request at a valid starting radius', () => {
     expect(createMatchRequestSchema.safeParse(valid).success).toBe(true);
   });
 
@@ -36,9 +36,14 @@ describe('createMatchRequestSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects a radius off the ladder', () => {
-    const result = createMatchRequestSchema.safeParse({ ...valid, radiusKm: 5 });
-    expect(result.success).toBe(false);
+  it('accepts any radius in the free-range window, not just fixed rungs', () => {
+    expect(createMatchRequestSchema.safeParse({ ...valid, radiusKm: 5 }).success).toBe(true);
+    expect(createMatchRequestSchema.safeParse({ ...valid, radiusKm: 50 }).success).toBe(true);
+  });
+
+  it('rejects a radius outside the allowed window', () => {
+    expect(createMatchRequestSchema.safeParse({ ...valid, radiusKm: 0 }).success).toBe(false);
+    expect(createMatchRequestSchema.safeParse({ ...valid, radiusKm: 51 }).success).toBe(false);
   });
 
   it('rejects a fixed budget amount off the step boundary', () => {

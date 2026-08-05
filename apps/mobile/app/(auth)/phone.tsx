@@ -4,7 +4,8 @@ import { router } from 'expo-router';
 import { color, space } from '@sc/tokens';
 import type { RequestOtpResponse } from '@sc/shared';
 import { Screen, ScreenHeader, Text, TextField, Button } from '@sc/ui';
-import { apiFetch, ApiError } from '../../src/api/client.js';
+import { apiFetch } from '../../src/api/client.js';
+import { describeError, isValidationError } from '../../src/api/errorMessage.js';
 
 const styles = StyleSheet.create({
   body: { marginBottom: space.xxl },
@@ -36,7 +37,9 @@ export default function PhoneEntry() {
       });
     } catch (err) {
       setError(
-        err instanceof ApiError ? err.message : "Couldn't send a code — check your connection.",
+        isValidationError(err)
+          ? "That doesn't look like a Zimbabwean mobile number. Enter it as 077 123 4567."
+          : describeError(err, "Couldn't send a code. Try again."),
       );
     } finally {
       setLoading(false);
@@ -53,15 +56,26 @@ export default function PhoneEntry() {
         <TextField
           label="Phone number"
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(next) => {
+            setPhone(next);
+            setError(null);
+          }}
           placeholder="077 000 0000"
           keyboardType="phone-pad"
           autoFocus
         />
       </View>
 
+      {/* accessibilityLiveRegion so the failure is announced rather than
+          silently appearing below a field the user may have already left. */}
       {error ? (
-        <Text variant="meta" color={color.accent700} style={styles.error}>
+        <Text
+          variant="meta"
+          color={color.accent700}
+          style={styles.error}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+        >
           {error}
         </Text>
       ) : null}

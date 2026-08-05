@@ -18,6 +18,7 @@ import {
 } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
+import { describeError } from '../../src/api/errorMessage.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -74,13 +75,28 @@ export default function ProviderProfile() {
   const setProvider = useBookingDraftStore((s) => s.setProvider);
 
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
-  const [lastReport, setLastReport] = useState<ReportReason | null>(null);
+  const [reportOutcome, setReportOutcome] = useState<{ ok: boolean; message: string } | null>(null);
   const createReport = useCreateReport();
 
+  // Same false-confirmation the Bookings screen had: the thank-you was shown
+  // before the request resolved, so a report that never landed still told the
+  // user it had.
   const submitReport = (reason: ReportReason) => {
     if (!id) return;
-    createReport.mutate({ providerId: id, reason });
-    setLastReport(reason);
+    createReport.mutate(
+      { providerId: id, reason },
+      {
+        onSuccess: () => {
+          setReportOutcome({ ok: true, message: 'Report sent — thanks for the heads up.' });
+        },
+        onError: (error) => {
+          setReportOutcome({
+            ok: false,
+            message: describeError(error, "Couldn't send that report. Please try again."),
+          });
+        },
+      },
+    );
   };
 
   const goMessage = () => {
@@ -138,9 +154,15 @@ export default function ProviderProfile() {
           </View>
         }
       >
-        {lastReport ? (
-          <Text variant="meta" color={color.accent700} style={styles.reportedNote}>
-            Report sent — thanks for the heads up.
+        {reportOutcome ? (
+          <Text
+            variant="meta"
+            color={reportOutcome.ok ? 'neutral700' : color.accent700}
+            style={styles.reportedNote}
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
+            {reportOutcome.message}
           </Text>
         ) : null}
 

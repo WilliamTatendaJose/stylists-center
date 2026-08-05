@@ -1,11 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { color, space } from '@sc/tokens';
-import { canRetry, isRadiusKm, nextRadiusKm, type RadiusKm } from '@sc/shared';
+import { canRetry, nextMatchRadiusKm } from '@sc/shared';
 import { Screen, Text, Button } from '@sc/ui';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
 import { useMatch, useRetryMatch } from '../../src/api/hooks/useMatching.js';
+import { describeError } from '../../src/api/errorMessage.js';
 import { useRequestStore } from '../../src/state/index.js';
 
 const styles = StyleSheet.create({
@@ -42,6 +43,9 @@ export default function Expired() {
 
   const { data: match } = useMatch(matchId);
   const retryMatch = useRetryMatch();
+  // Declared before the guard below: a hook after an early return is a
+  // conditional hook call and breaks on the render where `match` is absent.
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   // Cold-start / deep-link guard — this screen only makes sense right after a
   // real expiry, and needs the server row to know the attempt/radius ladder.
@@ -55,15 +59,21 @@ export default function Expired() {
 
   const categoryName = categories?.find((c) => c.id === categoryId)?.name ?? 'a stylist';
   const { attempt, budget } = match;
-  const radiusKm: RadiusKm = isRadiusKm(match.radiusKm) ? match.radiusKm : 1;
+  const radiusKm = match.radiusKm;
   const canTryAgain = canRetry(attempt);
-  const next: RadiusKm | null = nextRadiusKm(radiusKm, attempt);
+  const next = nextMatchRadiusKm(radiusKm, attempt);
   const budgetLabel = budget.mode === 'fixed' ? `Up to $${String(budget.amountUsd)}` : 'Flexible';
 
   const tryAgain = () => {
+    setRetryError(null);
     retryMatch.mutate(matchId, {
       onSuccess: () => {
         router.replace('/request/searching');
+      },
+      // Retry is the whole point of this screen — a failed one that said
+      // nothing left the user tapping a button that appeared to do nothing.
+      onError: (error) => {
+        setRetryError(describeError(error, "Couldn't start another search. Try again."));
       },
     });
   };
@@ -106,6 +116,16 @@ export default function Expired() {
       ) : null}
 
       <View style={styles.actions}>
+        {retryError ? (
+          <Text
+            variant="meta"
+            color={color.accent700}
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
+            {retryError}
+          </Text>
+        ) : null}
         {canTryAgain && next ? (
           <Button
             label={

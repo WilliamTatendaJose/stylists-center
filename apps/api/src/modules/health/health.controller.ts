@@ -1,4 +1,5 @@
 import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import type Redis from 'ioredis';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CLIENT } from '../redis/redis.module';
@@ -8,7 +9,14 @@ import { REDIS_CLIENT } from '../redis/redis.module';
  * hung process). /readyz: dependencies are reachable (used for readiness —
  * don't route traffic to an instance that can't reach its database yet,
  * relevant once there are >=1 replicas, which the 99.5% uptime NFR requires).
+ *
+ * Exempt from the global rate limit: probes arrive from a small number of
+ * fixed infrastructure IPs at a high, constant rate. Throttling them means
+ * the load balancer eventually reads 429 as "unhealthy" and restarts a
+ * perfectly healthy process — the rate limiter causing the outage it exists
+ * to prevent.
  */
+@SkipThrottle()
 @Controller()
 export class HealthController {
   constructor(

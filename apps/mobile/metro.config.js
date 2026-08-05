@@ -31,4 +31,27 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, 'node_modules'),
 ];
 
+// Every relative import in this repo carries a `.js` extension — the NodeNext
+// convention TypeScript requires, and what `@sc/shared`'s emitted ESM needs to
+// be loadable by the API at runtime. Metro resolves `./client.js` literally,
+// finds no such file next to `client.ts`, and fails the bundle. Retrying
+// without the extension lets Metro's normal sourceExts order (.ts/.tsx/.js)
+// pick the real file.
+//
+// Deliberately a fallback in `catch` rather than an unconditional rewrite:
+// anything that already resolves keeps resolving exactly as before, so a
+// third-party package shipping a genuine `./foo.js` next to a `./foo.ts` can't
+// be silently redirected to the wrong one.
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  try {
+    return context.resolveRequest(context, moduleName, platform);
+  } catch (error) {
+    const isRelative = moduleName.startsWith('./') || moduleName.startsWith('../');
+    if (isRelative && moduleName.endsWith('.js')) {
+      return context.resolveRequest(context, moduleName.slice(0, -'.js'.length), platform);
+    }
+    throw error;
+  }
+};
+
 module.exports = config;

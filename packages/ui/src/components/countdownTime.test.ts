@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { secondsRemaining, formatMmSs } from './countdown.js';
+import { secondsRemaining, formatMmSs } from './countdownTime.js';
 
 describe('secondsRemaining', () => {
   it('computes whole seconds remaining until expiry', () => {

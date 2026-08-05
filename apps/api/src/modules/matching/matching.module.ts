@@ -6,11 +6,10 @@ import { AuthModule } from '../auth/auth.module';
 import { MatchingService } from './matching.service';
 import { MatchingProcessor } from './matching.processor';
 import { MatchingController } from './matching.controller';
-import { DevSimulateController } from './dev-simulate.controller';
 
 @Module({
   imports: [JobsModule, GeoModule, RealtimeModule, AuthModule],
-  controllers: [MatchingController, DevSimulateController],
+  controllers: [MatchingController],
   providers: [MatchingService, MatchingProcessor],
   exports: [MatchingService],
 })

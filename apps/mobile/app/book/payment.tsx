@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { color, space } from '@sc/tokens';
@@ -9,8 +9,10 @@ import { useCreateBooking } from '../../src/api/hooks/useBookings.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { formatSlotLabel, isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
+import { describeError } from '../../src/api/errorMessage.js';
 
 const styles = StyleSheet.create({
+  footer: { gap: space.s },
   section: { marginBottom: space.xxl },
   sectionLabel: { marginBottom: space.m },
   radioGap: { marginBottom: space.s },
@@ -35,6 +37,7 @@ export default function Payment() {
   const setPaymentMethod = useBookingDraftStore((s) => s.setPaymentMethod);
   const resetDraft = useBookingDraftStore((s) => s.reset);
   const createBooking = useCreateBooking();
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   const { data: provider } = useProvider(providerId ?? undefined);
   const service = provider?.services.find((s) => s.id === serviceId) ?? null;
@@ -52,6 +55,7 @@ export default function Payment() {
   const whenLabel = formatSlotLabel(date, time);
 
   const confirmBooking = () => {
+    setBookingError(null);
     createBooking.mutate(
       {
         providerId: provider.id,
@@ -77,6 +81,9 @@ export default function Payment() {
             },
           });
         },
+        onError: (error) => {
+          setBookingError(describeError(error, "Couldn't confirm that booking. Try again."));
+        },
       },
     );
   };
@@ -101,14 +108,30 @@ export default function Payment() {
         />
       }
       footer={
-        <Button
-          label={ctaLabel}
-          block
-          size="lg"
-          arrow
-          disabled={createBooking.isPending}
-          onPress={confirmBooking}
-        />
+        <View style={styles.footer}>
+          {/* The realistic failure here is losing the slot to someone else
+              between picking it and confirming — a race this screen cannot
+              prevent, only report. It was previously invisible: the tap did
+              nothing and the user tapped again. */}
+          {bookingError ? (
+            <Text
+              variant="meta"
+              color={color.accent700}
+              accessibilityLiveRegion="polite"
+              accessibilityRole="alert"
+            >
+              {bookingError}
+            </Text>
+          ) : null}
+          <Button
+            label={ctaLabel}
+            block
+            size="lg"
+            arrow
+            disabled={createBooking.isPending}
+            onPress={confirmBooking}
+          />
+        </View>
       }
     >
       <View style={styles.section}>

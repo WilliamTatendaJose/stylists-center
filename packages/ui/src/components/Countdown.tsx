@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AppState, View, type AppStateStatus } from 'react-native';
 import { color } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
-import { secondsRemaining, formatMmSs } from './countdown.js';
+import { secondsRemaining, formatMmSs } from './countdownTime.js';
 
 export interface CountdownProps {
   /** ISO-8601. In production this is server-issued and this component only ever displays it — see plan §6, "the client clock only animates." */

@@ -15,7 +15,7 @@ import type { Env } from '../../config/env';
  * what's under test is the state machine and DB writes, not BullMQ's own
  * scheduling — that's proven live in plan §10's manual verification).
  */
-const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5432/sc_test';
+const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
@@ -27,6 +27,7 @@ const BASE_ENV: Env = {
   PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
+  OSRM_BASE_URL: 'https://router.project-osrm.org',
 };
 
 const CLIENT_LOCATION = { lat: -17.7955, lng: 31.033 }; // Avondale
@@ -175,9 +176,9 @@ describe('MatchingService', () => {
     expect(offerJobs).toHaveLength(2);
   });
 
-  it('simulateAcceptOffer transitions the offer and the match, and getMatch then returns it', async () => {
+  it('acceptOffer transitions the offer and the match, and getMatch then returns it', async () => {
     const created = await createTestMatch();
-    const accepted = await matching.simulateAcceptOffer(created.id);
+    const accepted = await matching.acceptOffer(created.id);
     expect(accepted.quoteUsdCents).toBeGreaterThan(0);
 
     const dto = await matching.getMatch(created.id);
@@ -188,7 +189,7 @@ describe('MatchingService', () => {
 
   it('handleOfferTimeout expires only an unanswered offer, leaving an accepted one alone', async () => {
     const created = await createTestMatch();
-    const accepted = await matching.simulateAcceptOffer(created.id);
+    const accepted = await matching.acceptOffer(created.id);
 
     const offers = await prisma.matchOffer.findMany({ where: { matchRequestId: created.id } });
     const stillOffered = offers.find((o) => o.id !== accepted.id);
@@ -213,7 +214,7 @@ describe('MatchingService', () => {
 
   it('handleMatchExpiry allows an accepted-but-unbooked match to still expire (accepted -> expired is a valid transition)', async () => {
     const created = await createTestMatch();
-    await matching.simulateAcceptOffer(created.id);
+    await matching.acceptOffer(created.id);
 
     await matching.handleMatchExpiry(created.id);
     const dto = await matching.getMatch(created.id);
@@ -250,7 +251,7 @@ describe('MatchingService', () => {
     expect(retried.state).toBe('offered');
 
     const match = await prisma.matchRequest.findUniqueOrThrow({ where: { id: created.id } });
-    expect(match.radiusKm).toBe(8); // 3 -> 8, the next rung
+    expect(match.radiusKm).toBe(8); // 3 * 2.5 growth factor, rounded
     expect(match.attempt).toBe(2);
     expect(match.budgetMode).toBe('flex');
   });

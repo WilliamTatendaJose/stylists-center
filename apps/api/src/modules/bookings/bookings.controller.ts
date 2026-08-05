@@ -24,6 +24,11 @@ export class BookingsController {
     return this.bookings.confirmCompletion(id, user.id);
   }
 
+  @Post(':id/cancel')
+  cancel(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.bookings.cancel(id, user.id);
+  }
+
   @Post(':id/reviews')
   review(
     @Param('id') id: string,

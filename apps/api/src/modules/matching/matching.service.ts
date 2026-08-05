@@ -11,14 +11,13 @@ import {
   canTransition,
   formatBudgetLabel,
   MATCH_REQUEST_TTL_SECONDS,
-  nextRadiusKm,
+  nextMatchRadiusKm,
   OFFER_RESPONSE_TTL_SECONDS,
   type CreateMatchRequestInput,
   type CreateMatchRequestResponse,
   type MatchOfferDto,
   type MatchRequestDto,
   type MatchState,
-  type RadiusKm,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { GeoRepository } from '../geo/geo.repository';
@@ -83,12 +82,15 @@ export class MatchingService {
   private async fanOut(matchId: string): Promise<void> {
     const match = await this.prisma.matchRequest.findUniqueOrThrow({ where: { id: matchId } });
 
-    const providers = await this.geo.findProvidersWithinRadius(
-      match.latitude,
-      match.longitude,
-      match.radiusKm,
-      match.categoryId,
-    );
+    const providers = await this.geo.findProvidersWithinRadius({
+      lat: match.latitude,
+      lng: match.longitude,
+      radiusKm: match.radiusKm,
+      categoryId: match.categoryId,
+      // Fanning a request out to someone who has switched off is how a match
+      // ends in silence and a five-minute expiry for the client.
+      onlyAcceptingBookings: true,
+    });
 
     const respondBy = new Date(Date.now() + OFFER_RESPONSE_TTL_SECONDS * 1000);
     const offers = await Promise.all(
@@ -164,7 +166,7 @@ export class MatchingService {
       throw new BadRequestException('No attempts remaining — try again later instead');
     }
 
-    const next = nextRadiusKm(match.radiusKm as RadiusKm, match.attempt);
+    const next = nextMatchRadiusKm(match.radiusKm, match.attempt);
     if (!next) {
       throw new BadRequestException('No attempts remaining — try again later instead');
     }
@@ -248,8 +250,14 @@ export class MatchingService {
     await this.prisma.matchOffer.update({ where: { id: offerId }, data: { state: 'expired' } });
   }
 
-  /** Dev-only test harness (plan §9) — stands in for a real provider client accepting an offer. */
-  async simulateAcceptOffer(matchId: string, providerId?: string): Promise<MatchOfferDto> {
+  /**
+   * A stylist accepting one of their smart-match offers. Called by
+   * ProviderService with a real, ownership-checked providerId — the
+   * `providerId` parameter is optional only because this also backs the
+   * matching integration specs, which accept whichever provider offered
+   * first rather than naming one.
+   */
+  async acceptOffer(matchId: string, providerId?: string): Promise<MatchOfferDto> {
     const offer = await this.prisma.matchOffer.findFirst({
       where: { matchRequestId: matchId, state: 'offered', ...(providerId ? { providerId } : {}) },
       include: { provider: true },

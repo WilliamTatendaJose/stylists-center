@@ -5,3 +5,5 @@ export * from './providers.js';
 export * from './wallet.js';
 export * from './chat.js';
 export * from './trips.js';
+export * from './market.js';
+export * from './provider-jobs.js';

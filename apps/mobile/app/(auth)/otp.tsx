@@ -4,7 +4,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { color, space } from '@sc/tokens';
 import type { AuthTokens, RequestOtpResponse } from '@sc/shared';
 import { Screen, ScreenHeader, Text, TextField, Button, Pressable } from '@sc/ui';
-import { apiFetch, ApiError } from '../../src/api/client.js';
+import { apiFetch } from '../../src/api/client.js';
+import { describeError, isRejectedCode } from '../../src/api/errorMessage.js';
 import { useAuthStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -23,6 +24,7 @@ export default function OtpEntry() {
   const [loading, setLoading] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resent, setResent] = useState(false);
   const setSession = useAuthStore((s) => s.setSession);
 
   const canSubmit = code.length === 6 && !loading;
@@ -40,7 +42,11 @@ export default function OtpEntry() {
       await setSession(tokens);
       router.replace('/(tabs)');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't verify — check your connection.");
+      setError(describeError(err, "Couldn't verify the code. Try again."));
+      // Only a rejected code should be cleared. Wiping the field after a
+      // dropped connection would make the user retype six digits that were
+      // never actually wrong.
+      if (isRejectedCode(err)) setCode('');
     } finally {
       setLoading(false);
     }
@@ -49,16 +55,20 @@ export default function OtpEntry() {
   const resend = async () => {
     setResending(true);
     setError(null);
+    setResent(false);
     try {
       const response = await apiFetch<RequestOtpResponse>('/v1/auth/otp/request', {
         method: 'POST',
         body: { phone: params.phone },
         auth: false,
       });
+      // Only swap the challenge once the new one exists. Clearing it up front
+      // would strand the screen with no valid challenge if the request failed.
       setChallengeId(response.challengeId);
       setCode('');
+      setResent(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't resend — check your connection.");
+      setError(describeError(err, "Couldn't send a new code. Try again."));
     } finally {
       setResending(false);
     }
@@ -74,7 +84,10 @@ export default function OtpEntry() {
         <TextField
           label="Code"
           value={code}
-          onChangeText={setCode}
+          onChangeText={(next) => {
+            setCode(next);
+            setError(null);
+          }}
           placeholder="000000"
           keyboardType="number-pad"
           maxLength={6}
@@ -84,8 +97,25 @@ export default function OtpEntry() {
       </View>
 
       {error ? (
-        <Text variant="meta" color={color.accent700} style={styles.error}>
+        <Text
+          variant="meta"
+          color={color.accent700}
+          style={styles.error}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+        >
           {error}
+        </Text>
+      ) : null}
+
+      {!error && resent ? (
+        <Text
+          variant="meta"
+          color="neutral700"
+          style={styles.error}
+          accessibilityLiveRegion="polite"
+        >
+          New code sent.
         </Text>
       ) : null}
 

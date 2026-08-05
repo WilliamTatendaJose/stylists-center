@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@expo-google-fonts/archivo": "^0.4.2",
-    "@gorhom/bottom-sheet": "^5.2.14",
     "@maplibre/maplibre-react-native": "^11.3.6",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "@react-native-community/slider": "^5.2.0",
@@ -32,6 +31,7 @@
     "expo-dev-client": "~57.0.10",
     "expo-font": "~57.0.1",
     "expo-linking": "~57.0.4",
+    "expo-location": "~57.0.7",
     "expo-navigation-bar": "~57.0.2",
     "expo-router": "~57.0.9",
     "expo-secure-store": "~57.0.1",

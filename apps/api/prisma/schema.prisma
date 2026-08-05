@@ -150,6 +150,7 @@ model User {
   walletTransactions  WalletTransaction[]
   refreshTokenRecords RefreshToken[]
   auditLogEntries     AuditLog[]
+  ordersAsBuyer       Order[]             @relation("OrderBuyer")
 
   @@index([cityId])
 }
@@ -181,6 +182,8 @@ model ProviderProfile {
   priceDisplay       PriceDisplay @default(list)
   fromPriceUsdCents  Int?
   workingHoursLabel  String
+  /** Provider-controlled "I'm taking work right now". The only thing that makes Home's "Available now" list actually mean anything. */
+  acceptingBookings  Boolean      @default(true)
   verified           Boolean      @default(false)
   ratingAvg          Float        @default(0)
   completedCount     Int          @default(0)
@@ -192,9 +195,13 @@ model ProviderProfile {
   offers   MatchOffer[]
   bookings Booking[]
   trips    Trip[]
+  products Product[]
+  orders   Order[]
 
   @@index([categoryId])
   @@index([cityId])
+  // The trigram (GIN) and partial availability indexes are declared in the
+  // hand-written migration — Prisma's schema language cannot express either.
 }
 
 model Service {
@@ -226,9 +233,10 @@ model Category {
   @@index([parentId])
 }
 
-/// A client's smart-match search. `radiusKm` climbs the ladder [1,3,8] on
-/// retry; the server recomputes and rejects a client-supplied value that
-/// disagrees (plan §6) — this column just records what was actually used.
+/// A client's smart-match search. `radiusKm` starts at whatever the client
+/// chose and widens geometrically on retry (see MATCH_RADIUS_GROWTH_FACTOR);
+/// the server recomputes and rejects a client-supplied value that disagrees
+/// (plan §6) — this column just records what was actually used.
 model MatchRequest {
   id                   String     @id @default(uuid())
   clientId             String
@@ -314,9 +322,12 @@ model Booking {
 /// refund or release is a NEW row referencing the same booking, not an
 /// update, so the ledger stays a true audit trail.
 model Payment {
-  id             String   @id @default(uuid())
-  bookingId      String
-  booking        Booking  @relation(fields: [bookingId], references: [id])
+  id String @id @default(uuid())
+  /// Exactly one of bookingId/orderId is set — the ledger covers both sale types so money reconciles in one place.
+  bookingId      String?
+  booking        Booking? @relation(fields: [bookingId], references: [id])
+  orderId        String?
+  order          Order?   @relation(fields: [orderId], references: [id])
   provider       String // 'ecocash' (FakeEcoCashAdapter in M1) — a string, not an enum, so a second gateway is a new value, not a migration
   status         String // held | released | refunded | failed
   amountUsdCents Int
@@ -325,6 +336,74 @@ model Payment {
   createdAt      DateTime @default(now())
 
   @@index([bookingId])
+  @@index([orderId])
+}
+
+/// Mirrors @sc/shared's OrderStatus exactly.
+enum OrderStatus {
+  /// Paid or pledged, stock held for the buyer, waiting to be collected.
+  reserved
+  /// Buyer confirmed they have it; escrow released.
+  collected
+  cancelled
+}
+
+/// A physical item a stylist sells — hair, wigs, nail supplies, cosmetics.
+model Product {
+  id            String          @id @default(uuid())
+  providerId    String
+  provider      ProviderProfile @relation(fields: [providerId], references: [id])
+  name          String
+  description   String
+  priceUsdCents Int
+  /// Authoritative stock. Reserved atomically at checkout, restored on cancellation.
+  stockQty      Int             @default(0)
+  imageUrls     String[]        @default([])
+  /// A delisted product stays for order history; it just stops being sellable.
+  active        Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  orderItems OrderItem[]
+
+  @@index([providerId])
+  @@index([active])
+}
+
+/// One order is always with ONE stylist — the buyer collects from a single place.
+model Order {
+  id                String        @id @default(uuid())
+  reference         String        @unique
+  buyerId           String
+  buyer             User          @relation("OrderBuyer", fields: [buyerId], references: [id])
+  providerId        String
+  provider          ProviderProfile @relation(fields: [providerId], references: [id])
+  status            OrderStatus   @default(reserved)
+  paymentMethod     PaymentMethod
+  /// Sum of the item snapshots, stored so a later price change cannot rewrite history.
+  totalUsdCents     Int
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  items    OrderItem[]
+  payments Payment[]
+
+  @@index([buyerId])
+  @@index([providerId])
+}
+
+/// Name and price are snapshotted: what the buyer agreed to pay must not move when the seller edits the product.
+model OrderItem {
+  id            String  @id @default(uuid())
+  orderId       String
+  order         Order   @relation(fields: [orderId], references: [id])
+  productId     String
+  product       Product @relation(fields: [productId], references: [id])
+  nameSnapshot  String
+  priceUsdCents Int
+  quantity      Int
+
+  @@index([orderId])
 }
 
 model Review {
@@ -365,9 +444,13 @@ model NoShowRecord {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   bookingId String
+  /** 'no_show' | 'late_cancellation' — both count toward account standing, but an appeal needs to know which happened. */
+  reason    String   @default("no_show")
   createdAt DateTime @default(now())
 
+  @@unique([userId, bookingId, reason])
   @@index([userId])
+  @@index([userId, createdAt])
 }
 
 model Ban {

@@ -1,8 +1,11 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { GeoService } from './geo.service';
 import { GeoSearchQueryDto, GeoRouteQueryDto } from './dto';
 
+/** Signed-in only — /search returns map pins for every provider in a radius. */
 @Controller('geo')
+@UseGuards(JwtAuthGuard)
 export class GeoController {
   constructor(private readonly geo: GeoService) {}
 

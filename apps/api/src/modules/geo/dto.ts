@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
-import { isRadiusKm } from '@sc/shared';
+import { isBrowseRadiusKm, MAX_BROWSE_RADIUS_KM, MIN_BROWSE_RADIUS_KM } from '@sc/shared';
 
-const radiusKmSchema = z.coerce
-  .number()
-  .refine(isRadiusKm, { message: 'radiusKm must be 1, 3, or 8' });
+// The map's browse radius, not the smart-match ladder — see categories/dto.ts.
+const radiusKmSchema = z.coerce.number().refine(isBrowseRadiusKm, {
+  message: `radiusKm must be between ${String(MIN_BROWSE_RADIUS_KM)} and ${String(MAX_BROWSE_RADIUS_KM)}`,
+});
 
 export const geoSearchQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90),

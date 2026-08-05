@@ -8,5 +8,11 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["app", "src", "app.config.ts", "expo-env.d.ts"]
+  "include": [
+    "app",
+    "src",
+    "app.config.ts",
+    "expo-env.d.ts",
+    ".expo/types/**/*.ts"
+  ]
 }

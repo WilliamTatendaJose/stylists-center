@@ -16,14 +16,11 @@
   "dependencies": {
     "@sc/shared": "workspace:*",
     "@sc/tokens": "workspace:*",
-    "@turf/along": "^7.3.5",
     "@turf/circle": "^7.3.5",
-    "@turf/helpers": "^7.3.5",
-    "@turf/length": "^7.3.5"
+    "@turf/helpers": "^7.3.5"
   },
   "peerDependencies": {
     "@expo-google-fonts/archivo": "*",
-    "@gorhom/bottom-sheet": "*",
     "@maplibre/maplibre-react-native": "*",
     "@react-native-community/slider": "*",
     "expo-font": "*",
@@ -36,7 +33,6 @@
     "react-native-safe-area-context": "*"
   },
   "devDependencies": {
-    "@gorhom/bottom-sheet": "^5.2.14",
     "@maplibre/maplibre-react-native": "^11.3.6",
     "@react-native-community/slider": "^5.2.0",
     "@types/react": "~19.2.2",

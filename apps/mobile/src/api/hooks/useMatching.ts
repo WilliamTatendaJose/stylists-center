@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Budget, CreateMatchRequestResponse, MatchRequestDto, RadiusKm } from '@sc/shared';
+import type { Budget, CreateMatchRequestResponse, MatchRequestDto } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { useSessionStore } from '../../state/index.js';
 import { getSocket } from '../../realtime/socket.js';
@@ -12,7 +12,7 @@ export function matchQueryKey(matchId: string | null) {
 interface CreateMatchInput {
   categoryId: string;
   budget: Budget;
-  radiusKm: RadiusKm;
+  radiusKm: number;
 }
 
 /** `POST /v1/matches` — the client's current location rides along so a later retry can re-fan-out without resending it. */

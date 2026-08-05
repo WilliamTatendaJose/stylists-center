@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
 import { formatUsd } from '@sc/shared';
 import { Screen, ScreenHeader, Text, Badge, Card, Button, EmptyPanel } from '@sc/ui';
 import { color, space } from '@sc/tokens';
 import { useCashOut, useReferrals, useWallet } from '../../src/api/hooks/index.js';
+import { describeError } from '../../src/api/errorMessage.js';
 
 const styles = StyleSheet.create({
   balanceBlock: { alignItems: 'flex-start', marginBottom: space.xxl },
@@ -42,6 +44,7 @@ export default function WalletScreen() {
   const { data: wallet, isError } = useWallet();
   const { data: referrals } = useReferrals();
   const cashOut = useCashOut();
+  const [cashOutError, setCashOutError] = useState<string | null>(null);
 
   if (!wallet) {
     if (!isError) return null; // still loading — Screen renders nothing rather than flash empty content
@@ -98,14 +101,34 @@ export default function WalletScreen() {
           size="lg"
           disabled={!wallet.canCashOut || cashOut.isPending}
           onPress={() => {
-            cashOut.mutate();
+            setCashOutError(null);
+            cashOut.mutate(undefined, {
+              // A cash-out that failed silently was indistinguishable from one
+              // that worked — for a withdrawal, that is the one thing a user
+              // cannot be left guessing about.
+              onError: (error) => {
+                setCashOutError(describeError(error, "Couldn't submit that cash-out. Try again."));
+              },
+            });
           }}
         />
-        <Text variant="metaSmall" color="neutral600" style={styles.cashOutNote}>
-          {cashOut.isSuccess
-            ? 'Submitted — paid to your EcoCash number shortly.'
-            : `Cash-out unlocks above ${formatUsd(wallet.cashOutMinUsdCents)}. Paid to your EcoCash number.`}
-        </Text>
+        {cashOutError ? (
+          <Text
+            variant="metaSmall"
+            color={color.accent700}
+            style={styles.cashOutNote}
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
+            {cashOutError}
+          </Text>
+        ) : (
+          <Text variant="metaSmall" color="neutral600" style={styles.cashOutNote}>
+            {cashOut.isSuccess
+              ? 'Submitted — paid to your EcoCash number shortly.'
+              : `Cash-out unlocks above ${formatUsd(wallet.cashOutMinUsdCents)}. Paid to your EcoCash number.`}
+          </Text>
+        )}
       </View>
 
       <View style={styles.section}>

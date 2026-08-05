@@ -13,12 +13,19 @@ import type {
   CreateBookingResponse,
   CreateReviewInput,
 } from '@sc/shared';
-import { formatBookingReference, needsCashReconciliation, platformFeeCents } from '@sc/shared';
+import {
+  canCancelBooking,
+  formatBookingReference,
+  isLateCancellation,
+  needsCashReconciliation,
+  platformFeeCents,
+} from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { MatchingService } from '../matching/matching.service';
 import { PAYMENT_GATEWAY } from '../payments/payments.module';
 import type { PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { TrustService } from '../trust/trust.service';
 import { toBookingRowDto } from './mappers';
 
 const NON_BLOCKING_STATUSES = ['cancelled', 'declined'] as const;
@@ -29,6 +36,7 @@ export class BookingsService {
     private readonly prisma: PrismaService,
     private readonly socketEmitter: SocketEmitterService,
     private readonly matching: MatchingService,
+    private readonly trust: TrustService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
   ) {}
 
@@ -197,6 +205,82 @@ export class BookingsService {
         where: { id: booking.providerId },
         data: { ratingAvg: agg._avg.rating ?? input.rating },
       });
+    });
+  }
+
+  /**
+   * Client-initiated cancellation.
+   *
+   * There was previously no way to cancel at all, even though the schema has
+   * had a `cancelled` status throughout — so a client who could not make it
+   * had only one option, which was to not turn up. The Bookings screen warns
+   * that five no-shows remove an account, so the product was punishing the
+   * behaviour it left no alternative to.
+   */
+  async cancel(bookingId: string, clientId: string): Promise<BookingRowDto> {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.clientId !== clientId) throw new ForbiddenException();
+
+    // Idempotent: cancelling an already-cancelled booking is a retry (a
+    // dropped response, a double tap), not an error worth showing anyone.
+    if (booking.status === 'cancelled') return this.toRowById(bookingId);
+
+    if (!canCancelBooking(booking.status)) {
+      throw new BadRequestException(`Cannot cancel a booking in status "${booking.status}"`);
+    }
+
+    await this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: 'cancelled' },
+    });
+
+    /**
+     * Inside the free-cancellation window this costs the client nothing.
+     * Outside it, the stylist has lost a slot they can no longer resell, so
+     * it counts toward account standing — the same ledger the "five no-shows
+     * remove an account" policy on the Bookings screen refers to, which until
+     * now was never actually written to.
+     *
+     * The client is still refunded in full: this codebase has no
+     * cancellation-fee mechanism, and inventing a charge is a commercial
+     * decision, not an implementation detail.
+     */
+    if (isLateCancellation(booking.startsAt.toISOString())) {
+      await this.trust.recordStrike(clientId, bookingId, 'late_cancellation');
+    }
+
+    // Money first-class: an EcoCash booking has real value sitting in escrow,
+    // and a cancellation that freed the slot but kept the client's money would
+    // be the worst possible bug in this flow.
+    if (booking.paymentMethod === 'ecocash') {
+      await this.refundEscrow(bookingId);
+    }
+
+    const row = await this.toRowById(bookingId);
+    this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
+    return row;
+  }
+
+  /** Same append-only ledger as a release — a refund is a NEW row. */
+  private async refundEscrow(bookingId: string): Promise<void> {
+    const held = await this.prisma.payment.findFirst({
+      where: { bookingId, status: 'held' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!held) return;
+
+    await this.prisma.payment.create({
+      data: {
+        bookingId,
+        provider: held.provider,
+        status: 'refunded',
+        amountUsdCents: held.amountUsdCents,
+        // No platform fee on a cancellation: the platform did not deliver
+        // anything, so it does not keep anything.
+        feeUsdCents: 0,
+        externalRef: held.externalRef,
+      },
     });
   }
 

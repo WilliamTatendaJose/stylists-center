@@ -13,11 +13,13 @@ import {
   useStartConversation,
 } from '../../src/api/hooks/useChat.js';
 import { useBack } from '../../src/navigation/useBack.js';
+import { describeError } from '../../src/api/errorMessage.js';
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: space.m },
   headerText: { flex: 1, minWidth: 0 },
   list: { flex: 1 },
+  composerWrap: { gap: space.s },
   bubbleRow: { marginBottom: space.s },
   bubbleMine: { alignSelf: 'flex-end' },
   bubbleTheirs: { alignSelf: 'flex-start' },
@@ -49,6 +51,7 @@ export default function Chat() {
   const { data: conversations } = useConversations();
   const [resolvedConversation, setResolvedConversation] = useState<ConversationDto | null>(null);
   const [draft, setDraft] = useState('');
+  const [sendError, setSendError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!providerId) return;
@@ -69,11 +72,28 @@ export default function Chat() {
 
   const messagesNewestFirst = [...messages].reverse();
 
+  /**
+   * The draft is cleared optimistically — a composer that holds the text
+   * until the server answers feels broken on a slow connection — but the text
+   * is kept so a failure can put it back. Previously `setDraft('')` ran
+   * unconditionally right after a fire-and-forget mutate, so a failed send
+   * destroyed what the user had typed and said nothing.
+   */
   const send = () => {
     const text = draft.trim();
     if (!text) return;
-    sendMessage.mutate({ text });
+
+    setSendError(null);
     setDraft('');
+    sendMessage.mutate(
+      { text },
+      {
+        onError: (error) => {
+          setDraft((current) => (current === '' ? text : current));
+          setSendError(describeError(error, "That message didn't send. Try again."));
+        },
+      },
+    );
   };
 
   const renderMessage = ({ item }: { item: MessageDto }) => (
@@ -112,7 +132,21 @@ export default function Chat() {
           </View>
         </View>
       }
-      footer={<Composer value={draft} onChange={setDraft} onSend={send} />}
+      footer={
+        <View style={styles.composerWrap}>
+          {sendError ? (
+            <Text
+              variant="meta"
+              color={color.accent700}
+              accessibilityLiveRegion="polite"
+              accessibilityRole="alert"
+            >
+              {sendError}
+            </Text>
+          ) : null}
+          <Composer value={draft} onChange={setDraft} onSend={send} />
+        </View>
+      }
     >
       <FlatList
         style={styles.list}

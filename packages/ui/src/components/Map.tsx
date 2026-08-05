@@ -9,8 +9,6 @@ import {
   Marker,
 } from '@maplibre/maplibre-react-native';
 import { circle } from '@turf/circle';
-import { along } from '@turf/along';
-import { length as turfLength } from '@turf/length';
 import { lineString } from '@turf/helpers';
 import { color, radius } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
@@ -33,15 +31,8 @@ export interface ScMapProps {
   markers?: ScMapMarker[];
   /** Draws the smart-match/map-search radius circle around `center`. */
   radiusKm?: number;
-  /** The dashed "as the crow flies" route line (plan §5 — not real street routing). */
+  /** The route line — a real road-following polyline from the routing engine (see the API's geo module), in travel order. */
   routeCoordinates?: ScMapLngLat[];
-  /**
-   * 0..1 along `routeCoordinates` — renders an animated position dot at that
-   * point. The caller advances this (a simulation timer in M1; a
-   * `trip.location` socket event in Phase 3) — this component only
-   * interpolates, it never owns trip state.
-   */
-  tripProgress?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -152,7 +143,6 @@ export function ScMap({
   markers = [],
   radiusKm,
   routeCoordinates,
-  tripProgress,
   style,
 }: ScMapProps) {
   const radiusFeature = useMemo(() => {
@@ -165,14 +155,23 @@ export function ScMap({
     return lineString(routeCoordinates);
   }, [routeCoordinates]);
 
-  const tripPoint = useMemo(() => {
-    if (!routeFeature || tripProgress === undefined) return null;
-    const totalKm = turfLength(routeFeature, { units: 'kilometers' });
-    const point = along(routeFeature, totalKm * Math.min(1, Math.max(0, tripProgress)), {
-      units: 'kilometers',
-    });
-    return point.geometry.coordinates as ScMapLngLat;
-  }, [routeFeature, tripProgress]);
+  // A fixed center+zoom was only ever right for the origin end of a route —
+  // anything past a couple of km put the destination (and often most of the
+  // route line) outside the viewport. Fitting to the route's own bounds
+  // means the whole path is always in frame, regardless of trip length.
+  const routeBounds = useMemo((): [number, number, number, number] | null => {
+    const first = routeCoordinates?.[0];
+    if (!routeCoordinates || routeCoordinates.length < 2 || !first) return null;
+    let [west, south] = first;
+    let [east, north] = first;
+    for (const [lng, lat] of routeCoordinates) {
+      if (lng < west) west = lng;
+      if (lng > east) east = lng;
+      if (lat < south) south = lat;
+      if (lat > north) north = lat;
+    }
+    return [west, south, east, north];
+  }, [routeCoordinates]);
 
   return (
     <View style={[styles.fill, style]}>
@@ -183,7 +182,14 @@ export function ScMap({
         logo={false}
         compass={false}
       >
-        <Camera center={center} zoom={zoom} />
+        {routeBounds ? (
+          <Camera
+            bounds={routeBounds}
+            padding={{ top: 60, right: 50, bottom: 60, left: 50 }}
+          />
+        ) : (
+          <Camera center={center} zoom={zoom} />
+        )}
 
         {radiusFeature ? (
           <GeoJSONSource id="sc-radius" data={radiusFeature}>
@@ -209,7 +215,6 @@ export function ScMap({
               paint={{
                 'line-color': color.accent,
                 'line-width': 3,
-                'line-dasharray': [2, 7],
               }}
             />
           </GeoJSONSource>
@@ -228,12 +233,6 @@ export function ScMap({
             )}
           </Marker>
         ))}
-
-        {tripPoint ? (
-          <Marker id="sc-trip-dot" lngLat={tripPoint}>
-            <DotMarker />
-          </Marker>
-        ) : null}
       </MapLibreMap>
 
       <View style={styles.attribution}>

@@ -1,16 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
-import type { CategoryDto, RadiusKm } from '@sc/shared';
+import { DEFAULT_BROWSE_RADIUS_KM, type CategoryDto } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { useSessionStore } from '../../state/index.js';
 
-/** The radius the Home screen's category counts are computed at, when the caller doesn't need a different one (e.g. New request's live radius picker). */
-const DEFAULT_RADIUS_KM: RadiusKm = 3;
-
-/** `GET /v1/categories` — `nearbyCount` is a live PostGIS count, never a placeholder (plan §9 cutover 1, 5, 11). */
-export function useCategories(radiusKm: RadiusKm = DEFAULT_RADIUS_KM) {
+/**
+ * `radiusKm` is a plain number: this hook serves both Find's free-ranging
+ * browse radius AND New Request's live "N stylists in range" preview for
+ * whatever starting radius the client has picked — the query param is
+ * identical either way, so one hook serves both without a cast.
+ */
+export function useCategories(
+  radiusKm: number = DEFAULT_BROWSE_RADIUS_KM,
+  options?: { enabled?: boolean },
+) {
   const location = useSessionStore((s) => s.location);
 
   return useQuery({
+    enabled: options?.enabled ?? true,
     queryKey: ['categories', location.lat, location.lng, radiusKm],
     queryFn: () =>
       apiFetch<CategoryDto[]>(

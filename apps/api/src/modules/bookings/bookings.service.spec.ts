@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { BookingsService } from './bookings.service';
+import { TrustService } from '../trust/trust.service';
 import { MatchingService } from '../matching/matching.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
@@ -17,7 +18,7 @@ import type { Env } from '../../config/env';
  * held->released ledger, reviews, and the matchId->confirmForBooking wiring
  * that supersedes sibling accepted offers.
  */
-const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5432/sc_test';
+const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
@@ -29,6 +30,7 @@ const BASE_ENV: Env = {
   PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
+  OSRM_BASE_URL: 'https://router.project-osrm.org',
 };
 
 const CLIENT_LOCATION = { lat: -17.7955, lng: 31.033 };
@@ -178,7 +180,13 @@ describe('BookingsService', () => {
     const geo = new GeoRepository(prisma);
     const socketEmitter = new SocketEmitterService();
     matching = new MatchingService(prisma, geo, socketEmitter, new FakeQueue() as unknown as Queue);
-    bookings = new BookingsService(prisma, socketEmitter, matching, new FakeEcoCashAdapter());
+    bookings = new BookingsService(
+      prisma,
+      socketEmitter,
+      matching,
+      new TrustService(prisma),
+      new FakeEcoCashAdapter(),
+    );
   });
 
   function futureSlot(hoursFromNow: number): string {

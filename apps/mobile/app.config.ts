@@ -1,6 +1,23 @@
 import type { ExpoConfig } from 'expo/config';
 
 /**
+ * A release build has no Metro server, so src/api/client.ts cannot infer the
+ * API host from `hostUri` and falls through to localhost — i.e. the phone
+ * itself. That failure is invisible in every dev test and total in the store
+ * build, so it is caught here, at build time, instead of shipping.
+ */
+const RELEASE_PROFILES = ['preview', 'production'];
+if (
+  RELEASE_PROFILES.includes(process.env.EAS_BUILD_PROFILE ?? '') &&
+  !process.env.EXPO_PUBLIC_API_URL
+) {
+  throw new Error(
+    `EXPO_PUBLIC_API_URL must be set for the "${process.env.EAS_BUILD_PROFILE ?? ''}" build profile — ` +
+      'without it the app would try to reach the API on the device itself.',
+  );
+}
+
+/**
  * app.config.ts instead of app.json: the MapLibre config plugin (§5 of the
  * plan) and future EAS build profiles need conditional logic that a static
  * JSON file can't express.
@@ -21,6 +38,10 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'zw.co.stylistscenter.app',
+    // Play requires a monotonically increasing integer that is independent of
+    // the user-facing `version`. Bump on every upload; Play rejects a reused
+    // value outright, so this cannot be left implicit.
+    versionCode: 1,
     adaptiveIcon: {
       backgroundColor: '#EC3013',
       foregroundImage: './assets/android-icon-foreground.png',
@@ -43,10 +64,14 @@ const config: ExpoConfig = {
     [
       'expo-font',
       {
+        // Resolved rather than written as './node_modules/...': .npmrc pins
+        // node-linker=hoisted, so these live in the workspace root's
+        // node_modules, not apps/mobile's, and a relative literal makes
+        // `expo prebuild` fail with "Cannot find module".
         fonts: [
-          './node_modules/@expo-google-fonts/archivo/400Regular/Archivo_400Regular.ttf',
-          './node_modules/@expo-google-fonts/archivo/600SemiBold/Archivo_600SemiBold.ttf',
-          './node_modules/@expo-google-fonts/archivo/800ExtraBold/Archivo_800ExtraBold.ttf',
+          require.resolve('@expo-google-fonts/archivo/400Regular/Archivo_400Regular.ttf'),
+          require.resolve('@expo-google-fonts/archivo/600SemiBold/Archivo_600SemiBold.ttf'),
+          require.resolve('@expo-google-fonts/archivo/800ExtraBold/Archivo_800ExtraBold.ttf'),
         ],
       },
     ],

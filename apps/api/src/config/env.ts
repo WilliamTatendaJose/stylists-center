@@ -31,6 +31,12 @@ export const envSchema = z
     PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10_000).default(500),
     COIN_USD_CENTS: z.coerce.number().int().positive().default(50),
     CASH_OUT_MIN_USD_CENTS: z.coerce.number().int().positive().default(500),
+
+    // Free public demo instance — no key, no cost, fine for dev/testing. A
+    // self-hosted OSRM or a paid Directions API is the production swap (plan
+    // risk R2); one env var is the entire migration since geo.service.ts
+    // only ever calls whatever this points at.
+    OSRM_BASE_URL: z.url().default('https://router.project-osrm.org'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production' && env.AUTH_DEV_OTP) {

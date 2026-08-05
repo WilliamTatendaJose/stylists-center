@@ -5,7 +5,6 @@ import { Screen, ScreenHeader, Text, Avatar, StatTile, ScMap, Button } from '@sc
 import { color, radius, space } from '@sc/tokens';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useRoute } from '../../src/api/hooks/useGeo.js';
-import { PROVIDER_LOCATIONS } from '../../src/fixtures/index.js';
 import { useSessionStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -49,7 +48,7 @@ export default function Directions() {
     );
   }
 
-  const destination = PROVIDER_LOCATIONS[providerId] ?? { lat: location.lat, lng: location.lng };
+  const destination = route.destination;
   const mapPaneStyle = { height: windowHeight * 0.44 };
 
   const goMessage = () => {
@@ -94,10 +93,7 @@ export default function Directions() {
         <ScMap
           center={[location.lng, location.lat]}
           zoom={13}
-          routeCoordinates={[
-            [location.lng, location.lat],
-            [destination.lng, destination.lat],
-          ]}
+          routeCoordinates={route.coordinates}
           markers={[
             {
               id: 'self',

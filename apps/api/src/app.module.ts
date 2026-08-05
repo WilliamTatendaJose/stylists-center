@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { RedisModule } from './modules/redis/redis.module';
@@ -17,6 +18,8 @@ import { BookingsModule } from './modules/bookings/bookings.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { ReportsModule } from './modules/reports/reports.module';
+import { MarketModule } from './modules/market/market.module';
+import { ProviderModule } from './modules/provider/provider.module';
 
 @Module({
   imports: [
@@ -46,6 +49,17 @@ import { ReportsModule } from './modules/reports/reports.module';
     ChatModule,
     WalletModule,
     ReportsModule,
+    MarketModule,
+    ProviderModule,
+  ],
+  providers: [
+    /**
+     * ThrottlerModule.forRoot() only *configures* a limit — nothing enforces
+     * it until ThrottlerGuard is bound. Without this the "global rate limit
+     * floor" above was inert: 150 requests in a row to a catalogue endpoint
+     * all returned 200.
+     */
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

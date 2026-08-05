@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { useAuthStore } from '../state/useAuthStore.js';
 import { getStoredTokens, setStoredTokens, clearStoredTokens } from '../auth/tokenStorage.js';
+import { ApiError, NetworkError, extractMessage } from './errors.js';
 
 /**
  * Device -> API host, solved once (plan §7) so nobody hardcodes an IP: the
@@ -23,14 +24,9 @@ function resolveBaseUrl(): string {
 
 export const BASE_URL = resolveBaseUrl();
 
-export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
+// Re-exported so callers keep importing their errors from the client they
+// already use, while the definitions stay in a testable, RN-free module.
+export { ApiError, NetworkError };
 
 interface RefreshResponse {
   accessToken: string;
@@ -44,11 +40,19 @@ async function refreshAccessToken(): Promise<string | null> {
   const stored = await getStoredTokens();
   if (!stored) return null;
 
-  const res = await fetch(`${BASE_URL}/v1/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken: stored.refreshToken }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: stored.refreshToken }),
+    });
+  } catch (cause) {
+    // Deliberately does NOT clear the session: an unreachable server says
+    // nothing about whether the refresh token is still valid, and signing the
+    // user out every time they walk into a tunnel would be its own bug.
+    throw new NetworkError(cause);
+  }
 
   if (!res.ok) {
     await clearStoredTokens();
@@ -83,12 +87,19 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     if (token) headers.Authorization = `Bearer ${token}`;
   }
 
-  const doFetch = () =>
-    fetch(`${BASE_URL}${path}`, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
+  const doFetch = async () => {
+    try {
+      return await fetch(`${BASE_URL}${path}`, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    } catch (cause) {
+      // fetch only rejects when the request never completed; every HTTP status,
+      // including 5xx, resolves normally and is handled below.
+      throw new NetworkError(cause);
+    }
+  };
 
   let res = await doFetch();
 
@@ -105,7 +116,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   if (!res.ok) {
     const text = await res.text();
-    throw new ApiError(res.status, text || res.statusText);
+    throw new ApiError(res.status, extractMessage(text, res.status, res.statusText));
   }
 
   if (res.status === 204) return undefined as T;

@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
 
 /** Against real Postgres (sc_test) — no Testcontainers daemon in this sandbox. */
-const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5432/sc_test';
+const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
@@ -18,6 +18,7 @@ const BASE_ENV: Env = {
   PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
+  OSRM_BASE_URL: 'https://router.project-osrm.org',
 };
 
 describe('WalletService', () => {
