@@ -1,16 +1,14 @@
 import { Tabs } from 'expo-router';
-import { ClipboardList, MessageCircle } from 'lucide-react-native';
+import { ClipboardList, MessageCircle, Store, Wallet, User } from 'lucide-react-native';
 import { FloatingTabBar, type FloatingTabBarProps } from '@sc/ui';
 
 /**
- * Stylist tab bar. The client layout has always noted that provider tabs
- * (Jobs · Shop · Messages · Earnings · My page) belong in their own route
- * group — this is that group, starting with the two tabs the Jobs slice
- * needs. Shop, Earnings and My page join it as those slices land.
+ * Stylist tab bar: Jobs · Shop · Messages · Earnings · My page.
  *
- * Messages is deliberately the same screen the client side uses: a
- * conversation has two ends and neither is special, so duplicating it would
- * mean maintaining the same chat twice.
+ * Shop, Messages and Earnings are deliberately the same screens the client
+ * side uses (buying supplies, a conversation, the coin ledger are the same
+ * thing on either side of one account) — re-exports, not copies, so the two
+ * can never drift. My page is the same account screen /profile is.
  */
 export default function ProviderTabsLayout() {
   return (
@@ -31,11 +29,38 @@ export default function ProviderTabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="shop"
+        options={{
+          title: 'Shop',
+          tabBarIcon: ({ color: iconColor, size }) => (
+            <Store color={iconColor} size={size} strokeWidth={1.8} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="messages"
         options={{
           title: 'Messages',
           tabBarIcon: ({ color: iconColor, size }) => (
             <MessageCircle color={iconColor} size={size} strokeWidth={1.8} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="earnings"
+        options={{
+          title: 'Earnings',
+          tabBarIcon: ({ color: iconColor, size }) => (
+            <Wallet color={iconColor} size={size} strokeWidth={1.8} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'My page',
+          tabBarIcon: ({ color: iconColor, size }) => (
+            <User color={iconColor} size={size} strokeWidth={1.8} />
           ),
         }}
       />

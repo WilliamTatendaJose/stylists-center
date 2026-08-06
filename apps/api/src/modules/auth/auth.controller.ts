@@ -1,8 +1,8 @@
-import { Body, Controller, Get, Ip, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Ip, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
-import { RequestOtpDto, VerifyOtpDto, RefreshDto, SetActiveRoleDto } from './dto';
+import { RequestOtpDto, VerifyOtpDto, RefreshDto, SetActiveRoleDto, UpdateProfileDto } from './dto';
 
 @Controller('auth')
 export class AuthController {
@@ -38,5 +38,11 @@ export class MeController {
   @Post('role')
   setRole(@CurrentUser() user: { id: string }, @Body() dto: SetActiveRoleDto) {
     return this.auth.setActiveRole(user.id, dto.role);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch()
+  updateProfile(@CurrentUser() user: { id: string }, @Body() dto: UpdateProfileDto) {
+    return this.auth.updateProfile(user.id, dto);
   }
 }

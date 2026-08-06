@@ -51,11 +51,17 @@ const styles = StyleSheet.create({
  * existed in useAuthStore, wired to nothing. Also the one place that shows
  * whether a client has a stylist page and links to setting one up, instead
  * of that only being discoverable through the role switcher.
+ *
+ * Reached two different ways (see (provider)/profile.tsx's re-export): a
+ * push from the client Find tab's header button, and a provider tab-bar
+ * root ("My page"). `router.canGoBack()` tells the two apart at render time
+ * — a pushed screen gets the back chevron, a tab root gets the tab bar.
  */
 export default function Profile() {
   const onBack = useBack('/(tabs)');
   const { data: me } = useMe();
   const signOut = useAuthStore((s) => s.signOut);
+  const isPushed = router.canGoBack();
 
   if (!me) return null;
 
@@ -64,7 +70,10 @@ export default function Profile() {
   const roleLabel = me.activeRole === 'provider' ? 'Provider' : 'Client';
 
   return (
-    <Screen header={<ScreenHeader title="Profile" onBack={onBack} />}>
+    <Screen
+      hasTabBar={!isPushed}
+      header={<ScreenHeader title="Profile" showBack={isPushed} onBack={onBack} />}
+    >
       <Card bordered style={styles.identityCard}>
         <Avatar initials={initials} tint={tint} size={52} />
         <View style={styles.identityMiddle}>

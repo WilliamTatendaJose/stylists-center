@@ -52,3 +52,33 @@ export const providerJobsSchema = z.object({
   bookings: z.array(providerBookingRowSchema),
 });
 export type ProviderJobsDto = z.infer<typeof providerJobsSchema>;
+
+/**
+ * One row of the append-only Payment ledger (plan §6), narrowed to a single
+ * provider and given a name they recognise instead of a raw booking/order
+ * id — a booking or a market order, whichever produced this entry.
+ */
+export const providerEarningsEntrySchema = z.object({
+  id: z.uuid(),
+  reference: z.string(),
+  kind: z.enum(['booking', 'order']),
+  counterpartyName: z.string(),
+  amountUsdCents: z.number().int(),
+  feeUsdCents: z.number().int(),
+  status: z.enum(['held', 'released', 'refunded', 'failed']),
+  createdAt: z.iso.datetime(),
+});
+export type ProviderEarningsEntryDto = z.infer<typeof providerEarningsEntrySchema>;
+
+/**
+ * `releasedUsdCents` is money actually settled to the provider (net of the
+ * platform fee); `pendingUsdCents` is still held in escrow — a booking or
+ * order in progress, not yet collected/completed. Neither total counts a
+ * refunded or failed entry.
+ */
+export const providerEarningsSchema = z.object({
+  releasedUsdCents: z.number().int(),
+  pendingUsdCents: z.number().int(),
+  entries: z.array(providerEarningsEntrySchema),
+});
+export type ProviderEarningsDto = z.infer<typeof providerEarningsSchema>;

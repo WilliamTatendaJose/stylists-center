@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ProviderAvailabilityDto, ProviderJobsDto } from '@sc/shared';
+import type { ProviderAvailabilityDto, ProviderEarningsDto, ProviderJobsDto } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { getSocket } from '../../realtime/socket.js';
 
@@ -20,6 +20,14 @@ export function useProviderJobs() {
     queryKey: PROVIDER_JOBS_KEY,
     queryFn: () => apiFetch<ProviderJobsDto>('/v1/provider/jobs'),
     refetchInterval: JOBS_POLL_MS,
+  });
+}
+
+/** `GET /v1/provider/earnings` — the Earnings tab's released/pending totals and the ledger entries behind them. */
+export function useProviderEarnings() {
+  return useQuery({
+    queryKey: ['provider', 'earnings'],
+    queryFn: () => apiFetch<ProviderEarningsDto>('/v1/provider/earnings'),
   });
 }
 

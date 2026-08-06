@@ -9,9 +9,11 @@ import { useMe } from '../api/hooks/useMe.js';
  * read has resolved yet, so the root layout can hold the splash screen until
  * it has (never flash the wrong stack for a frame).
  *
- * Also routes between the two sides of the marketplace. `activeRole` is the
- * server's answer, not a local preference, so signing in on a new device puts
- * a stylist straight into their own side of the app.
+ * Also routes between the two sides of the marketplace, and — before either
+ * side — forces a stop at /complete-profile for any account still carrying
+ * its sign-up placeholder name (see auth.service.ts / isProfileComplete).
+ * `activeRole` is the server's answer, not a local preference, so signing in
+ * on a new device puts a stylist straight into their own side of the app.
  */
 export function useAuthGate(): boolean {
   const isHydrated = useAuthStore((s) => s.isHydrated);
@@ -37,21 +39,26 @@ export function useAuthGate(): boolean {
       return;
     }
 
-    // Role routing waits for /v1/me: guessing from a local default would
-    // bounce a stylist through the client tabs on every cold start.
+    // Role and profile-completion routing both wait for /v1/me: guessing
+    // from a local default would bounce a stylist through the client tabs
+    // (or past the name prompt) on every cold start.
     if (!accessToken || !me) return;
+
+    // A real name comes before either side of the app — a client mid
+    // smart-match and a stylist mid job list both still need one.
+    if (!me.profileComplete) {
+      if (segments[0] !== 'complete-profile') router.replace('/complete-profile');
+      return;
+    }
 
     const inProviderGroup = segments[0] === '(provider)';
     const wantsProvider = me.activeRole === 'provider' && me.hasProviderProfile;
+    const onCompleteProfile = segments[0] === 'complete-profile';
 
-    if (wantsProvider && !inProviderGroup) {
-      router.replace('/(provider)/jobs');
-    } else if (!wantsProvider && inProviderGroup) {
-      // Covers switching back to client AND the edge case of an account in
-      // 'provider' role whose stylist page has gone — without the
-      // hasProviderProfile check that account would be stranded on a group
-      // whose every request 403s.
-      router.replace('/(tabs)');
+    // Three cases collapse to the same fix: sitting on the now-finished name
+    // prompt, or on the wrong side of the client/provider split either way.
+    if (onCompleteProfile || (wantsProvider && !inProviderGroup) || (!wantsProvider && inProviderGroup)) {
+      router.replace(wantsProvider ? '/(provider)/jobs' : '/(tabs)');
     }
   }, [isHydrated, accessToken, segments, me]);
 

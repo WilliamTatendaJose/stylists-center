@@ -20,6 +20,11 @@ export class ProviderController {
     return this.provider.getJobs(providerId);
   }
 
+  @Get('earnings')
+  earnings(@CurrentProvider() providerId: string) {
+    return this.provider.getEarnings(providerId);
+  }
+
   @Post('availability')
   setAvailability(@CurrentProvider() providerId: string, @Body() dto: SetAvailabilityDto) {
     return this.provider.setAvailability(providerId, dto.acceptingBookings);

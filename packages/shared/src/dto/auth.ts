@@ -53,5 +53,12 @@ export const meSchema = z.object({
   activeRole: activeRoleSchema,
   hasProviderProfile: z.boolean(),
   verificationStatus: z.enum(['unverified', 'pending', 'verified']),
+  /** False until `displayName` has been changed away from its sign-up placeholder (the phone number itself). */
+  profileComplete: z.boolean(),
 });
 export type Me = z.infer<typeof meSchema>;
+
+export const updateProfileSchema = z.object({
+  displayName: z.string().trim().min(2).max(60),
+});
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

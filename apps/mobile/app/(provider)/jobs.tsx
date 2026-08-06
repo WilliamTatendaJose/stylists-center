@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
-import { User } from 'lucide-react-native';
 import {
   BOOKING_STATUS_LABELS,
   formatUsd,
@@ -13,7 +11,6 @@ import {
   Screen,
   ScreenHeader,
   Text,
-  Pressable,
   Avatar,
   Badge,
   Button,
@@ -54,15 +51,6 @@ const styles = StyleSheet.create({
   note: { marginBottom: space.m },
   reconcileNote: { marginTop: space.s },
   sectionGap: { marginTop: space.xl },
-  profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: color.divider,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
 });
 
 /** A live smart-match offer: accept it and it becomes a booking, or it expires. */
@@ -227,24 +215,7 @@ export default function Jobs() {
   return (
     <Screen
       hasTabBar
-      header={
-        <ScreenHeader
-          title="Jobs"
-          showBack={false}
-          right={
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Profile"
-              onPress={() => {
-                router.push('/profile');
-              }}
-              style={styles.profileButton}
-            >
-              <User size={16} strokeWidth={1.8} color={color.text} />
-            </Pressable>
-          }
-        />
-      }
+      header={<ScreenHeader title="Jobs" showBack={false} />}
       refreshControl={
         <RefreshControl
           refreshing={isRefetching}

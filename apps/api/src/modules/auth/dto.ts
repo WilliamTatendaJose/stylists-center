@@ -1,5 +1,11 @@
 import { createZodDto } from 'nestjs-zod';
-import { requestOtpSchema, verifyOtpSchema, refreshSchema, setActiveRoleSchema } from '@sc/shared';
+import {
+  requestOtpSchema,
+  verifyOtpSchema,
+  refreshSchema,
+  setActiveRoleSchema,
+  updateProfileSchema,
+} from '@sc/shared';
 
 /**
  * Wraps @sc/shared's zod schemas as nestjs-zod DTO classes — the global
@@ -11,3 +17,4 @@ export class RequestOtpDto extends createZodDto(requestOtpSchema) {}
 export class VerifyOtpDto extends createZodDto(verifyOtpSchema) {}
 export class RefreshDto extends createZodDto(refreshSchema) {}
 export class SetActiveRoleDto extends createZodDto(setActiveRoleSchema) {}
+export class UpdateProfileDto extends createZodDto(updateProfileSchema) {}

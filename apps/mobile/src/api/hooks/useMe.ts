@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ActiveRole, Me } from '@sc/shared';
+import type { ActiveRole, Me, UpdateProfileInput } from '@sc/shared';
 import { apiFetch } from '../client.js';
 
 export const ME_QUERY_KEY = ['me'] as const;
@@ -34,6 +34,19 @@ export function useSetActiveRole() {
       // Role decides which side of the marketplace the rest of the app is
       // showing, so anything already fetched under the old role is suspect.
       void queryClient.invalidateQueries();
+    },
+  });
+}
+
+/** `PATCH /v1/me` — the Complete Profile screen's only field today: a real display name. */
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UpdateProfileInput) =>
+      apiFetch<Me>('/v1/me', { method: 'PATCH', body: input }),
+    onSuccess: (me) => {
+      queryClient.setQueryData(ME_QUERY_KEY, me);
     },
   });
 }

@@ -11,6 +11,8 @@ import {
   providerOwesCompletion,
   type ProviderAvailabilityDto,
   type ProviderBookingRowDto,
+  type ProviderEarningsDto,
+  type ProviderEarningsEntryDto,
   type ProviderJobsDto,
   type ProviderOfferDto,
 } from '@sc/shared';
@@ -239,6 +241,55 @@ export class ProviderService {
       'booking.updated',
       toBookingRowDto(booking, !!alreadyRated),
     );
+  }
+
+  /**
+   * The provider side of the same Payment ledger every escrow movement in
+   * this codebase writes to. `releasedUsdCents` is what has actually
+   * settled (net of the platform fee); `pendingUsdCents` is still held —
+   * work in progress, not a payout yet. Refunded/failed entries count
+   * toward neither total but still appear in the list, since a stylist
+   * needs to see a refund happened, not just that it isn't money for them.
+   */
+  async getEarnings(providerProfileId: string): Promise<ProviderEarningsDto> {
+    const payments = await this.prisma.payment.findMany({
+      where: {
+        OR: [
+          { booking: { providerId: providerProfileId } },
+          { order: { providerId: providerProfileId } },
+        ],
+      },
+      include: {
+        booking: { include: { client: true } },
+        order: { include: { buyer: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    let releasedUsdCents = 0;
+    let pendingUsdCents = 0;
+
+    const entries: ProviderEarningsEntryDto[] = payments.map((payment) => {
+      if (payment.status === 'released') {
+        releasedUsdCents += payment.amountUsdCents - payment.feeUsdCents;
+      } else if (payment.status === 'held') {
+        pendingUsdCents += payment.amountUsdCents;
+      }
+
+      return {
+        id: payment.id,
+        reference: payment.booking?.reference ?? payment.order?.reference ?? '',
+        kind: payment.bookingId ? 'booking' : 'order',
+        counterpartyName:
+          payment.booking?.client.displayName ?? payment.order?.buyer.displayName ?? '',
+        amountUsdCents: payment.amountUsdCents,
+        feeUsdCents: payment.feeUsdCents,
+        status: payment.status as ProviderEarningsEntryDto['status'],
+        createdAt: payment.createdAt.toISOString(),
+      };
+    });
+
+    return { releasedUsdCents, pendingUsdCents, entries };
   }
 
   /** Append-only, same as every other escrow movement in this codebase. */

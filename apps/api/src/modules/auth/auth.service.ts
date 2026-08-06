@@ -12,11 +12,13 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type Redis from 'ioredis';
 import {
+  isProfileComplete,
   normalizePhone,
   type ActiveRole,
   type AuthTokens,
   type Me,
   type RequestOtpResponse,
+  type UpdateProfileInput,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CLIENT } from '../redis/redis.module';
@@ -241,7 +243,17 @@ export class AuthService {
       activeRole: user.activeRole,
       hasProviderProfile: !!user.providerProfile,
       verificationStatus: user.verificationStatus,
+      profileComplete: isProfileComplete(user.displayName, user.phone),
     };
+  }
+
+  /** `PATCH /v1/me` — replaces the sign-up placeholder `displayName` with a real one. */
+  async updateProfile(userId: string, input: UpdateProfileInput): Promise<Me> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { displayName: input.displayName },
+    });
+    return this.me(userId);
   }
 
   async setActiveRole(userId: string, role: ActiveRole): Promise<Me> {
