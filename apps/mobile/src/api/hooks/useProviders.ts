@@ -3,9 +3,13 @@ import {
   PROVIDER_PAGE_SIZE,
   type CreateProviderProfileInput,
   type CreateProviderProfileResponse,
+  type CreateProviderServiceInput,
+  type ProviderManagementProfileDto,
   type ProviderPageDto,
   type ProviderProfileDto,
   type ProviderSlotsResponse,
+  type ServiceDto,
+  type UpdateProviderProfileInput,
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { ME_QUERY_KEY } from './useMe.js';
@@ -102,15 +106,22 @@ export function useProvider(id: string | undefined) {
   });
 }
 
-/** `GET /v1/providers/:id/slots?date`. */
-export function useProviderSlots(id: string | undefined, date: string) {
+/** `GET /v1/providers/:id/slots?date&serviceId`. */
+export function useProviderSlots(
+  id: string | undefined,
+  serviceId: string | undefined,
+  date: string,
+) {
   return useQuery({
-    queryKey: ['providers', id, 'slots', date],
+    queryKey: ['providers', id, 'slots', serviceId, date],
     queryFn: () =>
       apiFetch<ProviderSlotsResponse>(
-        `/v1/providers/${String(id)}/slots?${new URLSearchParams({ date }).toString()}`,
+        `/v1/providers/${String(id)}/slots?${new URLSearchParams({
+          date,
+          serviceId: String(serviceId),
+        }).toString()}`,
       ),
-    enabled: !!id,
+    enabled: !!id && !!serviceId,
   });
 }
 
@@ -129,6 +140,43 @@ export function useCreateProviderProfile() {
       apiFetch<CreateProviderProfileResponse>('/v1/providers', { method: 'POST', body: input }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    },
+  });
+}
+
+const PROVIDER_PROFILE_KEY = ['provider', 'profile'] as const;
+
+export function useProviderManagementProfile() {
+  return useQuery({
+    queryKey: PROVIDER_PROFILE_KEY,
+    queryFn: () => apiFetch<ProviderManagementProfileDto>('/v1/provider/profile'),
+  });
+}
+
+export function useUpdateProviderProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateProviderProfileInput) =>
+      apiFetch<ProviderManagementProfileDto>('/v1/provider/profile', {
+        method: 'PATCH',
+        body: input,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_PROFILE_KEY });
+      void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['providers'] });
+    },
+  });
+}
+
+export function useAddProviderService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateProviderServiceInput) =>
+      apiFetch<ServiceDto>('/v1/provider/services', { method: 'POST', body: input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_PROFILE_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['providers'] });
     },
   });
 }

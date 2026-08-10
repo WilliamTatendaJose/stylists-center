@@ -2,7 +2,14 @@ import { Body, Controller, Get, Ip, Patch, Post, UseGuards } from '@nestjs/commo
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
-import { RequestOtpDto, VerifyOtpDto, RefreshDto, SetActiveRoleDto, UpdateProfileDto } from './dto';
+import {
+  RequestOtpDto,
+  VerifyOtpDto,
+  RefreshDto,
+  SetActiveRoleDto,
+  UpdateProfileDto,
+  RegisterPushTokenDto,
+} from './dto';
 
 @Controller('auth')
 export class AuthController {
@@ -10,7 +17,7 @@ export class AuthController {
 
   @Post('otp/request')
   requestOtp(@Body() dto: RequestOtpDto, @Ip() ip: string) {
-    return this.auth.requestOtp(dto.phone, ip);
+    return this.auth.requestOtp(dto.phone, ip, dto.channel);
   }
 
   @Post('otp/verify')
@@ -44,5 +51,11 @@ export class MeController {
   @Patch()
   updateProfile(@CurrentUser() user: { id: string }, @Body() dto: UpdateProfileDto) {
     return this.auth.updateProfile(user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('push-token')
+  registerPushToken(@CurrentUser() user: { id: string }, @Body() dto: RegisterPushTokenDto) {
+    return this.auth.registerPushToken(user.id, dto);
   }
 }

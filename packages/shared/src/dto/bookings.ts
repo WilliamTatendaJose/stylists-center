@@ -23,6 +23,8 @@ export const createBookingResponseSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   status: bookingStatusSchema,
+  /** Present for Paynow bookings; the client must open it to complete checkout. */
+  checkoutUrl: z.url().optional(),
 });
 export type CreateBookingResponse = z.infer<typeof createBookingResponseSchema>;
 

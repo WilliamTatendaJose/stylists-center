@@ -46,7 +46,11 @@ export default function ChooseSlot() {
   const dates = useMemo(buildDateStrip, []);
   const [date, setDate] = useState(dates[0]?.value ?? '');
   const [time, setTime] = useState<string | null>(null);
-  const { data: slotsResponse } = useProviderSlots(providerId ?? undefined, date);
+  const { data: slotsResponse } = useProviderSlots(
+    providerId ?? undefined,
+    serviceId ?? undefined,
+    date,
+  );
 
   // Cold-start / deep-link guard — this screen only makes sense once a
   // provider has been chosen (Provider profile's BOOK button).
@@ -122,7 +126,10 @@ export default function ChooseSlot() {
               description={`${String(service.durationMinutes)} min · ${formatUsd(service.priceUsdCents)}`}
               selected={service.id === serviceId}
               onPress={() => {
+                // A slot that fits one service may overlap an existing booking
+                // once the client chooses a longer service.
                 setService(service.id);
+                setTime(null);
               }}
             />
           ))}

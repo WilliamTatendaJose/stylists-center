@@ -7,13 +7,19 @@ import type { ExpoConfig } from 'expo/config';
  * build, so it is caught here, at build time, instead of shipping.
  */
 const RELEASE_PROFILES = ['preview', 'production'];
-if (
-  RELEASE_PROFILES.includes(process.env.EAS_BUILD_PROFILE ?? '') &&
-  !process.env.EXPO_PUBLIC_API_URL
-) {
+const isReleaseProfile = RELEASE_PROFILES.includes(process.env.EAS_BUILD_PROFILE ?? '');
+
+if (isReleaseProfile && !process.env.EXPO_PUBLIC_API_URL?.trim()) {
   throw new Error(
     `EXPO_PUBLIC_API_URL must be set for the "${process.env.EAS_BUILD_PROFILE ?? ''}" build profile — ` +
       'without it the app would try to reach the API on the device itself.',
+  );
+}
+
+if (isReleaseProfile && !process.env.EXPO_PUBLIC_MAPTILER_KEY?.trim()) {
+  throw new Error(
+    `EXPO_PUBLIC_MAPTILER_KEY must be set for the "${process.env.EAS_BUILD_PROFILE ?? ''}" build profile - ` +
+      'release builds must not fall back to the OpenStreetMap public tile server.',
   );
 }
 
@@ -61,6 +67,8 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-secure-store',
+    'expo-notifications',
+    'expo-web-browser',
     [
       'expo-font',
       {
@@ -81,6 +89,11 @@ const config: ExpoConfig = {
   ],
   extra: {
     router: {},
+    eas: {
+      projectId:
+        process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
+        '563fa89a-e790-487f-8d78-0815ed9588c1',
+    },
   },
   experiments: {
     typedRoutes: true,

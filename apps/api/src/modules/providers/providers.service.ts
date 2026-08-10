@@ -176,27 +176,50 @@ export class ProvidersService {
     };
   }
 
-  async getSlots(providerId: string, date: string): Promise<ProviderSlotsResponse> {
-    const candidates = CANDIDATE_TIMES.map((time) => ({
-      time,
-      instant: harareSlotToUtc(date, time),
-    }));
+  async getSlots(
+    providerId: string,
+    date: string,
+    serviceId: string,
+  ): Promise<ProviderSlotsResponse> {
+    const service = await this.prisma.service.findFirst({
+      where: { id: serviceId, providerId },
+      select: { durationMinutes: true },
+    });
+    if (!service) throw new NotFoundException('Service not found for this provider');
 
+    const candidates = CANDIDATE_TIMES.map((time) => {
+      const instant = harareSlotToUtc(date, time);
+      return {
+        time,
+        instant,
+        endsAt: new Date(instant.getTime() + service.durationMinutes * 60_000),
+      };
+    });
+    const dayClose = harareSlotToUtc(date, '20:00');
+    const firstCandidate = candidates[0];
+    const lastCandidate = candidates[candidates.length - 1];
+    if (!firstCandidate || !lastCandidate) return { date, slots: [] };
+
+    // Read every appointment that could overlap a candidate, not just one
+    // with the same start timestamp. `endsAt` is a snapshot, so a later menu
+    // edit cannot change the schedule already promised to clients.
     const bookings = await this.prisma.booking.findMany({
       where: {
         providerId,
-        startsAt: { in: candidates.map((c) => c.instant) },
+        startsAt: { lt: lastCandidate.endsAt },
+        endsAt: { gt: firstCandidate.instant },
         status: { notIn: [...NON_BLOCKING_STATUSES] },
       },
-      select: { startsAt: true },
+      select: { startsAt: true, endsAt: true },
     });
-    const takenTimestamps = new Set(bookings.map((b) => b.startsAt.getTime()));
 
     return {
       date,
-      slots: candidates.map(({ time, instant }) => ({
+      slots: candidates.map(({ time, instant, endsAt }) => ({
         time,
-        available: !takenTimestamps.has(instant.getTime()),
+        available:
+          endsAt <= dayClose &&
+          bookings.every((booking) => booking.startsAt >= endsAt || booking.endsAt <= instant),
       })),
     };
   }

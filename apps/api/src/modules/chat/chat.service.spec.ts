@@ -16,6 +16,8 @@ const BASE_ENV: Env = {
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
   AUTH_DEV_OTP: '000000',
+  TWILIO_VERIFY_CHANNEL: 'whatsapp',
+  PAYMENT_PROVIDER: 'fake',
   PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
@@ -163,5 +165,28 @@ describe('ChatService', () => {
     await chat.getMessages(conversation.id, clientId);
     const after = await chat.list(clientId);
     expect(after.find((c) => c.id === conversation.id)?.unreadCount).toBe(0);
+  });
+
+  it('lets the provider list, read, and reply in the same conversation', async () => {
+    const conversation = await chat.getOrCreateByProvider(clientId, providerId);
+    await chat.sendMessage(conversation.id, clientId, { text: 'Provider-side test' });
+
+    const providerInbox = await chat.list(providerUserId);
+    const providerRow = providerInbox.find((row) => row.id === conversation.id);
+    expect(providerRow?.counterpartyName).toBe('Chat Client');
+    expect(providerRow?.unreadCount).toBeGreaterThan(0);
+
+    const providerMessages = await chat.getMessages(conversation.id, providerUserId);
+    expect(providerMessages.some((message) => message.text === 'Provider-side test')).toBe(true);
+    expect(
+      (await chat.list(providerUserId)).find((row) => row.id === conversation.id)?.unreadCount,
+    ).toBe(0);
+
+    const reply = await chat.sendMessage(conversation.id, providerUserId, {
+      text: 'Provider reply',
+    });
+    expect(reply.mine).toBe(true);
+    const clientMessages = await chat.getMessages(conversation.id, clientId);
+    expect(clientMessages.some((message) => message.text === 'Provider reply')).toBe(true);
   });
 });

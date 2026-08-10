@@ -1,15 +1,24 @@
+export const PAYMENT_GATEWAY = Symbol('PAYMENT_GATEWAY');
+
+export interface PaymentCheckoutInput {
+  reference: string;
+  amountUsdCents: number;
+  description: string;
+}
+
 export interface PaymentIntentResult {
+  /** Paynow poll URL, or a deterministic fake reference in development. */
   externalRef: string;
-  status: 'held' | 'failed';
+  status: 'held' | 'pending' | 'failed';
+  checkoutUrl?: string;
+  provider: 'fake-ecocash' | 'paynow';
 }
 
 /**
- * Plan §6/R3: EcoCash escrow is a commercial/legal integration, not just an
- * engineering one — real access runs through an aggregator and takes weeks to
- * onboard. This port isolates that behind an interface so swapping the fake
- * adapter for a real one later is a provider binding change, not a rewrite of
- * BookingsService.
+ * All payment gateway calls stay on the API. The client receives only a
+ * Paynow-hosted checkout URL; integration keys never leave the server.
  */
 export interface PaymentGatewayPort {
-  chargeToEscrow(amountUsdCents: number): Promise<PaymentIntentResult>;
+  createCheckout(input: PaymentCheckoutInput): Promise<PaymentIntentResult>;
+  verifyCallback(fields: Record<string, string>): boolean;
 }

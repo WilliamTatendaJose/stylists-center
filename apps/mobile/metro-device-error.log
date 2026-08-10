@@ -1,0 +1,33 @@
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Error [ERR_STREAM_UNABLE_TO_PIPE]: Cannot pipe to a closed or destroyed stream
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Error [ERR_STREAM_UNABLE_TO_PIPE]: Cannot pipe to a closed or destroyed stream
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+Warning: Unable to resolve manifest assets. Icons and fonts might not work. EPERM: operation not permitted, open 'C:\Users\wjose\.expo\schema-cache\0a7dc4d138008d2fe89f97b8cf1dba489131944c94585081be06f239cc7dabf1-body.bin'.
+
+<--- Last few GCs --->
+
+[43052:00000165C3BE5000]  6355099 ms: Scavenge (interleaved) 4088.3 (4094.8) -> 4085.1 (4095.3) MB, pooled: 0 MB, 16.58 / 0.00 ms  (average mu = 0.293, current mu = 0.242) allocation failure; 
+[43052:00000165C3BE5000]  6359312 ms: Mark-Compact (reduce) 4092.3 (4098.8) -> 4085.1 (4089.8) MB, pooled: 0 MB, 3091.61 / 0.00 ms  (+ 569.6 ms in 113 steps since start of marking, biggest step 5.6 ms, walltime since start of marking 4000 ms) (average mu 
+FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory
+----- Native stack trace -----
+
+ 1: 00007FF7BF9F0CCF node::OnFatalError+1343
+ 2: 00007FF7C063F697 v8::Function::NewInstance+423
+ 3: 00007FF7C04400C7 v8::base::AddressSpaceReservation::AddressSpaceReservation+322071
+ 4: 00007FF7C0443DD4 v8::base::AddressSpaceReservation::AddressSpaceReservation+337700
+ 5: 00007FF7C0452D2C v8::internal::StrongRootAllocatorBase::deallocate_impl+16604
+ 6: 00007FF7C045256B v8::internal::StrongRootAllocatorBase::deallocate_impl+14619
+ 7: 00007FF7C18DE86D v8::base::UnsignedDivisionByConstant<unsigned __int64>+2794685
+ 8: 00007FF7C043DB90 v8::base::AddressSpaceReservation::AddressSpaceReservation+312544
+ 9: 00007FF7C04583DA X509_STORE_set_cleanup+5098
+10: 00007FF7C0464876 uv_timer_set_repeat+20694
+11: 00007FF7C00365B7 v8::String::Value::~Value+144199
+12: 00000165FC277A10 

@@ -20,11 +20,11 @@ import {
   needsCashReconciliation,
   platformFeeCents,
 } from '@sc/shared';
+import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { MatchingService } from '../matching/matching.service';
-import { PAYMENT_GATEWAY } from '../payments/payments.module';
-import type { PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
 import { TrustService } from '../trust/trust.service';
 import { toBookingRowDto } from './mappers';
 
@@ -50,53 +50,87 @@ export class BookingsService {
     }
 
     const startsAt = new Date(input.startsAt);
-    const conflict = await this.prisma.booking.findFirst({
-      where: {
-        providerId: input.providerId,
-        startsAt,
-        status: { notIn: [...NON_BLOCKING_STATUSES] },
-      },
-    });
-    if (conflict) throw new BadRequestException('That slot is no longer available');
+    const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
 
-    // Confirming the match here (not before the conflict check) means a slot
-    // race never leaves a MatchRequest confirmed with no resulting booking.
-    if (input.matchId) {
-      await this.matching.confirmForBooking(input.matchId, clientId, input.providerId);
-    }
+    const booking = await this.prisma.$transaction(async (tx) => {
+      // A per-provider transaction lock closes the read-then-write race while
+      // keeping unrelated stylists fully concurrent. The exclusion constraint
+      // in the migration remains the final database-level safeguard for any
+      // future write path that does not use this service.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.providerId}))`;
 
-    const sequence = await this.nextBookingSequence();
-    const booking = await this.prisma.booking.create({
-      data: {
-        reference: formatBookingReference(sequence),
-        clientId,
-        providerId: input.providerId,
-        serviceId: input.serviceId,
-        matchRequestId: input.matchId ?? null,
-        startsAt,
-        paymentMethod: input.paymentMethod,
-        priceUsdCents: service.priceUsdCents,
-      },
-    });
-
-    if (input.paymentMethod === 'ecocash') {
-      const intent = await this.paymentGateway.chargeToEscrow(service.priceUsdCents);
-      await this.prisma.payment.create({
-        data: {
-          bookingId: booking.id,
-          provider: 'ecocash',
-          status: intent.status,
-          amountUsdCents: service.priceUsdCents,
-          feeUsdCents: platformFeeCents(service.priceUsdCents),
-          externalRef: intent.externalRef,
+      const conflict = await tx.booking.findFirst({
+        where: {
+          providerId: input.providerId,
+          startsAt: { lt: endsAt },
+          endsAt: { gt: startsAt },
+          status: { notIn: [...NON_BLOCKING_STATUSES] },
         },
       });
+      if (conflict) throw new BadRequestException('That time is no longer available');
+
+      // A match is only consumed after its appointment range is known to be
+      // free. Keeping the provider lock until the row is written prevents a
+      // second client from taking the same appointment in the meantime.
+      if (input.matchId) {
+        await this.matching.confirmForBooking(input.matchId, clientId, input.providerId);
+      }
+
+      const sequence = await this.nextBookingSequence(tx);
+      return tx.booking.create({
+        data: {
+          reference: formatBookingReference(sequence),
+          clientId,
+          providerId: input.providerId,
+          serviceId: input.serviceId,
+          matchRequestId: input.matchId ?? null,
+          startsAt,
+          endsAt,
+          paymentMethod: input.paymentMethod,
+          priceUsdCents: service.priceUsdCents,
+        },
+      });
+    });
+    let checkoutUrl: string | undefined;
+    if (input.paymentMethod === 'ecocash') {
+      try {
+        const intent = await this.paymentGateway.createCheckout({
+          reference: booking.reference,
+          amountUsdCents: service.priceUsdCents,
+          description: `Booking ${booking.reference}: ${service.name}`,
+        });
+        await this.prisma.payment.create({
+          data: {
+            bookingId: booking.id,
+            provider: intent.provider,
+            status: intent.status,
+            amountUsdCents: service.priceUsdCents,
+            feeUsdCents: platformFeeCents(service.priceUsdCents),
+            externalRef: intent.externalRef,
+          },
+        });
+        checkoutUrl = intent.checkoutUrl;
+      } catch (error) {
+        // Never reserve a stylist's time when the gateway failed before the
+        // client received a checkout page. The cancelled booking preserves an
+        // audit trail while releasing the exclusion-constraint time range.
+        await this.prisma.booking.update({
+          where: { id: booking.id },
+          data: { status: 'cancelled' },
+        });
+        throw error;
+      }
     }
 
     const row = await this.toRowById(booking.id);
     this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
 
-    return { id: booking.id, reference: booking.reference, status: booking.status };
+    return {
+      id: booking.id,
+      reference: booking.reference,
+      status: booking.status,
+      ...(checkoutUrl ? { checkoutUrl } : {}),
+    };
   }
 
   async listForClient(clientId: string): Promise<BookingRowDto[]> {
@@ -116,9 +150,19 @@ export class BookingsService {
   }
 
   async confirmCompletion(bookingId: string, clientId: string): Promise<ConfirmCompletionResponse> {
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { provider: true },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.clientId !== clientId) throw new ForbiddenException();
+    if (booking.status === 'completed') {
+      return {
+        confirmedByClient: booking.confirmedByClient,
+        confirmedByProvider: booking.confirmedByProvider,
+        status: booking.status,
+      };
+    }
     // Both the cash and EcoCash happy paths are awaiting_provider -> confirmed
     // -> completed — completion only makes sense once the provider has
     // confirmed the appointment, never while still awaiting them.
@@ -140,26 +184,71 @@ export class BookingsService {
     // released on the client's word alone — they're the one who received the
     // service, so their confirmation is what the "held until complete" promise
     // (plan R3) actually turns on.
-    const stillNeedsReconciliation = needsCashReconciliation({
-      paymentMethod: booking.paymentMethod,
-      status: booking.status,
-      confirmedByClient: true,
-      confirmedByProvider: booking.confirmedByProvider,
-    });
-    const completes = booking.paymentMethod === 'ecocash' || !stillNeedsReconciliation;
-    const nextStatus: BookingStatus = completes ? 'completed' : booking.status;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+      const current = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
+      if (current.status === 'completed' || current.confirmedByClient) return current;
 
-    const updated = await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { confirmedByClient: true, status: nextStatus },
-    });
+      const fundedPayment =
+        current.paymentMethod === 'ecocash'
+          ? await tx.payment.findFirst({
+              where: { bookingId, status: { in: ['paid', 'held'] } },
+              orderBy: { createdAt: 'desc' },
+            })
+          : null;
+      if (current.paymentMethod === 'ecocash' && !fundedPayment) {
+        throw new BadRequestException('Payment has not cleared yet');
+      }
 
-    if (completes && booking.paymentMethod === 'ecocash') {
-      await this.releaseEscrow(bookingId);
-    }
+      const stillNeedsReconciliation = needsCashReconciliation({
+        paymentMethod: current.paymentMethod,
+        status: current.status,
+        confirmedByClient: true,
+        confirmedByProvider: current.confirmedByProvider,
+      });
+      const completes = current.paymentMethod === 'ecocash' || !stillNeedsReconciliation;
+      const nextStatus: BookingStatus = completes ? 'completed' : current.status;
+      const result = await tx.booking.update({
+        where: { id: bookingId },
+        data: { confirmedByClient: true, status: nextStatus },
+      });
+
+      if (completes) {
+        await tx.providerProfile.update({
+          where: { id: current.providerId },
+          data: { completedCount: { increment: 1 } },
+        });
+        if (current.paymentMethod === 'ecocash') {
+          if (fundedPayment) {
+            await tx.payment.create({
+              data: {
+                bookingId,
+                provider: fundedPayment.provider,
+                status: 'released',
+                amountUsdCents: fundedPayment.amountUsdCents,
+                feeUsdCents: fundedPayment.feeUsdCents,
+                externalRef: fundedPayment.externalRef,
+              },
+            });
+          }
+        } else {
+          await tx.payment.create({
+            data: {
+              bookingId,
+              provider: 'cash',
+              status: 'released',
+              amountUsdCents: current.priceUsdCents,
+              feeUsdCents: platformFeeCents(current.priceUsdCents),
+            },
+          });
+        }
+      }
+      return result;
+    });
 
     const row = await this.toRowById(bookingId);
     this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
+    this.socketEmitter.emitToUser(booking.provider.userId, 'booking.updated', row);
 
     return {
       confirmedByClient: updated.confirmedByClient,
@@ -265,7 +354,7 @@ export class BookingsService {
   /** Same append-only ledger as a release — a refund is a NEW row. */
   private async refundEscrow(bookingId: string): Promise<void> {
     const held = await this.prisma.payment.findFirst({
-      where: { bookingId, status: 'held' },
+      where: { bookingId, status: { in: ['paid', 'held'] } },
       orderBy: { createdAt: 'desc' },
     });
     if (!held) return;
@@ -287,7 +376,7 @@ export class BookingsService {
   /** Append-only ledger (plan §6): a release is a NEW row, never an update of the held one. */
   private async releaseEscrow(bookingId: string): Promise<void> {
     const held = await this.prisma.payment.findFirst({
-      where: { bookingId, status: 'held' },
+      where: { bookingId, status: { in: ['paid', 'held'] } },
       orderBy: { createdAt: 'desc' },
     });
     if (!held) return;
@@ -316,10 +405,10 @@ export class BookingsService {
   }
 
   /** Race-free monotonic counter for the "SC-4471" reference (plan §9 — a real Postgres sequence, not a row count). */
-  private async nextBookingSequence(): Promise<number> {
-    const [row] = await this.prisma.$queryRaw<
-      { nextval: bigint }[]
-    >`SELECT nextval('booking_reference_seq')`;
+  private async nextBookingSequence(tx: Prisma.TransactionClient): Promise<number> {
+    const [row] = await tx.$queryRaw<{ nextval: bigint }[]>`
+      SELECT nextval('booking_reference_seq')
+    `;
     return Number(row?.nextval ?? 0);
   }
 }

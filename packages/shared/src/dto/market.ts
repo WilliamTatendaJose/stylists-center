@@ -84,5 +84,42 @@ export const createOrderResponseSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   totalUsdCents: z.number().int(),
+  /** Present for Paynow orders; the client must open it to complete checkout. */
+  checkoutUrl: z.url().optional(),
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
+
+/** A seller's own inventory row; distance/provider identity are implicit. */
+export const providerProductSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  description: z.string(),
+  priceUsdCents: z.number().int(),
+  stockQty: z.number().int(),
+  imageUrls: z.array(z.string()),
+  active: z.boolean(),
+});
+export type ProviderProductDto = z.infer<typeof providerProductSchema>;
+
+export const createProviderProductSchema = z.object({
+  name: z.string().trim().min(2).max(80),
+  description: z.string().trim().min(2).max(500),
+  priceUsdCents: z.number().int().min(100).max(1_000_000),
+  stockQty: z.number().int().min(0).max(100_000),
+  imageUrls: z.array(z.url()).max(5).default([]),
+});
+export type CreateProviderProductInput = z.infer<typeof createProviderProductSchema>;
+
+/** An incoming order as the seller sees it. */
+export const providerOrderSchema = z.object({
+  id: z.uuid(),
+  reference: z.string(),
+  buyerName: z.string(),
+  status: orderStatusSchema,
+  paymentMethod: paymentMethodSchema,
+  totalUsdCents: z.number().int(),
+  createdAt: z.iso.datetime(),
+  items: z.array(orderItemSchema),
+  canMarkCollected: z.boolean(),
+});
+export type ProviderOrderDto = z.infer<typeof providerOrderSchema>;

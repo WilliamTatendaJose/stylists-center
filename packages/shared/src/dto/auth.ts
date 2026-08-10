@@ -9,6 +9,8 @@ import { z } from 'zod';
 export const requestOtpSchema = z.object({
   /** Any format libphonenumber-js can parse against the ZW default region. */
   phone: z.string().min(6).max(20),
+  /** WhatsApp is the default; the OTP screen can explicitly retry over SMS. */
+  channel: z.enum(['whatsapp', 'sms']).optional(),
 });
 export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
 
@@ -62,3 +64,10 @@ export const updateProfileSchema = z.object({
   displayName: z.string().trim().min(2).max(60),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+
+/** Expo push token captured from a physical iOS/Android device. */
+export const registerPushTokenSchema = z.object({
+  expoPushToken: z.string().trim().min(20).max(255),
+  platform: z.enum(['android', 'ios']),
+});
+export type RegisterPushTokenInput = z.infer<typeof registerPushTokenSchema>;

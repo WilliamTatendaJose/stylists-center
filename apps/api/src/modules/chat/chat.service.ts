@@ -1,5 +1,11 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import type { ConversationDto, MessageDto, SendMessageInput } from '@sc/shared';
+import {
+  deriveInitials,
+  deriveTint,
+  type ConversationDto,
+  type MessageDto,
+  type SendMessageInput,
+} from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { toConversationDto, toMessageDto } from './mappers';
@@ -11,10 +17,11 @@ export class ChatService {
     private readonly socketEmitter: SocketEmitterService,
   ) {}
 
-  async list(clientId: string): Promise<ConversationDto[]> {
+  async list(viewerId: string): Promise<ConversationDto[]> {
     const conversations = await this.prisma.conversation.findMany({
-      where: { clientId },
+      where: { OR: [{ clientId: viewerId }, { providerUserId: viewerId }] },
       include: {
+        client: true,
         providerUser: { include: { providerProfile: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
@@ -23,18 +30,25 @@ export class ChatService {
 
     return Promise.all(
       conversations.map(async (c) => {
+        const viewingAsClient = c.clientId === viewerId;
         const profile = c.providerUser.providerProfile;
-        if (!profile) {
-          throw new Error(`Conversation ${c.id} has no provider profile for its counterparty`);
-        }
+        const counterparty = viewingAsClient
+          ? profile
+          : {
+              displayName: c.client.displayName,
+              tint: deriveTint(c.client.displayName),
+              initials: deriveInitials(c.client.displayName),
+            };
+        if (!counterparty) throw new Error(`Conversation ${c.id} has no provider profile`);
+        const lastReadAt = viewingAsClient ? c.clientLastReadAt : c.providerLastReadAt;
         const unreadCount = await this.prisma.message.count({
           where: {
             conversationId: c.id,
-            authorId: { not: clientId },
-            createdAt: { gt: c.clientLastReadAt },
+            authorId: { not: viewerId },
+            createdAt: { gt: lastReadAt },
           },
         });
-        return toConversationDto(c, profile, c.messages[0]?.text ?? '', unreadCount);
+        return toConversationDto(c, counterparty, c.messages[0]?.text ?? '', unreadCount);
       }),
     );
   }
@@ -66,12 +80,12 @@ export class ChatService {
   }
 
   /** Viewing the thread is what marks it read — plan §9's endpoint list has no separate "mark read" call. */
-  async getMessages(conversationId: string, clientId: string): Promise<MessageDto[]> {
+  async getMessages(conversationId: string, viewerId: string): Promise<MessageDto[]> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
-    if (conversation.clientId !== clientId) throw new ForbiddenException();
+    this.assertParticipant(conversation, viewerId);
 
     const messages = await this.prisma.message.findMany({
       where: { conversationId },
@@ -80,26 +94,29 @@ export class ChatService {
 
     await this.prisma.conversation.update({
       where: { id: conversationId },
-      data: { clientLastReadAt: new Date() },
+      data:
+        conversation.clientId === viewerId
+          ? { clientLastReadAt: new Date() }
+          : { providerLastReadAt: new Date() },
     });
 
-    return messages.map((m) => toMessageDto(m, clientId));
+    return messages.map((m) => toMessageDto(m, viewerId));
   }
 
   async sendMessage(
     conversationId: string,
-    clientId: string,
+    viewerId: string,
     input: SendMessageInput,
   ): Promise<MessageDto> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
-    if (conversation.clientId !== clientId) throw new ForbiddenException();
+    this.assertParticipant(conversation, viewerId);
 
     const [message] = await this.prisma.$transaction([
       this.prisma.message.create({
-        data: { conversationId, authorId: clientId, text: input.text },
+        data: { conversationId, authorId: viewerId, text: input.text },
       }),
       this.prisma.conversation.update({
         where: { id: conversationId },
@@ -107,16 +124,24 @@ export class ChatService {
       }),
     ]);
 
-    const dto = toMessageDto(message, clientId);
-    // `mine` is viewer-relative: the conversation room only ever holds this
-    // same client's other devices (multi-device sync), while the provider's
-    // own `user:{id}` room needs the flag flipped for their eventual app.
+    const dto = toMessageDto(message, viewerId);
+    const counterpartyId =
+      conversation.clientId === viewerId ? conversation.providerUserId : conversation.clientId;
     this.socketEmitter.emitToConversation(conversationId, 'message.created', dto);
-    this.socketEmitter.emitToUser(conversation.providerUserId, 'message.created', {
+    this.socketEmitter.emitToUser(counterpartyId, 'message.created', {
       ...dto,
       mine: false,
     });
 
     return dto;
+  }
+
+  private assertParticipant(
+    conversation: { clientId: string; providerUserId: string },
+    viewerId: string,
+  ): void {
+    if (conversation.clientId !== viewerId && conversation.providerUserId !== viewerId) {
+      throw new ForbiddenException();
+    }
   }
 }

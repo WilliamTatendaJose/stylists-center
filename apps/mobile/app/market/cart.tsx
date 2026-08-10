@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import { formatUsd, type CreateOrderResponse, type PaymentMethod } from '@sc/shared';
 import { color, space } from '@sc/tokens';
@@ -129,6 +130,10 @@ export default function Cart() {
 
     for (const { group } of succeeded) {
       removeSeller(group.providerId);
+    }
+
+    for (const { created } of succeeded) {
+      if (created.checkoutUrl) await WebBrowser.openBrowserAsync(created.checkoutUrl);
     }
 
     if (Object.keys(nextErrors).length > 0) {
@@ -266,8 +271,8 @@ export default function Cart() {
         </Text>
         <View style={styles.radioGap}>
           <RadioCard
-            title="EcoCash — pay now"
-            description="Held until you collect. Refunded in full if you cancel."
+            title="Paynow — pay securely"
+            description="Choose EcoCash, card, or another supported Paynow method. We verify the result with Paynow."
             dot
             selected={paymentMethod === 'ecocash'}
             onPress={() => {

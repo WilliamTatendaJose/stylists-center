@@ -65,7 +65,7 @@ export const providerEarningsEntrySchema = z.object({
   counterpartyName: z.string(),
   amountUsdCents: z.number().int(),
   feeUsdCents: z.number().int(),
-  status: z.enum(['held', 'released', 'refunded', 'failed']),
+  status: z.enum(['pending', 'paid', 'held', 'released', 'refunded', 'failed', 'disputed']),
   createdAt: z.iso.datetime(),
 });
 export type ProviderEarningsEntryDto = z.infer<typeof providerEarningsEntrySchema>;

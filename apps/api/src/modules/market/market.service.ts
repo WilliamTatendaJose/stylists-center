@@ -18,8 +18,7 @@ import {
 } from '@sc/shared';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
-import { PAYMENT_GATEWAY } from '../payments/payments.module';
-import type { PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
 import { Inject } from '@nestjs/common';
 import { toOrderRow, toProductDetail, toProductRow, type ProductGeoRow } from './mappers';
 
@@ -197,21 +196,32 @@ export class MarketService {
         },
       });
 
+      let checkoutUrl: string | undefined;
       if (input.paymentMethod === 'ecocash') {
-        const intent = await this.paymentGateway.chargeToEscrow(totalUsdCents);
+        const intent = await this.paymentGateway.createCheckout({
+          reference: order.reference,
+          amountUsdCents: totalUsdCents,
+          description: `Market order ${order.reference}`,
+        });
         await tx.payment.create({
           data: {
             orderId: order.id,
-            provider: 'ecocash',
+            provider: intent.provider,
             status: intent.status,
             amountUsdCents: totalUsdCents,
             feeUsdCents: platformFeeCents(totalUsdCents),
             externalRef: intent.externalRef,
           },
         });
+        checkoutUrl = intent.checkoutUrl;
       }
 
-      return { id: order.id, reference: order.reference, totalUsdCents };
+      return {
+        id: order.id,
+        reference: order.reference,
+        totalUsdCents,
+        ...(checkoutUrl ? { checkoutUrl } : {}),
+      };
     });
   }
 
@@ -229,6 +239,13 @@ export class MarketService {
     const order = await this.requireOwnOrder(orderId, buyerId);
     if (!canCollectOrder(order.status)) {
       throw new BadRequestException(`Cannot collect an order that is ${order.status}`);
+    }
+
+    if (order.paymentMethod === 'ecocash') {
+      const funded = await this.prisma.payment.findFirst({
+        where: { orderId, status: { in: ['paid', 'held'] } },
+      });
+      if (!funded) throw new BadRequestException('Payment has not cleared yet');
     }
 
     await this.prisma.order.update({ where: { id: orderId }, data: { status: 'collected' } });
@@ -281,7 +298,7 @@ export class MarketService {
     keepsFee: boolean,
   ): Promise<void> {
     const held = await this.prisma.payment.findFirst({
-      where: { orderId, status: 'held' },
+      where: { orderId, status: { in: ['paid', 'held'] } },
       orderBy: { createdAt: 'desc' },
     });
     if (!held) return;

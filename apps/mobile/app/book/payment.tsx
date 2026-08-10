@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { color, space } from '@sc/tokens';
 import { formatUsd } from '@sc/shared';
 import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button } from '@sc/ui';
@@ -66,20 +67,29 @@ export default function Payment() {
       },
       {
         onSuccess: (created) => {
-          resetDraft();
-          router.replace({
-            pathname: '/book/done',
-            params: {
-              reference: created.reference,
-              providerId: provider.id,
-              providerName: provider.displayName,
-              serviceName: service.name,
-              whenLabel,
-              areaName: provider.areaName,
-              paymentLabel:
-                paymentMethod === 'ecocash' ? 'EcoCash — held in escrow' : 'Cash — pay in person',
-            },
-          });
+          const finish = () => {
+            resetDraft();
+            router.replace({
+              pathname: '/book/done',
+              params: {
+                reference: created.reference,
+                providerId: provider.id,
+                providerName: provider.displayName,
+                serviceName: service.name,
+                whenLabel,
+                areaName: provider.areaName,
+                paymentLabel:
+                  paymentMethod === 'ecocash'
+                    ? 'Paynow — payment verification pending'
+                    : 'Cash — pay in person',
+              },
+            });
+          };
+          if (created.checkoutUrl) {
+            void WebBrowser.openBrowserAsync(created.checkoutUrl).finally(finish);
+          } else {
+            finish();
+          }
         },
         onError: (error) => {
           setBookingError(describeError(error, "Couldn't confirm that booking. Try again."));
@@ -91,7 +101,7 @@ export default function Payment() {
   const ctaLabel = createBooking.isPending
     ? 'Booking…'
     : paymentMethod === 'ecocash'
-      ? `Pay ${formatUsd(service.priceUsdCents)} with EcoCash`
+      ? `Continue to Paynow — ${formatUsd(service.priceUsdCents)}`
       : 'Request booking — pay cash';
 
   return (
@@ -154,8 +164,8 @@ export default function Payment() {
         </Text>
         <View style={styles.radioGap}>
           <RadioCard
-            title="EcoCash — pay in app"
-            description="Held until the appointment is marked complete. Refunded if she cancels."
+            title="Paynow — pay securely"
+            description="Choose EcoCash, card, or another supported Paynow method. We record payment only after Paynow verifies it."
             dot
             selected={paymentMethod === 'ecocash'}
             onPress={() => {

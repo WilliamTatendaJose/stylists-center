@@ -52,12 +52,20 @@ export function useAuthGate(): boolean {
     }
 
     const inProviderGroup = segments[0] === '(provider)';
+    const inClientGroup = segments[0] === '(tabs)';
     const wantsProvider = me.activeRole === 'provider' && me.hasProviderProfile;
     const onCompleteProfile = segments[0] === 'complete-profile';
 
     // Three cases collapse to the same fix: sitting on the now-finished name
     // prompt, or on the wrong side of the client/provider split either way.
-    if (onCompleteProfile || (wantsProvider && !inProviderGroup) || (!wantsProvider && inProviderGroup)) {
+    // Neutral routes such as /chat, /map and /market are shared by both
+    // roles. Redirect only when the user is actually inside the opposite tab
+    // group; otherwise opening a provider conversation bounces to Jobs.
+    if (
+      onCompleteProfile ||
+      (wantsProvider && inClientGroup) ||
+      (!wantsProvider && inProviderGroup)
+    ) {
       router.replace(wantsProvider ? '/(provider)/jobs' : '/(tabs)');
     }
   }, [isHydrated, accessToken, segments, me]);

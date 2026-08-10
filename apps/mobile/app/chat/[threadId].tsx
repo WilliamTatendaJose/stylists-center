@@ -14,6 +14,7 @@ import {
 } from '../../src/api/hooks/useChat.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { describeError } from '../../src/api/errorMessage.js';
+import { useMe } from '../../src/api/hooks/useMe.js';
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: space.m },
@@ -46,7 +47,10 @@ export default function Chat() {
     threadId: string;
     providerId?: string;
   }>();
-  const onBack = useBack('/(tabs)/messages');
+  const { data: me } = useMe();
+  const onBack = useBack(
+    me?.activeRole === 'provider' ? '/(provider)/messages' : '/(tabs)/messages',
+  );
   const startConversation = useStartConversation();
   const { data: conversations } = useConversations();
   const [resolvedConversation, setResolvedConversation] = useState<ConversationDto | null>(null);

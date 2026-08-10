@@ -40,8 +40,8 @@ pnpm dev:infra
 
 # apps/api/.env and apps/mobile/.env from the templates in .env.example:
 cp .env.example apps/api/.env   # then fill in JWT_ACCESS_SECRET / JWT_REFRESH_PEPPER
-# apps/mobile/.env only needs EXPO_PUBLIC_MAP_TILE_URL/EXPO_PUBLIC_MAP_ENGINE if you're
-# overriding the defaults — see .env.example for both apps' variables in one file.
+# Set EXPO_PUBLIC_MAPTILER_KEY for MapTiler maps/offline packs. Release builds also
+# require EXPO_PUBLIC_API_URL — see .env.example for both apps' variables.
 
 pnpm --filter @sc/shared build
 pnpm --filter @sc/api prisma:migrate   # `prisma migrate deploy`, applies apps/api/prisma/migrations
@@ -106,16 +106,52 @@ plausible-looking mock.
   immediately on a cold start before the first real fetch resolves — mutations are never persisted,
   to avoid replaying a queued write twice after a restart.
 
-## Known gaps (by design, for this milestone)
+## Delivery status and remaining gaps
 
-- **No Provider-role UI.** Every screen in this repo is the client's. A few flows that would
-  normally need a provider to act (accepting a smart-match offer, confirming a booking from
-  `awaiting_provider` to `confirmed`) are exercised in tests and via a dev-only
-  `POST /v1/dev/simulate/accept-offer` endpoint instead of a real second app.
-- **EcoCash, SMS/WhatsApp OTP, and push notifications are all stubbed.** `AUTH_DEV_OTP` short-circuits
-  OTP verification in development and is rejected by env validation in production.
-- **Map tiles**: `tile.openstreetmap.org` is fine for development but its usage policy forbids the
-  bulk downloading the offline tile pack does — a real tile vendor (MapTiler, Protomaps) is needed
-  before launch.
-- **Real turn-by-turn routing** isn't wired up; the Directions screen uses a static ETA lookup table
-  and a canned step list instead of a routing engine.
+### Implemented since the original milestone report
+
+- **Provider operations are now in the mobile app.** A stylist can create a basic provider page,
+  switch roles, toggle availability, respond to smart-match offers, confirm or decline bookings,
+  confirm cash-job completion, and view earnings. The API protects these actions with a provider
+  guard, rather than relying on the client to decide who may act.
+- **Routing now prefers OSRM.** The API requests a road-following route and turn instructions from
+  `OSRM_BASE_URL`, then degrades to a clearly limited straight-line route if the routing service is
+  unavailable. The public OSRM server remains suitable only for development.
+- **Client booking and marketplace basics are present.** Clients can browse nearby stylists, make a
+  direct or smart-match booking, chat, cancel, review completed work, and reserve marketplace stock.
+
+### Release blockers
+
+- **Payments and authentication delivery are still test doubles.** `FakeEcoCashAdapter` immediately
+  holds funds; no real payment initiation, webhook signature verification, reconciliation, retry, or
+  payout process exists. OTP challenges are generated and rate-limited, but neither SMS nor WhatsApp
+  delivery is integrated. `AUTH_DEV_OTP` is correctly rejected in production, which means a real
+  delivery provider is required before production sign-in can work.
+- **Scheduling still needs a real provider calendar.** Bookings now persist their end time, slot
+  availability accounts for the selected service duration, and PostgreSQL rejects overlapping active
+  appointments. However, `workingHoursLabel` remains free text and the candidate window is fixed at
+  07:00-20:00. Add structured weekly hours, breaks, days off, and time-off exceptions before relying
+  on the scheduler as the provider's source of truth.
+- **Provider management is incomplete.** Onboarding creates one service, but there is no provider
+  workflow or API to edit a page, services, hours, location, portfolio, products, stock, or product
+  fulfilment. The provider Shop and Profile tabs currently reuse client-facing screens, so they are
+  not merchant-management tools.
+- **Operational safety has no staff console.** Clients can submit reports and no-show records can
+  trigger automatic bans, but there is no authenticated staff interface/API for reviewing reports,
+  resolving disputes, handling appeals, correcting a strike, verifying a stylist, or reconciling
+  payments. These processes need ownership, audit controls, and support playbooks before launch.
+- **Notifications are absent.** Socket events improve responsiveness only while an app is running;
+  there are no push notifications for a provider offer, booking response, cancellation, chat message,
+  payment outcome, or appointment reminder. Background delivery and retry behaviour need to be
+  designed and tested.
+- **Production map and privacy operations need hardening.** Public OpenStreetMap tiles must not be
+  used for offline downloads, and the public OSRM demo endpoint has no production SLA. Choose licensed
+  tile and routing providers (or self-host them), define quotas and monitoring, and validate the
+  location-retention/deletion policy against the deployment's privacy requirements.
+
+### Recommended release order
+
+1. Make scheduling correct and race-safe; it is the most direct source of failed appointments.
+2. Integrate real OTP and payments with webhook/reconciliation tests.
+3. Add provider self-service, verification, and staff support tooling.
+4. Add push notifications, then move maps and routing to production-grade providers.

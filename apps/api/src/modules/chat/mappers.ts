@@ -20,15 +20,15 @@ interface ProviderIdentity {
 
 export function toConversationDto(
   conversation: Conversation,
-  provider: ProviderIdentity,
+  counterparty: ProviderIdentity,
   lastMessagePreview: string,
   unreadCount: number,
 ): ConversationDto {
   return {
     id: conversation.id,
-    counterpartyName: provider.displayName,
-    tint: provider.tint,
-    initials: provider.initials,
+    counterpartyName: counterparty.displayName,
+    tint: counterparty.tint,
+    initials: counterparty.initials,
     lastMessagePreview,
     lastMessageAt: conversation.lastMessageAt.toISOString(),
     unreadCount,

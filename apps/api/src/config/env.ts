@@ -27,6 +27,21 @@ export const envSchema = z
       .length(6)
       .regex(/^\d{6}$/)
       .optional(),
+    // Twilio Verify owns code generation and verification in production.
+    // WhatsApp is preferred in Zimbabwe; SMS is the automatic fallback when
+    // WhatsApp cannot deliver to a particular number.
+    TWILIO_ACCOUNT_SID: z.string().startsWith('AC').optional(),
+    TWILIO_AUTH_TOKEN: z.string().min(20).optional(),
+    TWILIO_VERIFY_SERVICE_SID: z.string().startsWith('VA').optional(),
+    TWILIO_VERIFY_CHANNEL: z.enum(['whatsapp', 'sms']).default('whatsapp'),
+
+    // Paynow is the selected collection provider. It remains optional in
+    // development so the fake adapter keeps local and integration tests free.
+    PAYMENT_PROVIDER: z.enum(['fake', 'paynow']).default('fake'),
+    PAYNOW_INTEGRATION_ID: z.string().min(1).optional(),
+    PAYNOW_INTEGRATION_KEY: z.string().min(20).optional(),
+    PAYNOW_RETURN_URL: z.url().optional(),
+    PAYNOW_RESULT_URL: z.url().optional(),
 
     PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10_000).default(500),
     COIN_USD_CENTS: z.coerce.number().int().positive().default(50),
@@ -45,6 +60,38 @@ export const envSchema = z
         path: ['AUTH_DEV_OTP'],
         message: 'AUTH_DEV_OTP must not be set in production — it bypasses real OTP verification.',
       });
+    }
+    if (env.NODE_ENV === 'production') {
+      for (const key of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_VERIFY_SERVICE_SID'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `${key} is required in production for Twilio Verify.`,
+          });
+        }
+      }
+      if (env.PAYMENT_PROVIDER !== 'paynow') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['PAYMENT_PROVIDER'],
+          message: 'PAYMENT_PROVIDER must be paynow in production.',
+        });
+      }
+      for (const key of [
+        'PAYNOW_INTEGRATION_ID',
+        'PAYNOW_INTEGRATION_KEY',
+        'PAYNOW_RETURN_URL',
+        'PAYNOW_RESULT_URL',
+      ] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `${key} is required in production for Paynow.`,
+          });
+        }
+      }
     }
   });
 

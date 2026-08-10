@@ -3,9 +3,12 @@ import {
   PRODUCT_PAGE_SIZE,
   type CreateOrderInput,
   type CreateOrderResponse,
+  type CreateProviderProductInput,
   type OrderRowDto,
   type ProductDetailDto,
   type ProductPageDto,
+  type ProviderOrderDto,
+  type ProviderProductDto,
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { useSessionStore } from '../../state/index.js';
@@ -102,6 +105,48 @@ export function useCancelOrder() {
       void queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
       // Cancelling puts the stock back, so the catalogue changed too.
       void queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+  });
+}
+
+const PROVIDER_PRODUCTS_KEY = ['provider', 'products'] as const;
+const PROVIDER_ORDERS_KEY = ['provider', 'orders'] as const;
+
+export function useProviderProducts() {
+  return useQuery({
+    queryKey: PROVIDER_PRODUCTS_KEY,
+    queryFn: () => apiFetch<ProviderProductDto[]>('/v1/provider/products'),
+  });
+}
+
+export function useProviderOrders() {
+  return useQuery({
+    queryKey: PROVIDER_ORDERS_KEY,
+    queryFn: () => apiFetch<ProviderOrderDto[]>('/v1/provider/orders'),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useCreateProviderProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateProviderProductInput) =>
+      apiFetch<ProviderProductDto>('/v1/provider/products', { method: 'POST', body: input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_PRODUCTS_KEY });
+      void queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+  });
+}
+
+export function useProviderCollectOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) =>
+      apiFetch<void>(`/v1/provider/orders/${orderId}/collect`, { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_ORDERS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['provider', 'earnings'] });
     },
   });
 }

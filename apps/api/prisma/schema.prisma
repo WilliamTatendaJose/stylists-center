@@ -151,6 +151,7 @@ model User {
   refreshTokenRecords RefreshToken[]
   auditLogEntries     AuditLog[]
   ordersAsBuyer       Order[]             @relation("OrderBuyer")
+  pushTokens          DevicePushToken[]
 
   @@index([cityId])
 }
@@ -300,6 +301,9 @@ model Booking {
   matchRequestId      String?
   matchRequest        MatchRequest?   @relation(fields: [matchRequestId], references: [id])
   startsAt            DateTime
+  /// Fixed at booking time from the selected service duration. This makes the
+  /// appointment range auditable even if the service menu changes later.
+  endsAt              DateTime
   paymentMethod       PaymentMethod
   status              BookingStatus   @default(awaiting_provider)
   priceUsdCents       Int
@@ -479,6 +483,7 @@ model Conversation {
   /// on the client's own inbox is just "messages from the provider after
   /// this timestamp", bumped whenever the client fetches the thread.
   clientLastReadAt DateTime @default(now())
+  providerLastReadAt DateTime @default(now())
   createdAt      DateTime @default(now())
 
   messages Message[]
@@ -565,6 +570,20 @@ model Trip {
 /// Rotated on every refresh-token use, with reuse detection (plan §6): a
 /// replayed token revokes the whole family by deleting every row sharing
 /// `familyId`.
+/// One Expo Push Token per install. A token can move between accounts when a
+/// device is handed over, so it is globally unique and upserted on every app launch.
+model DevicePushToken {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  expoPushToken String   @unique
+  platform      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model RefreshToken {
   id        String   @id @default(uuid())
   userId    String

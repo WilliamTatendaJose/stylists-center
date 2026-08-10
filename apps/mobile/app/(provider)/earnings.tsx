@@ -5,10 +5,13 @@ import { Screen, ScreenHeader, Text, StatTile, Card, Badge, EmptyPanel } from '@
 import { useProviderEarnings } from '../../src/api/hooks/useProviderJobs.js';
 
 const STATUS_LABEL: Record<ProviderEarningsEntryDto['status'], string> = {
+  pending: 'Payment pending',
+  paid: 'Paid — payout pending',
   held: 'In progress',
   released: 'Paid out',
   refunded: 'Refunded',
   failed: 'Failed',
+  disputed: 'Disputed',
 };
 
 const styles = StyleSheet.create({

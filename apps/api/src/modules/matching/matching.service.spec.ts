@@ -24,6 +24,8 @@ const BASE_ENV: Env = {
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
   AUTH_DEV_OTP: '000000',
+  TWILIO_VERIFY_CHANNEL: 'whatsapp',
+  PAYMENT_PROVIDER: 'fake',
   PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,

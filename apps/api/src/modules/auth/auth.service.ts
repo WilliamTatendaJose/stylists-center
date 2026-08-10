@@ -6,18 +6,22 @@ import {
   HttpStatus,
   Inject,
   Injectable,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type Redis from 'ioredis';
 import {
+  deriveInitials,
+  deriveTint,
   isProfileComplete,
   normalizePhone,
   type ActiveRole,
   type AuthTokens,
   type Me,
   type RequestOtpResponse,
+  type RegisterPushTokenInput,
   type UpdateProfileInput,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -43,10 +47,6 @@ function sha256Hex(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
-function generateOtpCode(): string {
-  return String(Math.floor(100_000 + Math.random() * 900_000));
-}
-
 function generateRefreshTokenRaw(): string {
   return randomBytes(32).toString('base64url');
 }
@@ -69,7 +69,11 @@ export class AuthService {
     @Inject(REDIS_CLIENT) private readonly redis: Redis,
   ) {}
 
-  async requestOtp(phoneInput: string, ip: string): Promise<RequestOtpResponse> {
+  async requestOtp(
+    phoneInput: string,
+    ip: string,
+    requestedChannel?: 'whatsapp' | 'sms',
+  ): Promise<RequestOtpResponse> {
     const phone = normalizePhone(phoneInput);
     if (!phone) {
       throw new BadRequestException('Invalid phone number');
@@ -79,21 +83,78 @@ export class AuthService {
     await this.checkRateLimit(`otp:rate:ip:${ip}`, IP_RATE_LIMIT_PER_HOUR);
 
     const devOtp = this.config.get('AUTH_DEV_OTP', { infer: true });
-    const code = devOtp ?? generateOtpCode();
+    if (!devOtp) {
+      await this.sendTwilioVerification(phone, requestedChannel);
+    }
+
     const challengeId = randomUUID();
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
-
-    const challenge: OtpChallenge = { phone, codeHash: sha256Hex(code), attempts: 0 };
+    // Twilio Verify holds the real code. The development-only code remains
+    // hashed locally so no OTP is persisted in Redis in either mode.
+    const challenge: OtpChallenge = {
+      phone,
+      codeHash: devOtp ? sha256Hex(devOtp) : '',
+      attempts: 0,
+    };
     await this.redis.setex(
       `otp:challenge:${challengeId}`,
       OTP_TTL_SECONDS,
       JSON.stringify(challenge),
     );
 
-    // Real SMS/WhatsApp delivery is a later milestone (plan risk R4) — in
-    // dev, `code` already equals AUTH_DEV_OTP, so there's nothing to send.
-
     return { challengeId, expiresAt: expiresAt.toISOString() };
+  }
+
+  /** WhatsApp is primary; a delivery failure retries once via SMS. */
+  private async sendTwilioVerification(
+    phone: string,
+    requestedChannel?: 'whatsapp' | 'sms',
+  ): Promise<void> {
+    const channel =
+      requestedChannel ?? this.config.get('TWILIO_VERIFY_CHANNEL', { infer: true }) ?? 'whatsapp';
+    try {
+      await this.twilioRequest('Verifications', { To: phone, Channel: channel });
+    } catch (error) {
+      if (channel !== 'whatsapp') throw error;
+      await this.twilioRequest('Verifications', { To: phone, Channel: 'sms' });
+    }
+  }
+
+  private async checkTwilioVerification(phone: string, code: string): Promise<boolean> {
+    const response = await this.twilioRequest('VerificationCheck', { To: phone, Code: code });
+    return response.status === 'approved';
+  }
+
+  private async twilioRequest(
+    resource: 'Verifications' | 'VerificationCheck',
+    body: Record<string, string>,
+  ): Promise<{ status?: string }> {
+    const accountSid = this.config.get('TWILIO_ACCOUNT_SID', { infer: true });
+    const authToken = this.config.get('TWILIO_AUTH_TOKEN', { infer: true });
+    const serviceSid = this.config.get('TWILIO_VERIFY_SERVICE_SID', { infer: true });
+    if (!accountSid || !authToken || !serviceSid) {
+      throw new ServiceUnavailableException('Phone verification is not configured');
+    }
+
+    const response = await fetch(
+      `https://verify.twilio.com/v2/Services/${serviceSid}/${resource}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams(body).toString(),
+      },
+    );
+    const payload = (await response.json().catch(() => ({}))) as {
+      status?: string;
+      message?: string;
+    };
+    if (!response.ok) {
+      throw new ServiceUnavailableException(payload.message ?? 'Phone verification is unavailable');
+    }
+    return payload;
   }
 
   private async checkRateLimit(key: string, limit: number): Promise<void> {
@@ -115,7 +176,9 @@ export class AuthService {
 
     const challenge = JSON.parse(raw) as OtpChallenge;
     const devOtp = this.config.get('AUTH_DEV_OTP', { infer: true });
-    const matches = (!!devOtp && code === devOtp) || sha256Hex(code) === challenge.codeHash;
+    const matches = devOtp
+      ? code === devOtp
+      : await this.checkTwilioVerification(challenge.phone, code);
 
     if (!matches) {
       challenge.attempts += 1;
@@ -249,13 +312,43 @@ export class AuthService {
 
   /** `PATCH /v1/me` — replaces the sign-up placeholder `displayName` with a real one. */
   async updateProfile(userId: string, input: UpdateProfileInput): Promise<Me> {
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { displayName: input.displayName },
-    });
+    const provider = await this.prisma.providerProfile.findUnique({ where: { userId } });
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { displayName: input.displayName },
+      }),
+      ...(provider
+        ? [
+            this.prisma.providerProfile.update({
+              where: { id: provider.id },
+              data: {
+                displayName: input.displayName,
+                tint: deriveTint(input.displayName),
+                initials: deriveInitials(input.displayName),
+              },
+            }),
+          ]
+        : []),
+    ]);
     return this.me(userId);
   }
 
+  /** Upsert keeps a rotated Expo token current without accumulating dead rows. */
+  async registerPushToken(userId: string, input: RegisterPushTokenInput): Promise<void> {
+    await this.prisma.devicePushToken.upsert({
+      where: { expoPushToken: input.expoPushToken },
+      create: {
+        userId,
+        expoPushToken: input.expoPushToken,
+        platform: input.platform,
+      },
+      update: {
+        userId,
+        platform: input.platform,
+      },
+    });
+  }
   async setActiveRole(userId: string, role: ActiveRole): Promise<Me> {
     if (role === 'provider') {
       // The mobile client already hides the switch when there is no provider

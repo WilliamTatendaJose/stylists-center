@@ -210,7 +210,8 @@ export default function Jobs() {
   const offers = data?.offers ?? [];
   const bookings = data?.bookings ?? [];
   const requests = bookings.filter((b) => b.status === 'awaiting_provider');
-  const upcoming = bookings.filter((b) => b.status !== 'awaiting_provider');
+  const upcoming = bookings.filter((b) => b.status === 'confirmed');
+  const completed = bookings.filter((b) => b.status === 'completed');
 
   return (
     <Screen
@@ -361,6 +362,22 @@ export default function Jobs() {
               booking.id,
             );
           }}
+        />
+      ))}
+
+      {completed.length > 0 ? (
+        <View style={styles.sectionGap}>
+          <SectionLabel label="Completed" count={completed.length} />
+        </View>
+      ) : null}
+      {completed.map((booking) => (
+        <JobCard
+          key={booking.id}
+          booking={booking}
+          pending={false}
+          onConfirm={() => {}}
+          onDecline={() => {}}
+          onComplete={() => {}}
         />
       ))}
 

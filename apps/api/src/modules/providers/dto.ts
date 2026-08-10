@@ -54,6 +54,9 @@ export class ProviderSearchQueryDto extends createZodDto(providerSearchQuerySche
 
 const slotsQuerySchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'date must be yyyy-MM-dd'),
+  // Availability depends on the selected service's duration: a two-hour
+  // appointment cannot start in a gap that only has thirty minutes free.
+  serviceId: z.uuid(),
 });
 export class SlotsQueryDto extends createZodDto(slotsQuerySchema) {}
 

@@ -8,6 +8,7 @@ import { OfflineManager, type OfflinePackCreateOptions } from '@maplibre/maplibr
 const AVONDALE_AREA_BOUNDS: [number, number, number, number] = [30.98, -17.84, 31.1, -17.72];
 
 const AVONDALE_PACK_NAME = 'avondale-area';
+const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
 
 /**
  * Downloads the offline tile pack for the client's home area, once, on first
@@ -15,15 +16,17 @@ const AVONDALE_PACK_NAME = 'avondale-area';
  * string, not the inline `StyleSpecification` object `@sc/ui`'s `ScMap` uses
  * for its live raster basemap — so this can't reuse that style directly.
  *
- * The URL below is a placeholder. Plan risk R1 is still open: a real tile
- * vendor (MapTiler, self-hosted Protomaps) must be chosen before launch,
- * since `tile.openstreetmap.org`'s usage policy explicitly forbids bulk/
- * offline downloading — this function's whole purpose. Swap the URL for that
- * vendor's hosted style once decided; nothing else here changes.
+ * MapTiler is the selected production tile vendor. Local development may
+ * render the live OSM fallback, but deliberately skips this offline pack:
+ * the public OSM tile server does not permit bulk downloads.
  */
-export async function downloadAvondaleAreaPack(): Promise<void> {
+export async function downloadAvondaleAreaPack(): Promise<boolean> {
+  // Never bulk-download from the live OSM development fallback. MapTiler is
+  // required by app.config.ts for preview and production builds.
+  if (!MAPTILER_KEY) return false;
+
   const options: OfflinePackCreateOptions = {
-    mapStyle: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    mapStyle: `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`,
     bounds: AVONDALE_AREA_BOUNDS,
     minZoom: 12,
     maxZoom: 16,
@@ -39,4 +42,5 @@ export async function downloadAvondaleAreaPack(): Promise<void> {
       /* left for a retry on next launch (see useOfflinePack) rather than surfacing an error UI in M1 */
     },
   );
+  return true;
 }

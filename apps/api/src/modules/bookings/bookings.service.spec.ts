@@ -27,6 +27,8 @@ const BASE_ENV: Env = {
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
   AUTH_DEV_OTP: '000000',
+  TWILIO_VERIFY_CHANNEL: 'whatsapp',
+  PAYMENT_PROVIDER: 'fake',
   PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
@@ -270,7 +272,6 @@ describe('BookingsService', () => {
     });
     createdBookingIds.push(created.id);
     await prisma.booking.update({ where: { id: created.id }, data: { status: 'confirmed' } });
-
     const result = await bookings.confirmCompletion(created.id, clientId);
     expect(result.confirmedByClient).toBe(true);
     expect(result.status).toBe('confirmed'); // still waiting on the provider's side
@@ -281,6 +282,10 @@ describe('BookingsService', () => {
   });
 
   it('an ecocash booking completes and releases escrow on the client confirmation alone', async () => {
+    const completedBefore = await prisma.providerProfile.findUniqueOrThrow({
+      where: { id: providerAId },
+      select: { completedCount: true },
+    });
     const created = await bookings.create(clientId, {
       providerId: providerAId,
       serviceId: serviceAId,
@@ -289,6 +294,21 @@ describe('BookingsService', () => {
     });
     createdBookingIds.push(created.id);
     await prisma.booking.update({ where: { id: created.id }, data: { status: 'confirmed' } });
+    const held = await prisma.payment.findFirstOrThrow({
+      where: { bookingId: created.id, status: 'held' },
+    });
+    // Production Paynow callbacks append `paid`; completion must release
+    // that state as well as the fake gateway's direct `held` state.
+    await prisma.payment.create({
+      data: {
+        bookingId: created.id,
+        provider: 'paynow',
+        status: 'paid',
+        amountUsdCents: held.amountUsdCents,
+        feeUsdCents: held.feeUsdCents,
+        externalRef: 'paynow-test-reference',
+      },
+    });
 
     const result = await bookings.confirmCompletion(created.id, clientId);
     expect(result.status).toBe('completed');
@@ -297,7 +317,20 @@ describe('BookingsService', () => {
       where: { bookingId: created.id },
       orderBy: { createdAt: 'asc' },
     });
-    expect(payments.map((p) => p.status)).toEqual(['held', 'released']);
+    expect(payments.map((p) => p.status)).toEqual(['held', 'paid', 'released']);
+
+    const completedAfter = await prisma.providerProfile.findUniqueOrThrow({
+      where: { id: providerAId },
+      select: { completedCount: true },
+    });
+    expect(completedAfter.completedCount).toBe(completedBefore.completedCount + 1);
+
+    await bookings.confirmCompletion(created.id, clientId);
+    const afterRetry = await prisma.providerProfile.findUniqueOrThrow({
+      where: { id: providerAId },
+      select: { completedCount: true },
+    });
+    expect(afterRetry.completedCount).toBe(completedAfter.completedCount);
   });
 
   it('lets the client review a completed booking exactly once, and updates the provider rating', async () => {

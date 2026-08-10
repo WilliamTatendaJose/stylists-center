@@ -8,6 +8,7 @@ import {
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
+  WsException,
 } from '@nestjs/websockets';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
@@ -99,17 +100,33 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
     @MessageBody() payload: { conversationId: string },
     @ConnectedSocket() socket: Socket,
   ): Promise<void> {
+    await this.requireConversationParticipant(payload.conversationId, socket);
     await socket.join(`conversation:${payload.conversationId}`);
   }
 
   @SubscribeMessage('message.typing')
-  onTyping(
+  async onTyping(
     @MessageBody() payload: { conversationId: string },
     @ConnectedSocket() socket: Socket,
-  ): void {
+  ): Promise<void> {
+    await this.requireConversationParticipant(payload.conversationId, socket);
     const { userId } = socket.data as SocketData;
     socket
       .to(`conversation:${payload.conversationId}`)
       .emit('message.typing', { ...payload, userId });
+  }
+
+  private async requireConversationParticipant(conversationId: string, socket: Socket) {
+    const { userId } = socket.data as SocketData;
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { clientId: true, providerUserId: true },
+    });
+    if (
+      !conversation ||
+      (conversation.clientId !== userId && conversation.providerUserId !== userId)
+    ) {
+      throw new WsException('Forbidden conversation');
+    }
   }
 }

@@ -28,6 +28,8 @@ export function useProviderEarnings() {
   return useQuery({
     queryKey: ['provider', 'earnings'],
     queryFn: () => apiFetch<ProviderEarningsDto>('/v1/provider/earnings'),
+    refetchInterval: JOBS_POLL_MS,
+    refetchOnMount: 'always',
   });
 }
 
@@ -52,6 +54,7 @@ export function useProviderJobsRealtime() {
 
     const refresh = () => {
       void queryClient.invalidateQueries({ queryKey: PROVIDER_JOBS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['provider', 'earnings'] });
     };
 
     socket.on('booking.updated', refresh);
@@ -74,6 +77,7 @@ function useJobsMutation<TInput>(path: (input: TInput) => string) {
     mutationFn: (input: TInput) => apiFetch<void>(path(input), { method: 'POST' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROVIDER_JOBS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['provider', 'earnings'] });
     },
   });
 }

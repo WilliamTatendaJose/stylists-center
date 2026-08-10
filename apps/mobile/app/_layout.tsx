@@ -15,6 +15,7 @@ import { useSessionStore } from '../src/state/index.js';
 import { downloadAvondaleAreaPack } from '../src/offline/downloadAreaPack.js';
 import { useAuthGate } from '../src/auth/useAuthGate.js';
 import { AppErrorBoundary } from '../src/errors/AppErrorBoundary.js';
+import { registerPushToken } from '../src/notifications/registerPushToken.js';
 
 // expo-router renders a route's exported `ErrorBoundary` when that segment
 // throws. Exported from the root layout so it covers every screen.
@@ -48,8 +49,8 @@ export default function RootLayout() {
   useEffect(() => {
     if (hasDownloadedOfflinePack) return;
     downloadAvondaleAreaPack()
-      .then(() => {
-        setHasDownloadedOfflinePack(true);
+      .then((created) => {
+        if (created) setHasDownloadedOfflinePack(true);
       })
       .catch(() => {
         /* retried on next app launch */
@@ -83,6 +84,14 @@ export default function RootLayout() {
 /** Rendered inside every provider above, so useAuthGate's useMe() call can actually find a QueryClient. */
 function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
   const isAuthHydrated = useAuthGate();
+
+  useEffect(() => {
+    if (!isAuthHydrated) return;
+    void registerPushToken().catch(() => {
+      // Push must never block sign-in or rendering; the next launch retries.
+    });
+  }, [isAuthHydrated]);
+
   if (!fontsReady || !isAuthHydrated) return null;
   return <Stack screenOptions={{ headerShown: false }} />;
 }

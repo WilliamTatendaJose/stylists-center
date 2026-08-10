@@ -1,9 +1,14 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProviderGuard } from './provider.guard';
 import { CurrentProvider } from './current-provider.decorator';
 import { ProviderService } from './provider.service';
-import { SetAvailabilityDto } from './dto';
+import {
+  CreateProviderProductDto,
+  CreateProviderServiceDto,
+  SetAvailabilityDto,
+  UpdateProviderProfileDto,
+} from './dto';
 
 /**
  * Everything the stylist side of the app can do. JwtAuthGuard establishes
@@ -23,6 +28,41 @@ export class ProviderController {
   @Get('earnings')
   earnings(@CurrentProvider() providerId: string) {
     return this.provider.getEarnings(providerId);
+  }
+
+  @Get('profile')
+  profile(@CurrentProvider() providerId: string) {
+    return this.provider.getProfile(providerId);
+  }
+
+  @Patch('profile')
+  updateProfile(@CurrentProvider() providerId: string, @Body() dto: UpdateProviderProfileDto) {
+    return this.provider.updateProfile(providerId, dto);
+  }
+
+  @Post('services')
+  addService(@CurrentProvider() providerId: string, @Body() dto: CreateProviderServiceDto) {
+    return this.provider.addService(providerId, dto);
+  }
+
+  @Get('products')
+  products(@CurrentProvider() providerId: string) {
+    return this.provider.getProducts(providerId);
+  }
+
+  @Post('products')
+  addProduct(@CurrentProvider() providerId: string, @Body() dto: CreateProviderProductDto) {
+    return this.provider.createProduct(providerId, dto);
+  }
+
+  @Get('orders')
+  orders(@CurrentProvider() providerId: string) {
+    return this.provider.getOrders(providerId);
+  }
+
+  @Post('orders/:id/collect')
+  collectOrder(@Param('id') id: string, @CurrentProvider() providerId: string) {
+    return this.provider.collectOrder(id, providerId);
   }
 
   @Post('availability')

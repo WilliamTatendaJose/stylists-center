@@ -43,6 +43,10 @@ export interface ScMapProps {
  * Kept as one named constant so that swap is a one-line change.
  */
 const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
+const MAPTILER_STYLE_URL = MAPTILER_KEY
+  ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
+  : null;
 
 const RASTER_STYLE: StyleSpecification = {
   version: 8,
@@ -176,17 +180,18 @@ export function ScMap({
   return (
     <View style={[styles.fill, style]}>
       <MapLibreMap
-        mapStyle={RASTER_STYLE}
+        mapStyle={MAPTILER_STYLE_URL ?? RASTER_STYLE}
         style={styles.map}
+        // v11 defaults Android to GLSurfaceView. TextureView is more stable
+        // when this native view is mounted/unmounted inside React Navigation
+        // tabs and overlaid with React Native markers on affected devices.
+        androidView="texture"
         attribution={false}
         logo={false}
         compass={false}
       >
         {routeBounds ? (
-          <Camera
-            bounds={routeBounds}
-            padding={{ top: 60, right: 50, bottom: 60, left: 50 }}
-          />
+          <Camera bounds={routeBounds} padding={{ top: 60, right: 50, bottom: 60, left: 50 }} />
         ) : (
           <Camera center={center} zoom={zoom} />
         )}
@@ -237,7 +242,9 @@ export function ScMap({
 
       <View style={styles.attribution}>
         <Text variant="metaSmall" color={color.neutral700}>
-          © OpenStreetMap contributors
+          {MAPTILER_STYLE_URL
+            ? 'MapTiler + OpenStreetMap contributors'
+            : 'OpenStreetMap contributors'}
         </Text>
       </View>
     </View>

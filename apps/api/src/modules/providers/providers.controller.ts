@@ -52,6 +52,6 @@ export class ProvidersController {
 
   @Get(':id/slots')
   getSlots(@Param('id') id: string, @Query() query: SlotsQueryDto) {
-    return this.providers.getSlots(id, query.date);
+    return this.providers.getSlots(id, query.date, query.serviceId);
   }
 }

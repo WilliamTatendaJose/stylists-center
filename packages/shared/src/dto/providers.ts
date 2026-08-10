@@ -162,3 +162,26 @@ export type CreateProviderProfileInput = z.infer<typeof createProviderProfileSch
 
 export const createProviderProfileResponseSchema = z.object({ id: z.uuid() });
 export type CreateProviderProfileResponse = z.infer<typeof createProviderProfileResponseSchema>;
+
+/** The provider-owned fields shown on the My page management screen. */
+export const providerManagementProfileSchema = z.object({
+  id: z.uuid(),
+  displayName: z.string(),
+  areaName: z.string(),
+  workingHoursLabel: z.string(),
+  lat: z.number().min(-90).max(90),
+  lng: z.number().min(-180).max(180),
+  services: z.array(serviceSchema),
+});
+export type ProviderManagementProfileDto = z.infer<typeof providerManagementProfileSchema>;
+
+export const updateProviderProfileSchema = z.object({
+  displayName: z.string().trim().min(2).max(60),
+  areaName: z.string().trim().min(2).max(60),
+  workingHoursLabel: z.string().trim().min(2).max(80),
+  ...latLngSchema.shape,
+});
+export type UpdateProviderProfileInput = z.infer<typeof updateProviderProfileSchema>;
+
+export const createProviderServiceSchema = createServiceInputSchema;
+export type CreateProviderServiceInput = z.infer<typeof createProviderServiceSchema>;

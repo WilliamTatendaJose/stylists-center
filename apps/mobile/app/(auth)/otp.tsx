@@ -59,7 +59,7 @@ export default function OtpEntry() {
     try {
       const response = await apiFetch<RequestOtpResponse>('/v1/auth/otp/request', {
         method: 'POST',
-        body: { phone: params.phone },
+        body: { phone: params.phone, channel: 'sms' },
         auth: false,
       });
       // Only swap the challenge once the new one exists. Clearing it up front
@@ -115,7 +115,7 @@ export default function OtpEntry() {
           style={styles.error}
           accessibilityLiveRegion="polite"
         >
-          New code sent.
+          New code sent by SMS.
         </Text>
       ) : null}
 
@@ -140,7 +140,7 @@ export default function OtpEntry() {
         style={styles.resend}
       >
         <Text variant="meta" color={color.accent700}>
-          {resending ? 'Resending…' : "Didn't get it? Resend code"}
+          {resending ? 'Sending SMS…' : "Didn't get it? Send by SMS"}
         </Text>
       </Pressable>
     </Screen>
