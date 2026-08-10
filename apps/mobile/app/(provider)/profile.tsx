@@ -1,9 +1,20 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { MapPin } from 'lucide-react-native';
-import { formatUsd } from '@sc/shared';
+import { deriveInitials, formatUsd } from '@sc/shared';
 import { color, space } from '@sc/tokens';
-import { Button, Card, EmptyPanel, Screen, ScreenHeader, Text, TextField } from '@sc/ui';
+import {
+  Avatar,
+  Button,
+  Card,
+  EmptyPanel,
+  ListRow,
+  Screen,
+  ScreenHeader,
+  SectionLabel,
+  Text,
+  TextField,
+} from '@sc/ui';
 import {
   useAddProviderService,
   useProviderManagementProfile,
@@ -17,11 +28,14 @@ const styles = StyleSheet.create({
   section: { marginBottom: space.xxl },
   title: { marginBottom: space.m },
   field: { marginBottom: space.m },
-  card: { padding: space.l, marginBottom: space.s },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: space.m },
   grow: { flex: 1, minWidth: 0 },
   error: { marginBottom: space.m },
   signOut: { marginTop: space.l },
+  previewCard: { padding: space.l, marginBottom: space.l },
+  previewRow: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  previewText: { flex: 1, minWidth: 0 },
+  previewLabel: { marginBottom: space.s },
 });
 
 export default function ProviderProfile() {
@@ -108,6 +122,26 @@ export default function ProviderProfile() {
         </Text>
       ) : null}
 
+      <Card bordered style={styles.previewCard}>
+        <Text variant="metaSmall" color="neutral600" style={styles.previewLabel}>
+          HOW CLIENTS SEE YOU
+        </Text>
+        <View style={styles.previewRow}>
+          <Avatar initials={deriveInitials(displayName || 'Your name')} size={54} />
+          <View style={styles.previewText}>
+            <Text variant="cardTitle" numberOfLines={1}>
+              {displayName || 'Your name'}
+            </Text>
+            <Text variant="meta" color="neutral700" numberOfLines={1}>
+              {areaName || 'Your area'}
+            </Text>
+            <Text variant="metaSmall" color="neutral600" numberOfLines={1}>
+              {workingHoursLabel || 'Working hours'}
+            </Text>
+          </View>
+        </View>
+      </Card>
+
       <View style={styles.section}>
         <Text variant="sectionLabel" style={styles.title}>
           Public details
@@ -151,22 +185,20 @@ export default function ProviderProfile() {
       </View>
 
       <View style={styles.section}>
-        <Text variant="sectionLabel" style={styles.title}>
-          Services
-        </Text>
-        {data?.services.map((service) => (
-          <Card bordered key={service.id} style={styles.card}>
-            <View style={styles.row}>
-              <View style={styles.grow}>
-                <Text variant="bodyStrong">{service.name}</Text>
-                <Text variant="meta" color="neutral700">
-                  {service.durationMinutes} min
-                </Text>
-              </View>
-              <Text variant="bodyStrong">{formatUsd(service.priceUsdCents)}</Text>
-            </View>
-          </Card>
-        ))}
+        <SectionLabel label="Services" count={data?.services.length} />
+        {data?.services.length === 0 ? (
+          <EmptyPanel body="No services yet — add your first one below." />
+        ) : (
+          data?.services.map((service) => (
+            <ListRow
+              key={service.id}
+              avatar={{ initials: deriveInitials(service.name), size: 44 }}
+              title={service.name}
+              meta={`${service.durationMinutes} min`}
+              rightPrimary={formatUsd(service.priceUsdCents)}
+            />
+          ))
+        )}
         <View style={[styles.field, { marginTop: space.m }]}>
           <TextField
             label="New service"

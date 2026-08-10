@@ -352,15 +352,21 @@ export class ProviderService {
         confirmedByClient: current.confirmedByClient,
         confirmedByProvider: true,
       });
-      const completes = !stillNeedsReconciliation;
+      // EcoCash escrow releases on the client's word alone (their own
+      // confirmCompletion in bookings.service.ts) — the stylist is never the
+      // blocker for it, per providerOwesCompletion. Without the `=== 'cash'`
+      // guard, needsCashReconciliation is unconditionally false for EcoCash,
+      // so this alone would complete an EcoCash booking on the stylist's
+      // confirmation and leave its payment held/paid forever, never released.
+      const completes = current.paymentMethod === 'cash' && !stillNeedsReconciliation;
 
       await tx.booking.update({
         where: { id: bookingId },
         data: {
           confirmedByProvider: true,
-          // Completes only once BOTH sides have confirmed — the stylist saying
-          // so alone is exactly the one-sided claim the double confirmation
-          // exists to prevent.
+          // Completes only once BOTH sides have confirmed a cash job — the
+          // stylist saying so alone is exactly the one-sided claim the double
+          // confirmation exists to prevent.
           status: completes ? 'completed' : current.status,
         },
       });
@@ -369,17 +375,15 @@ export class ProviderService {
           where: { id: providerProfileId },
           data: { completedCount: { increment: 1 } },
         });
-        if (current.paymentMethod === 'cash') {
-          await tx.payment.create({
-            data: {
-              bookingId,
-              provider: 'cash',
-              status: 'released',
-              amountUsdCents: current.priceUsdCents,
-              feeUsdCents: platformFeeCents(current.priceUsdCents),
-            },
-          });
-        }
+        await tx.payment.create({
+          data: {
+            bookingId,
+            provider: 'cash',
+            status: 'released',
+            amountUsdCents: current.priceUsdCents,
+            feeUsdCents: platformFeeCents(current.priceUsdCents),
+          },
+        });
       }
     });
     await this.notifyClient(bookingId, booking.clientId);

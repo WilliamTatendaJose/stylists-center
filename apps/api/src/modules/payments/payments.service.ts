@@ -55,6 +55,14 @@ export class PaymentsService {
 
     const status = ledgerStatus(fields.status);
     if (prior.status === status) return; // Paynow retries successful callbacks.
+    // `released` is never a status Paynow itself reports (see ledgerStatus) —
+    // it only exists once a booking/order has completed and escrow was paid
+    // out internally. A Paynow callback arriving after that point is always a
+    // stale retry of an earlier status; applying it would insert a newer
+    // 'paid'/'held' row that outranks the release in every ordered-by-date
+    // lookup (e.g. ProviderService.getEarnings), making a paid-out job look
+    // pending again.
+    if (prior.status === 'released') return;
     await this.prisma.payment.create({
       data: {
         ...subjectWhere,

@@ -16,7 +16,7 @@ import {
 } from '@sc/ui';
 import { useProduct } from '../../src/api/hooks/useMarket.js';
 import { useCartStore } from '../../src/state/index.js';
-import { useBack } from '../../src/navigation/useBack.js';
+import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
   image: { height: 220, marginBottom: space.l },
@@ -33,7 +33,8 @@ const styles = StyleSheet.create({
 /** Product detail (handoff screen 16). */
 export default function ProductDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const onBack = useBack('/(tabs)/market');
+  const marketHome = useMarketHome();
+  const onBack = useBack(marketHome);
   const { data: product, isError } = useProduct(id);
 
   const addToCart = useCartStore((s) => s.add);

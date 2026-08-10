@@ -5,7 +5,7 @@ import { color, space } from '@sc/tokens';
 import { Screen, ScreenHeader, Text, Avatar, Badge, Button, Card, Sheet, EmptyPanel } from '@sc/ui';
 import { useCancelOrder, useCollectOrder, useMyOrders } from '../../src/api/hooks/useMarket.js';
 import { describeError } from '../../src/api/errorMessage.js';
-import { useBack } from '../../src/navigation/useBack.js';
+import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
   card: { padding: space.l, marginBottom: space.m },
@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
 
 /** My orders — where to collect, and the two things a buyer can still do about it. */
 export default function Orders() {
-  const onBack = useBack('/(tabs)/market');
+  const onBack = useBack(useMarketHome());
   const { data: orders = [], isError, isLoading, refetch, isRefetching } = useMyOrders();
   const collectOrder = useCollectOrder();
   const cancelOrder = useCancelOrder();

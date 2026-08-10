@@ -24,7 +24,7 @@ import {
   type CartGroup,
 } from '../../src/state/index.js';
 import { describeError } from '../../src/api/errorMessage.js';
-import { useBack } from '../../src/navigation/useBack.js';
+import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
   sellerBlock: { marginBottom: space.xl },
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
  * deleted the first — it was silently replacing the entire cart.
  */
 export default function Cart() {
-  const onBack = useBack('/(tabs)/market');
+  const onBack = useBack(useMarketHome());
   const lines = useCartStore((s) => s.lines);
   const setQuantity = useCartStore((s) => s.setQuantity);
   const remove = useCartStore((s) => s.remove);

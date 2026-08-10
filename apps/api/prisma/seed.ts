@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { formatBookingReference } from '@sc/shared';
+import { formatBookingReference, platformFeeCents } from '@sc/shared';
 import { PrismaClient } from '../src/generated/prisma/index.js';
 
 /**
@@ -196,6 +196,10 @@ const BOOKING_IDS = {
   completed: '44444444-4444-4444-8444-444444444443',
 } as const;
 
+const PAYMENT_IDS = {
+  completedBookingCash: '44444444-4444-4444-8444-444444444493',
+} as const;
+
 const CONVERSATION_TARIRO_ID = '55555555-5555-4555-8555-555555555551';
 
 async function main() {
@@ -298,6 +302,7 @@ async function main() {
       providerId: PROVIDER_IDS.tariro,
       serviceId: tarirosCornrows.id,
       startsAt: new Date(Date.now() + 90 * 60_000),
+      endsAt: new Date(Date.now() + 90 * 60_000 + tarirosCornrows.durationMinutes * 60_000),
       paymentMethod: 'ecocash',
       status: 'awaiting_provider',
       priceUsdCents: 1800,
@@ -316,6 +321,9 @@ async function main() {
       providerId: PROVIDER_IDS.kudzai,
       serviceId: kudzaisGelOverlay.id,
       startsAt: new Date(Date.now() - 24 * 60 * 60_000 + 13 * 60 * 60_000),
+      endsAt: new Date(
+        Date.now() - 24 * 60 * 60_000 + 13 * 60 * 60_000 + kudzaisGelOverlay.durationMinutes * 60_000,
+      ),
       paymentMethod: 'cash',
       status: 'confirmed',
       priceUsdCents: 1200,
@@ -334,11 +342,30 @@ async function main() {
       providerId: PROVIDER_IDS.rudo,
       serviceId: rudosSkinFade.id,
       startsAt: new Date(Date.now() - 3 * 24 * 60 * 60_000),
+      endsAt: new Date(Date.now() - 3 * 24 * 60 * 60_000 + rudosSkinFade.durationMinutes * 60_000),
       paymentMethod: 'cash',
       status: 'completed',
       priceUsdCents: 1000,
       confirmedByClient: true,
       confirmedByProvider: true,
+    },
+  });
+
+  // A completed cash booking needs its released Payment row too — the API's
+  // own confirmCompletion always writes one alongside the status change
+  // (provider.service.ts / bookings.service.ts), and Earnings reads only
+  // from the Payment table, so a booking upserted straight to 'completed'
+  // without one is invisible to the provider's own earnings screen.
+  await prisma.payment.upsert({
+    where: { id: PAYMENT_IDS.completedBookingCash },
+    update: {},
+    create: {
+      id: PAYMENT_IDS.completedBookingCash,
+      bookingId: BOOKING_IDS.completed,
+      provider: 'cash',
+      status: 'released',
+      amountUsdCents: 1000,
+      feeUsdCents: platformFeeCents(1000),
     },
   });
 

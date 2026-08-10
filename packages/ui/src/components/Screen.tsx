@@ -1,5 +1,13 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type ScrollViewProps, type ViewStyle } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  type ScrollViewProps,
+  type ViewStyle,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
@@ -133,18 +141,31 @@ export function Screen({
       {header ? (
         <View style={[headerStyle, headerBordered ? styles.headerBorder : null]}>{header}</View>
       ) : null}
-      {scroll ? (
-        <ScrollView
-          style={styles.flexOne}
-          showsVerticalScrollIndicator={false}
-          refreshControl={refreshControl}
-        >
-          {body}
-        </ScrollView>
-      ) : (
-        <View style={styles.flexOne}>{body}</View>
-      )}
-      {footer ? <View style={[styles.footerBorder, footerStyle]}>{footer}</View> : null}
+      {/*
+       * Android now draws edge-to-edge unconditionally (targetSdk 36), which
+       * makes `windowSoftInputMode="adjustResize"` a no-op — the window no
+       * longer shrinks when the keyboard opens, so a fixed-bottom `footer`
+       * (the chat composer, a booking form's submit row, …) stayed hidden
+       * behind the keyboard instead of rising with it. KeyboardAvoidingView
+       * measures the keyboard itself instead of relying on window resize.
+       */}
+      <KeyboardAvoidingView
+        style={styles.flexOne}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {scroll ? (
+          <ScrollView
+            style={styles.flexOne}
+            showsVerticalScrollIndicator={false}
+            refreshControl={refreshControl}
+          >
+            {body}
+          </ScrollView>
+        ) : (
+          <View style={styles.flexOne}>{body}</View>
+        )}
+        {footer ? <View style={[styles.footerBorder, footerStyle]}>{footer}</View> : null}
+      </KeyboardAvoidingView>
     </Root>
   );
 }

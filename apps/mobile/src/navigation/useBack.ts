@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
+import { useMe } from '../api/hooks/useMe.js';
 
 /**
  * "Every screen records where back goes" (handoff, Client state table). Three
@@ -45,6 +46,19 @@ export function useBack(fallback: Href) {
     }
     router.replace(fallback);
   }, [back, fallback]);
+}
+
+/**
+ * The market screens (`/market/*`) are shared between the client Market tab
+ * and the provider's Shop "Buy" view — the same product detail, cart and
+ * order screens either side can reach. `useBack('/(tabs)/market')` alone
+ * would be wrong for a provider: hitting back from a product they opened
+ * from Shop would drop them onto a tab bar they don't have. This resolves
+ * the one role-dependent piece every one of those screens needs.
+ */
+export function useMarketHome(): Href {
+  const { data: me } = useMe();
+  return me?.activeRole === 'provider' ? '/(provider)/shop' : '/(tabs)/market';
 }
 
 /**

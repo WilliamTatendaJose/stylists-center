@@ -4,6 +4,7 @@ import { Check } from 'lucide-react-native';
 import { formatUsd } from '@sc/shared';
 import { color, space } from '@sc/tokens';
 import { Screen, Text, Button, RuleList } from '@sc/ui';
+import { useMarketHome } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
   circle: {
@@ -56,6 +57,7 @@ function parseOrders(raw: string | undefined): PlacedOrder[] {
  */
 export default function OrderDone() {
   const { orders: ordersParam } = useLocalSearchParams<{ orders?: string }>();
+  const marketHome = useMarketHome();
   const orders = parseOrders(ordersParam);
   const grandTotal = orders.reduce((sum, o) => sum + o.totalUsdCents, 0);
   const multi = orders.length > 1;
@@ -111,7 +113,7 @@ export default function OrderDone() {
           size="lg"
           block
           onPress={() => {
-            router.replace('/(tabs)/market');
+            router.replace(marketHome);
           }}
         />
       </View>
