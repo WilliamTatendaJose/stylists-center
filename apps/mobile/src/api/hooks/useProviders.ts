@@ -4,10 +4,13 @@ import {
   type CreateProviderProfileInput,
   type CreateProviderProfileResponse,
   type CreateProviderServiceInput,
+  type PaySubscriptionInput,
+  type PaySubscriptionResponse,
   type ProviderManagementProfileDto,
   type ProviderPageDto,
   type ProviderProfileDto,
   type ProviderSlotsResponse,
+  type ProviderSubscriptionDto,
   type ServiceDto,
   type UpdateProviderProfileInput,
 } from '@sc/shared';
@@ -177,6 +180,29 @@ export function useAddProviderService() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROVIDER_PROFILE_KEY });
       void queryClient.invalidateQueries({ queryKey: ['providers'] });
+    },
+  });
+}
+
+const PROVIDER_SUBSCRIPTION_KEY = ['provider', 'subscription'] as const;
+
+export function useProviderSubscription() {
+  return useQuery({
+    queryKey: PROVIDER_SUBSCRIPTION_KEY,
+    queryFn: () => apiFetch<ProviderSubscriptionDto>('/v1/provider/subscription'),
+  });
+}
+
+export function usePaySubscription() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: PaySubscriptionInput) =>
+      apiFetch<PaySubscriptionResponse>('/v1/provider/subscription/pay', {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_SUBSCRIPTION_KEY });
     },
   });
 }

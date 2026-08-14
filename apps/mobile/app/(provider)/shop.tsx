@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { ShoppingBag } from 'lucide-react-native';
+import { Package, ShoppingBag } from 'lucide-react-native';
 import { formatUsd } from '@sc/shared';
 import { color, space } from '@sc/tokens';
 import {
@@ -27,7 +27,7 @@ import { MarketBrowse } from '../../src/components/MarketBrowse.js';
 import { cartItemCount, useCartStore } from '../../src/state/index.js';
 
 const styles = StyleSheet.create({
-  toggle: { marginBottom: space.xl },
+  toggle: { marginBottom: space.xxl },
   section: { marginBottom: space.xxl },
   title: { marginBottom: space.m },
   card: { padding: space.l, marginBottom: space.m },
@@ -42,11 +42,21 @@ const styles = StyleSheet.create({
   field: { marginBottom: space.m },
   error: { marginBottom: space.m },
   action: { marginTop: space.m },
+  headerActions: { flexDirection: 'row', gap: space.s },
   cartButton: {
     width: 42,
     height: 42,
     borderRadius: 21,
     backgroundColor: color.neutral900,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ordersButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: color.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -117,23 +127,35 @@ export default function ProviderShop() {
           showBack={false}
           right={
             mode === 'buy' ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={
-                  itemCount > 0 ? `Cart, ${String(itemCount)} items` : 'Cart, empty'
-                }
-                onPress={() => {
-                  router.push('/market/cart');
-                }}
-                style={styles.cartButton}
-              >
-                <ShoppingBag size={18} strokeWidth={1.7} color={color.bg} />
-                {itemCount > 0 ? (
-                  <View style={styles.cartCount}>
-                    <Badge label={String(itemCount)} tone="accent" size="sm" />
-                  </View>
-                ) : null}
-              </Pressable>
+              <View style={styles.headerActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="My orders"
+                  onPress={() => {
+                    router.push('/market/orders');
+                  }}
+                  style={styles.ordersButton}
+                >
+                  <Package size={18} strokeWidth={1.7} color={color.text} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    itemCount > 0 ? `Cart, ${String(itemCount)} items` : 'Cart, empty'
+                  }
+                  onPress={() => {
+                    router.push('/market/cart');
+                  }}
+                  style={styles.cartButton}
+                >
+                  <ShoppingBag size={18} strokeWidth={1.7} color={color.bg} />
+                  {itemCount > 0 ? (
+                    <View style={styles.cartCount}>
+                      <Badge label={String(itemCount)} tone="accent" size="sm" />
+                    </View>
+                  ) : null}
+                </Pressable>
+              </View>
             ) : undefined
           }
         />
@@ -264,6 +286,7 @@ export default function ProviderShop() {
             <Button
               label={createProduct.isPending ? 'Adding…' : 'Add to marketplace'}
               block
+              style={styles.action}
               disabled={!canAdd}
               onPress={addProduct}
             />

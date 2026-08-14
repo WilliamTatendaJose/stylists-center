@@ -37,6 +37,24 @@ export function needsCashReconciliation(params: {
 }
 
 /**
+ * Whether the client still has a completion action to take on an EcoCash
+ * booking. Cash gets its own reconciliation panel (`needsCashReconciliation`,
+ * which needs both sides); EcoCash only ever needs the client's word — but
+ * nothing in the app surfaced that action, so a confirmed EcoCash booking had
+ * no route to `completed` at all once travel was done. Shared with the API's
+ * `confirmCompletion`, which already accepts this call for EcoCash.
+ */
+export function canConfirmEcocashCompletion(params: {
+  paymentMethod: PaymentMethod;
+  status: BookingStatus;
+  confirmedByClient: boolean;
+}): boolean {
+  return (
+    params.paymentMethod === 'ecocash' && params.status === 'confirmed' && !params.confirmedByClient
+  );
+}
+
+/**
  * Statuses a client can still call off. Anything already finished, declined
  * or cancelled is terminal — cancelling those means nothing, and cancelling a
  * `completed` booking would unwind a service that has already been given.

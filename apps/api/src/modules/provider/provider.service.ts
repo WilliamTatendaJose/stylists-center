@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -9,10 +10,13 @@ import {
   deriveInitials,
   deriveTint,
   formatBookingWhen,
+  isSubscriptionActive,
   needsCashReconciliation,
-  platformFeeCents,
+  nextSubscriptionPaidUntil,
   type CreateProviderProductInput,
   type CreateProviderServiceInput,
+  type PaySubscriptionInput,
+  type PaySubscriptionResponse,
   providerOwesCompletion,
   type ProviderAvailabilityDto,
   type ProviderBookingRowDto,
@@ -23,12 +27,14 @@ import {
   type ProviderManagementProfileDto,
   type ProviderOrderDto,
   type ProviderProductDto,
+  type ProviderSubscriptionDto,
   type ServiceDto,
   type UpdateProviderProfileInput,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { MatchingService } from '../matching/matching.service';
+import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
 import { toBookingRowDto } from '../bookings/mappers';
 
 /** Statuses a stylist still has something to do about, plus recent history for context. */
@@ -40,6 +46,7 @@ export class ProviderService {
     private readonly prisma: PrismaService,
     private readonly socketEmitter: SocketEmitterService,
     private readonly matching: MatchingService,
+    @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
   ) {}
 
   /** One request for the whole Jobs screen — availability, live offers, and the work itself. */
@@ -224,7 +231,6 @@ export class ProviderService {
             provider: 'cash',
             status: 'released',
             amountUsdCents: order.totalUsdCents,
-            feeUsdCents: platformFeeCents(order.totalUsdCents),
           },
         });
       }
@@ -381,7 +387,6 @@ export class ProviderService {
             provider: 'cash',
             status: 'released',
             amountUsdCents: current.priceUsdCents,
-            feeUsdCents: platformFeeCents(current.priceUsdCents),
           },
         });
       }
@@ -399,6 +404,77 @@ export class ProviderService {
       select: { acceptingBookings: true },
     });
     return updated;
+  }
+
+  async getSubscription(providerProfileId: string): Promise<ProviderSubscriptionDto> {
+    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
+      where: { id: providerProfileId },
+      select: { subscriptionPriceUsdCents: true, subscriptionPaidUntil: true },
+    });
+    const paidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
+    return {
+      priceUsdCents: profile.subscriptionPriceUsdCents,
+      paidUntil,
+      active: isSubscriptionActive(paidUntil),
+    };
+  }
+
+  /**
+   * Cash is a self-report — extends `subscriptionPaidUntil` immediately,
+   * since (unlike a booking) this money is owed to the platform, not held
+   * for a counterparty to double-confirm against. EcoCash goes through the
+   * same gateway checkout as a booking and is applied on successful
+   * checkout-intent creation, the same optimistic-then-reconciled pattern
+   * the rest of the app already uses for a fresh booking (see
+   * BookingsService.create) rather than waiting on a webhook this ledger
+   * entry has no `reference` to be matched against yet.
+   */
+  async paySubscription(
+    providerProfileId: string,
+    input: PaySubscriptionInput,
+  ): Promise<PaySubscriptionResponse> {
+    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
+      where: { id: providerProfileId },
+      select: { subscriptionPriceUsdCents: true, subscriptionPaidUntil: true },
+    });
+    const amountUsdCents = profile.subscriptionPriceUsdCents;
+    const currentPaidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
+
+    let checkoutUrl: string | undefined;
+    if (input.paymentMethod === 'ecocash') {
+      const intent = await this.paymentGateway.createCheckout({
+        reference: `SUB-${providerProfileId}-${String(Date.now())}`,
+        amountUsdCents,
+        description: 'Stylists Center monthly subscription',
+      });
+      await this.prisma.payment.create({
+        data: {
+          subscriptionProviderId: providerProfileId,
+          provider: intent.provider,
+          status: intent.status,
+          amountUsdCents,
+          externalRef: intent.externalRef,
+        },
+      });
+      checkoutUrl = intent.checkoutUrl;
+    } else {
+      await this.prisma.payment.create({
+        data: {
+          subscriptionProviderId: providerProfileId,
+          provider: 'cash',
+          status: 'released',
+          amountUsdCents,
+        },
+      });
+    }
+
+    const paidUntil = nextSubscriptionPaidUntil(currentPaidUntil);
+    await this.prisma.providerProfile.update({
+      where: { id: providerProfileId },
+      data: { subscriptionPaidUntil: paidUntil },
+    });
+
+    return { paidUntil, ...(checkoutUrl ? { checkoutUrl } : {}) };
   }
 
   /**

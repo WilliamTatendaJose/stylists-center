@@ -7,6 +7,7 @@ import {
   BOOKING_STATUS_LABELS,
   FREE_CANCELLATION_WINDOW_HOURS,
   NO_SHOW_COUNT_FOR_AUTO_BAN,
+  canConfirmEcocashCompletion,
   formatUsd,
   isLateCancellation,
   needsCashReconciliation,
@@ -84,7 +85,9 @@ function BookingCard({
   onDirections,
 }: BookingCardProps) {
   const reconcile = needsCashReconciliation(booking);
-  const statusLabel = reconcile ? 'Confirm it happened' : BOOKING_STATUS_LABELS[booking.status];
+  const canCompleteEcocash = canConfirmEcocashCompletion(booking);
+  const statusLabel =
+    reconcile || canCompleteEcocash ? 'Confirm it happened' : BOOKING_STATUS_LABELS[booking.status];
   const badgeTone = booking.status === 'awaiting_provider' ? 'accent' : 'neutral';
   const rated = !booking.canRate;
 
@@ -138,6 +141,25 @@ function BookingCard({
           <Button
             label={booking.confirmedByClient ? 'Confirmed' : 'Yes, it happened'}
             disabled={booking.confirmedByClient || confirmPending}
+            block
+            onPress={onConfirmCompletion}
+          />
+        </View>
+      ) : null}
+
+      {/* EcoCash needs only the client's word — no back-and-forth with the
+          stylist — but until now nothing surfaced that action at all, so a
+          confirmed EcoCash booking had no route to "completed" outside the
+          travel screens. */}
+      {canCompleteEcocash ? (
+        <View style={styles.reconcilePanel}>
+          <Text variant="bodyStrong">Had your appointment? Confirm it&apos;s done.</Text>
+          <Text variant="meta" color="neutral700" style={styles.reconcileBody}>
+            This is what releases payment to {booking.counterpartyName.split(' ')[0]}.
+          </Text>
+          <Button
+            label={confirmPending ? 'Confirming…' : 'Mark as done'}
+            disabled={confirmPending}
             block
             onPress={onConfirmCompletion}
           />
@@ -281,10 +303,7 @@ export default function Bookings() {
   };
 
   const goOnMyWay = (booking: BookingRowDto) => {
-    router.push({
-      pathname: '/map/trip',
-      params: { bookingId: booking.id, providerId: booking.providerId },
-    });
+    router.push({ pathname: '/map/trip', params: { id: booking.providerId } });
   };
 
   const goDirections = (booking: BookingRowDto) => {

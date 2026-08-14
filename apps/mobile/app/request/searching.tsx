@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { color, space } from '@sc/tokens';
 import { MATCH_REQUEST_TTL_SECONDS } from '@sc/shared';
@@ -27,11 +28,13 @@ import {
   useMatchRealtime,
 } from '../../src/api/hooks/useMatching.js';
 import { useRequestStore } from '../../src/state/index.js';
+import { ApiError } from '../../src/api/client.js';
 import { describeError } from '../../src/api/errorMessage.js';
 
 const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'flex-start' },
   headerText: { flex: 1, gap: 3 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space.l },
   progressWrap: { marginTop: space.l, marginBottom: space.xl },
   radarBlock: {
     height: 230,
@@ -100,15 +103,13 @@ export default function Searching() {
     setCancelSheetOpen(true);
   };
 
-  useEffect(() => {
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      openCancel();
-      return true;
-    });
-    return () => {
-      sub.remove();
-    };
-  }, []);
+  // The search keeps running server-side regardless of whether this screen
+  // is on top, so leaving it (back gesture or the close button) does not
+  // need to go through the cancel sheet — only the explicit "Cancel" action
+  // should stop the search itself.
+  const closeWithoutCancelling = () => {
+    router.replace('/(tabs)');
+  };
 
   /**
    * Leaves only once the server has actually cancelled.
@@ -134,6 +135,17 @@ export default function Searching() {
         router.replace('/(tabs)');
       },
       onError: (error) => {
+        // The only 400 this endpoint returns is "already in a state that
+        // can't be cancelled" — i.e. it already resolved server-side
+        // (auto-declined or expired) before this request landed. There is
+        // nothing left to cancel, so this is a stale screen, not a failure:
+        // leave rather than trap the user behind an error with no way out.
+        if (error instanceof ApiError && error.status === 400) {
+          setCancelSheetOpen(false);
+          reset();
+          router.replace('/(tabs)');
+          return;
+        }
         setCancelError(describeError(error, "Couldn't cancel that request. Try again."));
       },
     });
@@ -180,16 +192,26 @@ export default function Searching() {
                 {categoryName} · {budgetLabel}
               </Text>
             </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Cancel this request"
-              onDark
-              onPress={openCancel}
-            >
-              <Text variant="meta" color={color.onDark.text}>
-                Cancel
-              </Text>
-            </Pressable>
+            <View style={styles.headerActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel this request"
+                onDark
+                onPress={openCancel}
+              >
+                <Text variant="meta" color={color.onDark.text}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close — keep searching in the background"
+                onDark
+                onPress={closeWithoutCancelling}
+              >
+                <X size={20} strokeWidth={1.8} color={color.onDark.text} />
+              </Pressable>
+            </View>
           </View>
         }
       >

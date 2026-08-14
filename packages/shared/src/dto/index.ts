@@ -7,3 +7,4 @@ export * from './chat.js';
 export * from './trips.js';
 export * from './market.js';
 export * from './provider-jobs.js';
+export * from './subscription.js';

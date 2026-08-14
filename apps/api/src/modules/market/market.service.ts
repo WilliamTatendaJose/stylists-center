@@ -9,7 +9,6 @@ import {
   canCollectOrder,
   formatOrderReference,
   orderTotalUsdCents,
-  platformFeeCents,
   type CreateOrderInput,
   type CreateOrderResponse,
   type OrderRowDto,
@@ -209,7 +208,6 @@ export class MarketService {
             provider: intent.provider,
             status: intent.status,
             amountUsdCents: totalUsdCents,
-            feeUsdCents: platformFeeCents(totalUsdCents),
             externalRef: intent.externalRef,
           },
         });

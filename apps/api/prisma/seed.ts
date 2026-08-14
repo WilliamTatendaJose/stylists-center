@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { formatBookingReference, platformFeeCents } from '@sc/shared';
+import { formatBookingReference, SUBSCRIPTION_CYCLE_DAYS } from '@sc/shared';
 import { PrismaClient } from '../src/generated/prisma/index.js';
 
 /**
@@ -275,6 +275,10 @@ async function main() {
         verified: provider.verified,
         ratingAvg: provider.ratingAvg,
         completedCount: provider.completedCount,
+        // A provider with a lapsed subscription is excluded from search and
+        // smart-match, and can't be booked directly — every seeded demo
+        // provider needs one so the seed still demos a bookable app.
+        subscriptionPaidUntil: new Date(Date.now() + SUBSCRIPTION_CYCLE_DAYS * 24 * 60 * 60_000),
         services: { create: provider.services },
       },
     });
@@ -365,7 +369,6 @@ async function main() {
       provider: 'cash',
       status: 'released',
       amountUsdCents: 1000,
-      feeUsdCents: platformFeeCents(1000),
     },
   });
 

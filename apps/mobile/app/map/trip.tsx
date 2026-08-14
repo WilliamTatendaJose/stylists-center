@@ -108,8 +108,10 @@ export default function Trip() {
   const location = useSessionStore((s) => s.location);
   const arrived = useTripStore((s) => s.arrived);
   const etaShared = useTripStore((s) => s.etaShared);
+  const closeShared = useTripStore((s) => s.closeShared);
   const setArrived = useTripStore((s) => s.setArrived);
   const setEtaShared = useTripStore((s) => s.setEtaShared);
+  const setCloseShared = useTripStore((s) => s.setCloseShared);
   const resetTrip = useTripStore((s) => s.reset);
 
   const { data: provider } = useProvider(providerId);
@@ -185,7 +187,9 @@ export default function Trip() {
       router.replace('/(tabs)/bookings');
       return;
     }
-    // "Tell her I'm close" — a courtesy nudge, mocked; nothing to persist in M1.
+    // A courtesy nudge, mocked; nothing to persist in M1 — but the button
+    // still needs to visibly register the tap rather than doing nothing.
+    setCloseShared(true);
   };
 
   const goMessage = () => {
@@ -245,7 +249,7 @@ export default function Trip() {
           <Text variant="body" color="neutral700" style={styles.body}>
             {arrived
               ? `${firstName} has been told you are outside. Check in so the appointment starts.`
-              : 'She can see your ETA, so a late kombi will not cost you the slot.'}
+              : 'They can see your ETA, so a late kombi will not cost you the slot.'}
           </Text>
 
           <View style={styles.statRow}>
@@ -303,7 +307,8 @@ export default function Trip() {
           onPress={shareEta}
         />
         <Button
-          label={arrived ? 'Check in' : "Tell her I'm close"}
+          label={arrived ? 'Check in' : closeShared ? 'Sent' : "Tell them I'm close"}
+          disabled={!arrived && closeShared}
           style={styles.footerButton}
           onPress={primaryAction}
         />

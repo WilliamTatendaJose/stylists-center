@@ -17,14 +17,17 @@ import {
   canCancelBooking,
   formatBookingReference,
   isLateCancellation,
+  isSubscriptionActive,
   needsCashReconciliation,
-  platformFeeCents,
 } from '@sc/shared';
-import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { MatchingService } from '../matching/matching.service';
-import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
+import {
+  PAYMENT_GATEWAY,
+  type PaymentGatewayPort,
+  type PaymentIntentResult,
+} from '../payments/payment-gateway.port';
 import { TrustService } from '../trust/trust.service';
 import { toBookingRowDto } from './mappers';
 
@@ -48,9 +51,40 @@ export class BookingsService {
     if (service?.providerId !== input.providerId) {
       throw new NotFoundException('Service not found for this provider');
     }
+    // Discovery (search, "Available now", smart-match fan-out) already
+    // excludes a provider whose subscription has lapsed — this closes the
+    // remaining gap where a client still has their profile/service open
+    // from before it lapsed, or reached it via a chat/booking-history link.
+    if (!isSubscriptionActive(service.provider.subscriptionPaidUntil?.toISOString() ?? null)) {
+      throw new BadRequestException("This stylist isn't currently accepting bookings");
+    }
 
     const startsAt = new Date(input.startsAt);
     const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
+    const reference = formatBookingReference(await this.nextBookingSequence());
+
+    // EcoCash checkout is created BEFORE the match is confirmed and the
+    // booking is written, not after. `confirmForBooking` moves a MatchRequest
+    // to 'confirmed' — a state whose only allowed exit is 'no_show' (see
+    // match.ts's ALLOWED_TRANSITIONS) — and declines every sibling offer as
+    // part of the same step. Both are effectively irreversible. Doing this
+    // first and only then attempting checkout meant a gateway failure left
+    // the match permanently stuck "confirmed" with no booking behind it and
+    // no way for the client to ever complete or retry it. Creating the
+    // checkout intent first means a gateway failure never touches the match
+    // or the database at all — the client just sees the request fail and can
+    // retry cleanly. The remaining risk (the slot filling in the gap between
+    // a successful checkout and the transaction below) leaves an orphaned
+    // Paynow payment intent with no booking, which is recoverable; a wedged
+    // MatchRequest was not.
+    let checkoutIntent: PaymentIntentResult | undefined;
+    if (input.paymentMethod === 'ecocash') {
+      checkoutIntent = await this.paymentGateway.createCheckout({
+        reference,
+        amountUsdCents: service.priceUsdCents,
+        description: `Booking ${reference}: ${service.name}`,
+      });
+    }
 
     const booking = await this.prisma.$transaction(async (tx) => {
       // A per-provider transaction lock closes the read-then-write race while
@@ -76,10 +110,9 @@ export class BookingsService {
         await this.matching.confirmForBooking(input.matchId, clientId, input.providerId);
       }
 
-      const sequence = await this.nextBookingSequence(tx);
-      return tx.booking.create({
+      const created = await tx.booking.create({
         data: {
-          reference: formatBookingReference(sequence),
+          reference,
           clientId,
           providerId: input.providerId,
           serviceId: input.serviceId,
@@ -90,37 +123,21 @@ export class BookingsService {
           priceUsdCents: service.priceUsdCents,
         },
       });
-    });
-    let checkoutUrl: string | undefined;
-    if (input.paymentMethod === 'ecocash') {
-      try {
-        const intent = await this.paymentGateway.createCheckout({
-          reference: booking.reference,
-          amountUsdCents: service.priceUsdCents,
-          description: `Booking ${booking.reference}: ${service.name}`,
-        });
-        await this.prisma.payment.create({
+
+      if (checkoutIntent) {
+        await tx.payment.create({
           data: {
-            bookingId: booking.id,
-            provider: intent.provider,
-            status: intent.status,
+            bookingId: created.id,
+            provider: checkoutIntent.provider,
+            status: checkoutIntent.status,
             amountUsdCents: service.priceUsdCents,
-            feeUsdCents: platformFeeCents(service.priceUsdCents),
-            externalRef: intent.externalRef,
+            externalRef: checkoutIntent.externalRef,
           },
         });
-        checkoutUrl = intent.checkoutUrl;
-      } catch (error) {
-        // Never reserve a stylist's time when the gateway failed before the
-        // client received a checkout page. The cancelled booking preserves an
-        // audit trail while releasing the exclusion-constraint time range.
-        await this.prisma.booking.update({
-          where: { id: booking.id },
-          data: { status: 'cancelled' },
-        });
-        throw error;
       }
-    }
+
+      return created;
+    });
 
     const row = await this.toRowById(booking.id);
     this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
@@ -129,7 +146,7 @@ export class BookingsService {
       id: booking.id,
       reference: booking.reference,
       status: booking.status,
-      ...(checkoutUrl ? { checkoutUrl } : {}),
+      ...(checkoutIntent ? { checkoutUrl: checkoutIntent.checkoutUrl } : {}),
     };
   }
 
@@ -238,7 +255,6 @@ export class BookingsService {
               provider: 'cash',
               status: 'released',
               amountUsdCents: current.priceUsdCents,
-              feeUsdCents: platformFeeCents(current.priceUsdCents),
             },
           });
         }
@@ -404,9 +420,15 @@ export class BookingsService {
     return toBookingRowDto(booking, !!alreadyRated);
   }
 
-  /** Race-free monotonic counter for the "SC-4471" reference (plan §9 — a real Postgres sequence, not a row count). */
-  private async nextBookingSequence(tx: Prisma.TransactionClient): Promise<number> {
-    const [row] = await tx.$queryRaw<{ nextval: bigint }[]>`
+  /**
+   * Race-free monotonic counter for the "SC-4471" reference (plan §9 — a real
+   * Postgres sequence, not a row count). Called outside any transaction:
+   * `nextval` is never rolled back regardless of what happens to a
+   * surrounding transaction, so there is nothing gained by taking it from
+   * inside one, and `create()` needs the reference before it opens its own.
+   */
+  private async nextBookingSequence(): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<{ nextval: bigint }[]>`
       SELECT nextval('booking_reference_seq')
     `;
     return Number(row?.nextval ?? 0);

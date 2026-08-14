@@ -8,34 +8,11 @@
  */
 export type UsdCents = number;
 
-/** 5% platform fee on in-app service payments and in-app product sales. Cash is untouched. */
-export const PLATFORM_FEE_BPS = 500;
-
 /** 1 SC Coin = $0.50. */
 export const COIN_USD_CENTS = 50;
 
 /** Cash-out unlocks once the wallet balance EXCEEDS $5 — 500 is not enough, 501 is. */
 export const CASH_OUT_MIN_USD_CENTS = 500;
-
-/**
- * Rounds half up, in cents. Bankers' rounding would be defensible too, but
- * half-up is simpler to explain in a support conversation about why a fee was
- * $0.01 different from a naive calculation, and it matches how EcoCash and
- * most payment processors round.
- */
-function roundCents(cents: number): number {
-  return Math.round(cents);
-}
-
-/** The platform's cut of an in-app payment, in cents. */
-export function platformFeeCents(amountCents: UsdCents): UsdCents {
-  return roundCents((amountCents * PLATFORM_FEE_BPS) / 10_000);
-}
-
-/** What the provider/seller actually receives after the platform fee. */
-export function netOfFeeCents(amountCents: UsdCents): UsdCents {
-  return amountCents - platformFeeCents(amountCents);
-}
 
 export function coinsToUsdCents(coins: number): UsdCents {
   return coins * COIN_USD_CENTS;

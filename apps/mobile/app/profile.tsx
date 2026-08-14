@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { ChevronRight, LogOut } from 'lucide-react-native';
 import { deriveInitials, deriveTint } from '@sc/shared';
 import { color, space } from '@sc/tokens';
-import { Screen, ScreenHeader, Text, Avatar, Card, Badge, Button, Pressable } from '@sc/ui';
+import { Screen, ScreenHeader, Text, Avatar, Card, Badge, Button, Pressable, EmptyPanel } from '@sc/ui';
 import { useMe } from '../src/api/hooks/useMe.js';
 import { useAuthStore } from '../src/state/useAuthStore.js';
 import { useBack } from '../src/navigation/useBack.js';
@@ -44,6 +44,7 @@ const styles = StyleSheet.create({
     gap: space.s,
     paddingVertical: space.m,
   },
+  retryButton: { marginTop: space.l },
 });
 
 /**
@@ -52,18 +53,44 @@ const styles = StyleSheet.create({
  * whether a client has a stylist page and links to setting one up, instead
  * of that only being discoverable through the role switcher.
  *
- * Reached two different ways (see (provider)/profile.tsx's re-export): a
- * push from the client Find tab's header button, and a provider tab-bar
- * root ("My page"). `router.canGoBack()` tells the two apart at render time
- * — a pushed screen gets the back chevron, a tab root gets the tab bar.
+ * Reached by a push from the client Find tab's header button.
+ * `router.canGoBack()` tells a pushed screen apart from a tab root at render
+ * time — a pushed screen gets the back chevron, a tab root gets the tab bar.
  */
 export default function Profile() {
   const onBack = useBack('/(tabs)');
-  const { data: me } = useMe();
+  const { data: me, isLoading, isError, refetch } = useMe();
   const signOut = useAuthStore((s) => s.signOut);
   const isPushed = router.canGoBack();
 
-  if (!me) return null;
+  if (!me) {
+    return (
+      <Screen
+        hasTabBar={!isPushed}
+        header={<ScreenHeader title="Profile" showBack={isPushed} onBack={onBack} />}
+      >
+        {isError ? (
+          <>
+            <EmptyPanel
+              title="Couldn't load your profile"
+              body="Check your connection and try again."
+            />
+            <Button
+              label="Try again"
+              variant="secondary"
+              block
+              style={styles.retryButton}
+              onPress={() => {
+                void refetch();
+              }}
+            />
+          </>
+        ) : (
+          <EmptyPanel body={isLoading ? 'Loading your profile…' : 'Nothing to show.'} />
+        )}
+      </Screen>
+    );
+  }
 
   const initials = deriveInitials(me.displayName);
   const tint = deriveTint(me.displayName);

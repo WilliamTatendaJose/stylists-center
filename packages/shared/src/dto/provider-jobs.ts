@@ -71,10 +71,10 @@ export const providerEarningsEntrySchema = z.object({
 export type ProviderEarningsEntryDto = z.infer<typeof providerEarningsEntrySchema>;
 
 /**
- * `releasedUsdCents` is money actually settled to the provider (net of the
- * platform fee); `pendingUsdCents` is still held in escrow — a booking or
- * order in progress, not yet collected/completed. Neither total counts a
- * refunded or failed entry.
+ * `releasedUsdCents` is money actually settled to the provider — the full
+ * booking/order amount, no platform cut; `pendingUsdCents` is still held in
+ * escrow — a booking or order in progress, not yet collected/completed.
+ * Neither total counts a refunded or failed entry.
  */
 export const providerEarningsSchema = z.object({
   releasedUsdCents: z.number().int(),

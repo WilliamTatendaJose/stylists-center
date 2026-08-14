@@ -24,9 +24,8 @@ const BASE_ENV: Env = {
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
   AUTH_DEV_OTP: '000000',
-  TWILIO_VERIFY_CHANNEL: 'whatsapp',
+  INFOBIP_DEFAULT_CHANNEL: 'whatsapp',
   PAYMENT_PROVIDER: 'fake',
-  PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
@@ -124,6 +123,10 @@ describe('MatchingService', () => {
           longitude: seed.lng,
           cityId,
           workingHoursLabel: 'Always',
+          // Fan-out only offers to a provider with an active subscription
+          // (geo.repository.ts's onlyAcceptingBookings filter) — without
+          // this every provider here would be silently ineligible.
+          subscriptionPaidUntil: new Date(Date.now() + 30 * 24 * 60 * 60_000),
           services: {
             create: [
               { name: 'Test service', durationMinutes: 30, priceUsdCents: seed.priceUsdCents },

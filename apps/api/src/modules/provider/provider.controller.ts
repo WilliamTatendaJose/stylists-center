@@ -6,6 +6,7 @@ import { ProviderService } from './provider.service';
 import {
   CreateProviderProductDto,
   CreateProviderServiceDto,
+  PaySubscriptionDto,
   SetAvailabilityDto,
   UpdateProviderProfileDto,
 } from './dto';
@@ -68,6 +69,16 @@ export class ProviderController {
   @Post('availability')
   setAvailability(@CurrentProvider() providerId: string, @Body() dto: SetAvailabilityDto) {
     return this.provider.setAvailability(providerId, dto.acceptingBookings);
+  }
+
+  @Get('subscription')
+  subscription(@CurrentProvider() providerId: string) {
+    return this.provider.getSubscription(providerId);
+  }
+
+  @Post('subscription/pay')
+  paySubscription(@CurrentProvider() providerId: string, @Body() dto: PaySubscriptionDto) {
+    return this.provider.paySubscription(providerId, dto);
   }
 
   @Post('bookings/:id/confirm')

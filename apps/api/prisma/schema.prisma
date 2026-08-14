@@ -189,15 +189,24 @@ model ProviderProfile {
   ratingAvg          Float        @default(0)
   completedCount     Int          @default(0)
   salonCreatedAt     DateTime?
+  /// Per-provider so a future admin webapp can change one provider's price
+  /// without a deploy — see DEFAULT_SUBSCRIPTION_PRICE_USD_CENTS in @sc/shared.
+  subscriptionPriceUsdCents Int      @default(500)
+  /// Null for a provider who has never paid — never active, not an error.
+  /// Whether that reads as "active" is computed from this at request time
+  /// (isSubscriptionActive in @sc/shared), never stored as a separate flag,
+  /// so it can never drift out of sync with the date it's derived from.
+  subscriptionPaidUntil    DateTime?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
-  services Service[]
-  offers   MatchOffer[]
-  bookings Booking[]
-  trips    Trip[]
-  products Product[]
-  orders   Order[]
+  services             Service[]
+  offers               MatchOffer[]
+  bookings             Booking[]
+  trips                Trip[]
+  products             Product[]
+  orders               Order[]
+  subscriptionPayments Payment[]    @relation("SubscriptionPayments")
 
   @@index([categoryId])
   @@index([cityId])
@@ -327,11 +336,13 @@ model Booking {
 /// update, so the ledger stays a true audit trail.
 model Payment {
   id String @id @default(uuid())
-  /// Exactly one of bookingId/orderId is set — the ledger covers both sale types so money reconciles in one place.
-  bookingId      String?
-  booking        Booking? @relation(fields: [bookingId], references: [id])
-  orderId        String?
-  order          Order?   @relation(fields: [orderId], references: [id])
+  /// Exactly one of bookingId/orderId/subscriptionProviderId is set — the ledger covers all three money flows so it reconciles in one place. `feeUsdCents` is always 0 for a subscription row (there is no counterparty to take a cut from); it stays on the row rather than a separate model because the ledger's shape — provider/status/amount/externalRef/createdAt — is otherwise identical.
+  bookingId             String?
+  booking                Booking?         @relation(fields: [bookingId], references: [id])
+  orderId                String?
+  order                  Order?           @relation(fields: [orderId], references: [id])
+  subscriptionProviderId String?
+  subscriptionProvider   ProviderProfile? @relation("SubscriptionPayments", fields: [subscriptionProviderId], references: [id])
   provider       String // 'ecocash' (FakeEcoCashAdapter in M1) — a string, not an enum, so a second gateway is a new value, not a migration
   status         String // held | released | refunded | failed
   amountUsdCents Int
@@ -341,6 +352,7 @@ model Payment {
 
   @@index([bookingId])
   @@index([orderId])
+  @@index([subscriptionProviderId])
 }
 
 /// Mirrors @sc/shared's OrderStatus exactly.

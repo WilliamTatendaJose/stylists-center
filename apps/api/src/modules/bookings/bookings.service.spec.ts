@@ -8,6 +8,7 @@ import { MatchingService } from '../matching/matching.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
+import type { PaymentGatewayPort, PaymentIntentResult } from '../payments/payment-gateway.port';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
 
@@ -27,9 +28,8 @@ const BASE_ENV: Env = {
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
   AUTH_DEV_OTP: '000000',
-  TWILIO_VERIFY_CHANNEL: 'whatsapp',
+  INFOBIP_DEFAULT_CHANNEL: 'whatsapp',
   PAYMENT_PROVIDER: 'fake',
-  PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
@@ -60,6 +60,16 @@ class FakeQueue {
   }
 }
 
+/** Simulates a Paynow outage — used to prove a checkout failure never touches the match or the database. */
+class FailingGateway implements PaymentGatewayPort {
+  createCheckout(): Promise<PaymentIntentResult> {
+    return Promise.reject(new Error('gateway unavailable'));
+  }
+  verifyCallback(): boolean {
+    return false;
+  }
+}
+
 describe('BookingsService', () => {
   let prisma: PrismaService;
   let bookings: BookingsService;
@@ -72,6 +82,9 @@ describe('BookingsService', () => {
   let serviceAId: string;
   let providerBId: string;
   let providerBUserId: string;
+  let providerCId: string;
+  let providerCUserId: string;
+  let serviceCId: string;
   const createdBookingIds: string[] = [];
 
   beforeAll(async () => {
@@ -126,6 +139,10 @@ describe('BookingsService', () => {
         longitude: 31.0345,
         cityId,
         workingHoursLabel: 'Always',
+        // bookings.create() rejects a direct booking against a provider
+        // whose subscription has lapsed — without this every booking test
+        // below would fail that check before reaching what it's testing.
+        subscriptionPaidUntil: new Date(Date.now() + 30 * 24 * 60 * 60_000),
         services: { create: [{ name: 'Test service', durationMinutes: 30, priceUsdCents: 2000 }] },
       },
       include: { services: true },
@@ -154,10 +171,41 @@ describe('BookingsService', () => {
         longitude: 31.034,
         cityId,
         workingHoursLabel: 'Always',
+        subscriptionPaidUntil: new Date(Date.now() + 30 * 24 * 60 * 60_000),
       },
     });
     providerBId = providerB.id;
     providerBUserId = providerBUser.id;
+
+    const providerCUser = await prisma.user.create({
+      data: {
+        phone: `+263776${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Provider C (lapsed)',
+        cityId,
+      },
+    });
+    providerCUserId = providerCUser.id;
+    const providerC = await prisma.providerProfile.create({
+      data: {
+        userId: providerCUser.id,
+        displayName: 'Provider C',
+        tint: '#222222',
+        initials: 'PC',
+        categoryId,
+        areaName: 'Test area',
+        latitude: -17.796,
+        longitude: 31.036,
+        cityId,
+        workingHoursLabel: 'Always',
+        // Deliberately no subscriptionPaidUntil — a lapsed/never-paid provider.
+        services: { create: [{ name: 'Test service', durationMinutes: 30, priceUsdCents: 1500 }] },
+      },
+      include: { services: true },
+    });
+    providerCId = providerC.id;
+    const [serviceC] = providerC.services;
+    if (!serviceC) throw new Error('expected the seeded service to exist');
+    serviceCId = serviceC.id;
   });
 
   afterAll(async () => {
@@ -165,13 +213,17 @@ describe('BookingsService', () => {
     await prisma.payment.deleteMany({ where: { bookingId: { in: createdBookingIds } } });
     await prisma.booking.deleteMany({ where: { id: { in: createdBookingIds } } });
     await prisma.matchOffer.deleteMany({
-      where: { providerId: { in: [providerAId, providerBId] } },
+      where: { providerId: { in: [providerAId, providerBId, providerCId] } },
     });
     await prisma.matchRequest.deleteMany({ where: { clientId } });
-    await prisma.service.deleteMany({ where: { providerId: { in: [providerAId, providerBId] } } });
-    await prisma.providerProfile.deleteMany({ where: { id: { in: [providerAId, providerBId] } } });
+    await prisma.service.deleteMany({
+      where: { providerId: { in: [providerAId, providerBId, providerCId] } },
+    });
+    await prisma.providerProfile.deleteMany({
+      where: { id: { in: [providerAId, providerBId, providerCId] } },
+    });
     await prisma.user.deleteMany({
-      where: { id: { in: [clientId, providerAUserId, providerBUserId] } },
+      where: { id: { in: [clientId, providerAUserId, providerBUserId, providerCUserId] } },
     });
     await prisma.category.delete({ where: { id: categoryId } });
     await prisma.city.delete({ where: { id: cityId } });
@@ -226,7 +278,7 @@ describe('BookingsService', () => {
     expect(payments).toHaveLength(1);
     expect(payments[0]?.status).toBe('held');
     expect(payments[0]?.amountUsdCents).toBe(2000);
-    expect(payments[0]?.feeUsdCents).toBe(100); // 5% of 2000
+    expect(payments[0]?.feeUsdCents).toBe(0); // no per-payment fee — providers pay a flat subscription instead
   });
 
   it('rejects a booking when the slot is already taken', async () => {
@@ -247,6 +299,17 @@ describe('BookingsService', () => {
         paymentMethod: 'cash',
       }),
     ).rejects.toThrow('no longer available');
+  });
+
+  it('rejects a direct booking against a provider whose subscription has lapsed', async () => {
+    await expect(
+      bookings.create(clientId, {
+        providerId: providerCId,
+        serviceId: serviceCId,
+        startsAt: futureSlot(4),
+        paymentMethod: 'cash',
+      }),
+    ).rejects.toThrow("isn't currently accepting bookings");
   });
 
   it('confirmCompletion refuses a booking that is not yet confirmed by the provider', async () => {
@@ -404,5 +467,84 @@ describe('BookingsService', () => {
     expect(winning.state).toBe('accepted');
     const sibling = await prisma.matchOffer.findUniqueOrThrow({ where: { id: siblingOffer.id } });
     expect(sibling.state).toBe('declined');
+  });
+
+  it('leaves the match retryable, and creates no booking, when EcoCash checkout fails', async () => {
+    const match = await prisma.matchRequest.create({
+      data: {
+        clientId,
+        categoryId,
+        budgetMode: 'flex',
+        radiusKm: 3,
+        latitude: CLIENT_LOCATION.lat,
+        longitude: CLIENT_LOCATION.lng,
+        state: 'accepted',
+        expiresAt: new Date(Date.now() + 5 * 60_000),
+      },
+    });
+    const winningOffer = await prisma.matchOffer.create({
+      data: {
+        matchRequestId: match.id,
+        providerId: providerAId,
+        state: 'accepted',
+        quoteUsdCents: 2000,
+        respondBy: new Date(Date.now() + 30_000),
+      },
+    });
+    const siblingOffer = await prisma.matchOffer.create({
+      data: {
+        matchRequestId: match.id,
+        providerId: providerBId,
+        state: 'accepted',
+        quoteUsdCents: 1500,
+        respondBy: new Date(Date.now() + 30_000),
+      },
+    });
+
+    const flakyBookings = new BookingsService(
+      prisma,
+      new SocketEmitterService(),
+      matching,
+      new TrustService(prisma),
+      new FailingGateway(),
+    );
+
+    await expect(
+      flakyBookings.create(clientId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt: futureSlot(9),
+        paymentMethod: 'ecocash',
+        matchId: match.id,
+      }),
+    ).rejects.toThrow('gateway unavailable');
+
+    // The match was never touched by the failed checkout attempt — a client
+    // whose gateway call failed can still confirm the same match again,
+    // instead of it being wedged in 'confirmed' with no booking behind it.
+    const untouchedMatch = await prisma.matchRequest.findUniqueOrThrow({ where: { id: match.id } });
+    expect(untouchedMatch.state).toBe('accepted');
+
+    const winning = await prisma.matchOffer.findUniqueOrThrow({ where: { id: winningOffer.id } });
+    expect(winning.state).toBe('accepted');
+    const sibling = await prisma.matchOffer.findUniqueOrThrow({ where: { id: siblingOffer.id } });
+    expect(sibling.state).toBe('accepted');
+
+    const orphanedBooking = await prisma.booking.findFirst({ where: { matchRequestId: match.id } });
+    expect(orphanedBooking).toBeNull();
+
+    // The match is still usable: a retry with a working gateway succeeds.
+    const retried = await bookings.create(clientId, {
+      providerId: providerAId,
+      serviceId: serviceAId,
+      startsAt: futureSlot(9),
+      paymentMethod: 'ecocash',
+      matchId: match.id,
+    });
+    createdBookingIds.push(retried.id);
+    expect(retried.status).toBe('awaiting_provider');
+
+    const confirmedMatch = await prisma.matchRequest.findUniqueOrThrow({ where: { id: match.id } });
+    expect(confirmedMatch.state).toBe('confirmed');
   });
 });

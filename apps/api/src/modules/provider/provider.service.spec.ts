@@ -5,6 +5,7 @@ import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import type { MatchingService } from '../matching/matching.service';
+import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
 import { ProviderService } from './provider.service';
 
 const BASE_ENV: Env = {
@@ -15,9 +16,8 @@ const BASE_ENV: Env = {
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
   AUTH_DEV_OTP: '000000',
-  TWILIO_VERIFY_CHANNEL: 'whatsapp',
+  INFOBIP_DEFAULT_CHANNEL: 'whatsapp',
   PAYMENT_PROVIDER: 'fake',
-  PLATFORM_FEE_BPS: 500,
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
@@ -91,10 +91,12 @@ describe('ProviderService management', () => {
       prisma,
       new SocketEmitterService(),
       null as unknown as MatchingService,
+      new FakeEcoCashAdapter(),
     );
   });
 
   afterAll(async () => {
+    await prisma.payment.deleteMany({ where: { subscriptionProviderId: providerId } });
     await prisma.payment.deleteMany({ where: { order: { providerId } } });
     await prisma.orderItem.deleteMany({ where: { order: { providerId } } });
     await prisma.order.deleteMany({ where: { providerId } });
@@ -177,7 +179,57 @@ describe('ProviderService management', () => {
       await prisma.payment.findFirst({ where: { orderId: order.id, status: 'released' } }),
     ).not.toBeNull();
     const earnings = await provider.getEarnings(providerId);
-    expect(earnings.releasedUsdCents).toBe(950);
+    // No per-payment fee — providers pay a flat subscription instead, so the
+    // full $10.00 order amount is released, not $10.00 minus a 5% cut.
+    expect(earnings.releasedUsdCents).toBe(1000);
     expect(earnings.pendingUsdCents).toBe(0);
+  });
+
+  describe('subscription', () => {
+    it('is inactive with no paidUntil for a provider who has never paid', async () => {
+      const subscription = await provider.getSubscription(providerId);
+      expect(subscription).toMatchObject({ priceUsdCents: 500, paidUntil: null, active: false });
+    });
+
+    it('activates immediately on a cash payment and extends paidUntil ~30 days', async () => {
+      const before = Date.now();
+      const result = await provider.paySubscription(providerId, { paymentMethod: 'cash' });
+      expect(result.checkoutUrl).toBeUndefined();
+
+      const paidUntilMs = new Date(result.paidUntil).getTime();
+      const thirtyDaysMs = 30 * 24 * 60 * 60_000;
+      // Allow a little slack either side for how long the test itself took to run.
+      expect(paidUntilMs).toBeGreaterThan(before + thirtyDaysMs - 5000);
+      expect(paidUntilMs).toBeLessThan(before + thirtyDaysMs + 5000);
+
+      const subscription = await provider.getSubscription(providerId);
+      expect(subscription.active).toBe(true);
+      expect(subscription.paidUntil).toBe(result.paidUntil);
+
+      const payment = await prisma.payment.findFirst({
+        where: { subscriptionProviderId: providerId },
+      });
+      expect(payment).toMatchObject({
+        provider: 'cash',
+        status: 'released',
+        amountUsdCents: 500,
+        feeUsdCents: 0,
+        bookingId: null,
+        orderId: null,
+      });
+    });
+
+    it('creates a checkout intent for EcoCash and applies it on success, same as a fresh booking', async () => {
+      const before = await provider.getSubscription(providerId);
+      const result = await provider.paySubscription(providerId, { paymentMethod: 'ecocash' });
+      expect(new Date(result.paidUntil).getTime()).toBeGreaterThan(
+        before.paidUntil ? new Date(before.paidUntil).getTime() : Date.now(),
+      );
+
+      const payment = await prisma.payment.findFirst({
+        where: { subscriptionProviderId: providerId, provider: 'fake-ecocash' },
+      });
+      expect(payment).toMatchObject({ status: 'held', amountUsdCents: 500 });
+    });
   });
 });

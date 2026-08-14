@@ -27,13 +27,25 @@ export const envSchema = z
       .length(6)
       .regex(/^\d{6}$/)
       .optional(),
-    // Twilio Verify owns code generation and verification in production.
-    // WhatsApp is preferred in Zimbabwe; SMS is the automatic fallback when
-    // WhatsApp cannot deliver to a particular number.
-    TWILIO_ACCOUNT_SID: z.string().startsWith('AC').optional(),
-    TWILIO_AUTH_TOKEN: z.string().min(20).optional(),
-    TWILIO_VERIFY_SERVICE_SID: z.string().startsWith('VA').optional(),
-    TWILIO_VERIFY_CHANNEL: z.enum(['whatsapp', 'sms']).default('whatsapp'),
+    // Infobip delivers OTP codes in production: a WhatsApp template message
+    // first (preferred in Zimbabwe), SMS as the automatic fallback when
+    // WhatsApp cannot deliver to a particular number. Infobip does not host
+    // the code itself (unlike Twilio Verify) — AuthService generates it and
+    // only calls Infobip to deliver it, hashing+comparing locally.
+    INFOBIP_API_KEY: z.string().min(20).optional(),
+    // Bare host from the Infobip dashboard, e.g. "xxxxx.api.infobip.com" —
+    // no scheme; auth.service.ts prefixes https:// when building request URLs.
+    INFOBIP_BASE_URL: z.string().min(1).optional(),
+    // WhatsApp Business sender registered on the Infobip account.
+    INFOBIP_WHATSAPP_SENDER: z.string().min(1).optional(),
+    // Name of the pre-approved WhatsApp template used for the OTP message —
+    // WhatsApp requires business-initiated messages to use an approved
+    // template; free-form text is rejected.
+    INFOBIP_WHATSAPP_TEMPLATE_NAME: z.string().min(1).optional(),
+    // Optional alphanumeric sender ID for the SMS fallback; when unset,
+    // Infobip uses the account's default sender.
+    INFOBIP_SMS_SENDER: z.string().min(1).optional(),
+    INFOBIP_DEFAULT_CHANNEL: z.enum(['whatsapp', 'sms']).default('whatsapp'),
 
     // Paynow is the selected collection provider. It remains optional in
     // development so the fake adapter keeps local and integration tests free.
@@ -43,7 +55,6 @@ export const envSchema = z
     PAYNOW_RETURN_URL: z.url().optional(),
     PAYNOW_RESULT_URL: z.url().optional(),
 
-    PLATFORM_FEE_BPS: z.coerce.number().int().min(0).max(10_000).default(500),
     COIN_USD_CENTS: z.coerce.number().int().positive().default(50),
     CASH_OUT_MIN_USD_CENTS: z.coerce.number().int().positive().default(500),
 
@@ -62,12 +73,17 @@ export const envSchema = z
       });
     }
     if (env.NODE_ENV === 'production') {
-      for (const key of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_VERIFY_SERVICE_SID'] as const) {
+      for (const key of [
+        'INFOBIP_API_KEY',
+        'INFOBIP_BASE_URL',
+        'INFOBIP_WHATSAPP_SENDER',
+        'INFOBIP_WHATSAPP_TEMPLATE_NAME',
+      ] as const) {
         if (!env[key]) {
           ctx.addIssue({
             code: 'custom',
             path: [key],
-            message: `${key} is required in production for Twilio Verify.`,
+            message: `${key} is required in production for Infobip OTP delivery.`,
           });
         }
       }

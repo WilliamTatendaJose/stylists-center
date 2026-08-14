@@ -9,3 +9,4 @@ export * from './booking.js';
 export * from './order.js';
 export * from './avatar.js';
 export * from './profile.js';
+export * from './subscription.js';

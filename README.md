@@ -122,11 +122,12 @@ plausible-looking mock.
 
 ### Release blockers
 
-- **Payments and authentication delivery are still test doubles.** `FakeEcoCashAdapter` immediately
-  holds funds; no real payment initiation, webhook signature verification, reconciliation, retry, or
-  payout process exists. OTP challenges are generated and rate-limited, but neither SMS nor WhatsApp
-  delivery is integrated. `AUTH_DEV_OTP` is correctly rejected in production, which means a real
-  delivery provider is required before production sign-in can work.
+- **Payments are still a test double; OTP delivery now calls Infobip.** `FakeEcoCashAdapter`
+  immediately holds funds; no real payment initiation, webhook signature verification, reconciliation,
+  retry, or payout process exists. OTP challenges are generated, rate-limited, and delivered via
+  Infobip (WhatsApp template message first, SMS fallback) — but `INFOBIP_WHATSAPP_SENDER` and
+  `INFOBIP_WHATSAPP_TEMPLATE_NAME` still need a real sender and an approved template from the Infobip
+  account before delivery actually works. `AUTH_DEV_OTP` is correctly rejected in production.
 - **Scheduling still needs a real provider calendar.** Bookings now persist their end time, slot
   availability accounts for the selected service duration, and PostgreSQL rejects overlapping active
   appointments. However, `workingHoursLabel` remains free text and the candidate window is fixed at

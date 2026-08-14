@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  platformFeeCents,
-  netOfFeeCents,
   coinsToUsdCents,
   usdCentsToCoins,
   canCashOut,
@@ -9,28 +7,6 @@ import {
   CASH_OUT_MIN_USD_CENTS,
   COIN_USD_CENTS,
 } from './money.js';
-
-describe('platform fee', () => {
-  it('takes exactly 5% on a round amount', () => {
-    expect(platformFeeCents(2000)).toBe(100); // $20.00 -> $1.00
-  });
-
-  it('rounds half up on odd cents so the fee and net always sum to the total', () => {
-    // $18.45 (1845c) * 5% = 92.25c -> rounds to 92c.
-    const amount = 1845;
-    const fee = platformFeeCents(amount);
-    expect(fee).toBe(92);
-    expect(fee + netOfFeeCents(amount)).toBe(amount);
-  });
-
-  it('never takes a fee from a zero amount', () => {
-    expect(platformFeeCents(0)).toBe(0);
-  });
-
-  it('leaves the provider with the full amount minus the fee', () => {
-    expect(netOfFeeCents(3000)).toBe(2850); // $30.00 service, provider nets $28.50
-  });
-});
 
 describe('SC Coins', () => {
   it('converts coins to cents at the pegged $0.50 rate', () => {

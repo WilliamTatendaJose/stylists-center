@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   needsCashReconciliation,
+  canConfirmEcocashCompletion,
   isFullyConfirmed,
   canCancelBooking,
   canProviderRespond,
@@ -41,6 +42,37 @@ describe('cash reconciliation', () => {
   it('never applies before the booking is confirmed or after it completes', () => {
     expect(needsCashReconciliation({ ...base, status: 'awaiting_provider' })).toBe(false);
     expect(needsCashReconciliation({ ...base, status: 'completed' })).toBe(false);
+  });
+});
+
+describe('EcoCash completion confirmation', () => {
+  const ecocashConfirmed = {
+    paymentMethod: 'ecocash' as const,
+    status: 'confirmed' as const,
+    confirmedByClient: false,
+  };
+
+  it('is available on a confirmed EcoCash booking the client has not confirmed', () => {
+    expect(canConfirmEcocashCompletion(ecocashConfirmed)).toBe(true);
+  });
+
+  it('is not available once the client has confirmed', () => {
+    expect(canConfirmEcocashCompletion({ ...ecocashConfirmed, confirmedByClient: true })).toBe(
+      false,
+    );
+  });
+
+  it('never applies to a cash booking — that goes through reconciliation instead', () => {
+    expect(canConfirmEcocashCompletion({ ...ecocashConfirmed, paymentMethod: 'cash' })).toBe(
+      false,
+    );
+  });
+
+  it('is not available before the booking is confirmed or after it completes', () => {
+    expect(
+      canConfirmEcocashCompletion({ ...ecocashConfirmed, status: 'awaiting_provider' }),
+    ).toBe(false);
+    expect(canConfirmEcocashCompletion({ ...ecocashConfirmed, status: 'completed' })).toBe(false);
   });
 });
 

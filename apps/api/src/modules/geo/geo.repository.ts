@@ -88,8 +88,12 @@ export class GeoRepository {
       ? Prisma.sql`AND p."categoryId" = ${categoryId}`
       : Prisma.empty;
 
+    // A lapsed subscription is time-based, not a stored flag — computed here
+    // against the clock at read time, same as isSubscriptionActive in
+    // @sc/shared, so it can never drift out of sync with a background job
+    // that forgot to run.
     const availabilityFilter = onlyAcceptingBookings
-      ? Prisma.sql`AND p."acceptingBookings" = true`
+      ? Prisma.sql`AND p."acceptingBookings" = true AND p."subscriptionPaidUntil" > now()`
       : Prisma.empty;
 
     const term = searchTerm?.trim();

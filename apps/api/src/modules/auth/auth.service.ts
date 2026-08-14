@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { randomBytes, randomInt, randomUUID, createHash } from 'node:crypto';
 import {
   BadRequestException,
   ForbiddenException,
@@ -51,6 +51,10 @@ function generateRefreshTokenRaw(): string {
   return randomBytes(32).toString('base64url');
 }
 
+function generateOtpCode(): string {
+  return randomInt(0, 1_000_000).toString().padStart(6, '0');
+}
+
 /**
  * Phone + OTP auth (plan §6). No email/password — the phone number IS the
  * identity. `AUTH_DEV_OTP` (env-validated to never exist in production, see
@@ -83,17 +87,18 @@ export class AuthService {
     await this.checkRateLimit(`otp:rate:ip:${ip}`, IP_RATE_LIMIT_PER_HOUR);
 
     const devOtp = this.config.get('AUTH_DEV_OTP', { infer: true });
+    const code = devOtp ?? generateOtpCode();
     if (!devOtp) {
-      await this.sendTwilioVerification(phone, requestedChannel);
+      await this.sendInfobipOtp(phone, code, requestedChannel);
     }
 
     const challengeId = randomUUID();
     const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
-    // Twilio Verify holds the real code. The development-only code remains
-    // hashed locally so no OTP is persisted in Redis in either mode.
+    // Infobip only delivers the code — it never sees or checks it — so the
+    // hash (dev or real) is always what verifyOtp compares against.
     const challenge: OtpChallenge = {
       phone,
-      codeHash: devOtp ? sha256Hex(devOtp) : '',
+      codeHash: sha256Hex(code),
       attempts: 0,
     };
     await this.redis.setex(
@@ -106,55 +111,94 @@ export class AuthService {
   }
 
   /** WhatsApp is primary; a delivery failure retries once via SMS. */
-  private async sendTwilioVerification(
+  private async sendInfobipOtp(
     phone: string,
+    code: string,
     requestedChannel?: 'whatsapp' | 'sms',
   ): Promise<void> {
     const channel =
-      requestedChannel ?? this.config.get('TWILIO_VERIFY_CHANNEL', { infer: true }) ?? 'whatsapp';
+      requestedChannel ?? this.config.get('INFOBIP_DEFAULT_CHANNEL', { infer: true }) ?? 'whatsapp';
     try {
-      await this.twilioRequest('Verifications', { To: phone, Channel: channel });
+      if (channel === 'whatsapp') {
+        await this.sendInfobipWhatsApp(phone, code);
+      } else {
+        await this.sendInfobipSms(phone, code);
+      }
     } catch (error) {
       if (channel !== 'whatsapp') throw error;
-      await this.twilioRequest('Verifications', { To: phone, Channel: 'sms' });
+      await this.sendInfobipSms(phone, code);
     }
   }
 
-  private async checkTwilioVerification(phone: string, code: string): Promise<boolean> {
-    const response = await this.twilioRequest('VerificationCheck', { To: phone, Code: code });
-    return response.status === 'approved';
+  /** WhatsApp business-initiated messages must use a pre-approved template. */
+  private async sendInfobipWhatsApp(phone: string, code: string): Promise<void> {
+    const sender = this.config.get('INFOBIP_WHATSAPP_SENDER', { infer: true });
+    const template = this.config.get('INFOBIP_WHATSAPP_TEMPLATE_NAME', { infer: true });
+    if (!sender || !template) {
+      throw new ServiceUnavailableException('WhatsApp verification is not configured');
+    }
+
+    await this.infobipRequest('/whatsapp/1/message/template', {
+      messages: [
+        {
+          from: sender,
+          to: phone.replace('+', ''),
+          messageId: randomUUID(),
+          content: {
+            templateName: template,
+            templateData: {
+              body: { placeholders: [code] },
+              // The "authentication" template's approved "Copy Code" button
+              // is a dynamic-URL button under the hood, so WhatsApp requires
+              // the same OTP passed again here — omitting it fails delivery
+              // with "Failed to match template parameters" (Infobip code 7008).
+              buttons: [{ type: 'URL', parameter: code }],
+            },
+            language: 'en',
+          },
+        },
+      ],
+    });
   }
 
-  private async twilioRequest(
-    resource: 'Verifications' | 'VerificationCheck',
-    body: Record<string, string>,
-  ): Promise<{ status?: string }> {
-    const accountSid = this.config.get('TWILIO_ACCOUNT_SID', { infer: true });
-    const authToken = this.config.get('TWILIO_AUTH_TOKEN', { infer: true });
-    const serviceSid = this.config.get('TWILIO_VERIFY_SERVICE_SID', { infer: true });
-    if (!accountSid || !authToken || !serviceSid) {
+  private async sendInfobipSms(phone: string, code: string): Promise<void> {
+    const sender = this.config.get('INFOBIP_SMS_SENDER', { infer: true });
+    await this.infobipRequest('/sms/2/text/advanced', {
+      messages: [
+        {
+          ...(sender ? { from: sender } : {}),
+          destinations: [{ to: phone.replace('+', '') }],
+          text: `Your Stylists Center verification code is ${code}`,
+        },
+      ],
+    });
+  }
+
+  private async infobipRequest(path: string, body: unknown): Promise<void> {
+    const apiKey = this.config.get('INFOBIP_API_KEY', { infer: true });
+    const baseUrl = this.config.get('INFOBIP_BASE_URL', { infer: true });
+    if (!apiKey || !baseUrl) {
       throw new ServiceUnavailableException('Phone verification is not configured');
     }
 
-    const response = await fetch(
-      `https://verify.twilio.com/v2/Services/${serviceSid}/${resource}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString('base64')}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams(body).toString(),
+    const origin = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
+    const response = await fetch(`${origin}${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `App ${apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
       },
-    );
-    const payload = (await response.json().catch(() => ({}))) as {
-      status?: string;
-      message?: string;
-    };
+      body: JSON.stringify(body),
+    });
     if (!response.ok) {
-      throw new ServiceUnavailableException(payload.message ?? 'Phone verification is unavailable');
+      const payload = (await response.json().catch(() => ({}))) as {
+        requestError?: { serviceException?: { text?: string } };
+      };
+      throw new ServiceUnavailableException(
+        payload.requestError?.serviceException?.text ?? 'Phone verification is unavailable',
+      );
     }
-    return payload;
   }
 
   private async checkRateLimit(key: string, limit: number): Promise<void> {
@@ -175,10 +219,7 @@ export class AuthService {
     }
 
     const challenge = JSON.parse(raw) as OtpChallenge;
-    const devOtp = this.config.get('AUTH_DEV_OTP', { infer: true });
-    const matches = devOtp
-      ? code === devOtp
-      : await this.checkTwilioVerification(challenge.phone, code);
+    const matches = sha256Hex(code) === challenge.codeHash;
 
     if (!matches) {
       challenge.attempts += 1;
