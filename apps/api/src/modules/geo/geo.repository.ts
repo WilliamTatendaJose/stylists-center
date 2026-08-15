@@ -7,6 +7,7 @@ export interface ProviderGeoRow {
   displayName: string;
   tint: string;
   initials: string;
+  imageUrl: string | null;
   verified: boolean;
   acceptingBookings: boolean;
   categoryName: string;
@@ -168,6 +169,7 @@ export class GeoRepository {
         p."displayName",
         p.tint,
         p.initials,
+        COALESCE(p."profileImageUrl", p."portfolioImageUrls"[1]) AS "imageUrl",
         p.verified,
         p."acceptingBookings",
         c.name AS "categoryName",
@@ -196,6 +198,7 @@ export class GeoRepository {
         p."displayName",
         p.tint,
         p.initials,
+        COALESCE(p."profileImageUrl", p."portfolioImageUrls"[1]) AS "imageUrl",
         p.verified,
         p."acceptingBookings",
         c.name AS "categoryName",

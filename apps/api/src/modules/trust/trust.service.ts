@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { NO_SHOW_COUNT_FOR_AUTO_BAN, triggersAutoBan } from '@sc/shared';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { NO_SHOW_COUNT_FOR_AUTO_BAN, triggersAutoBan, type AppealStatus } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** Why a strike was recorded. Both count toward standing; an appeal needs to know which. */
@@ -94,6 +94,47 @@ export class TrustService {
     return this.prisma.ban.findFirst({
       where: { userId, appealStatus: { not: 'overturned' } },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * The admin console's ban lever — the third direction bans now arrive
+   * from, alongside the automatic no-show threshold above. Same transaction
+   * shape (create the Ban, bump tokenVersion) so a manual ban ends live
+   * sessions exactly as immediately as an automatic one.
+   */
+  async banManually(userId: string, reason: string): Promise<void> {
+    const existing = await this.findActiveBan(userId);
+    if (existing) {
+      throw new BadRequestException('This user already has an active ban');
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.ban.create({
+        data: { userId, trigger: 'manual', reason },
+      }),
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { tokenVersion: { increment: 1 } },
+      }),
+    ]);
+
+    this.logger.warn(`Manual ban applied to user ${userId}`);
+  }
+
+  /**
+   * Resolves an appeal one way or the other. `overturned` is the one status
+   * `findActiveBan` treats as "not in effect" — it does not touch
+   * `tokenVersion`, since restoring access is exactly what a fresh sign-in
+   * (which re-checks `findActiveBan`) already does on its own.
+   */
+  async resolveAppeal(banId: string, appealStatus: AppealStatus, appealNote?: string) {
+    return this.prisma.ban.update({
+      where: { id: banId },
+      data: {
+        appealStatus,
+        ...(appealNote !== undefined ? { appealNote } : {}),
+      },
     });
   }
 }

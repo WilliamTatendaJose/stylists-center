@@ -19,8 +19,23 @@ export const envSchema = z
     DATABASE_URL: z.url(),
     REDIS_URL: z.url(),
 
+    // Origin-relative image URLs are stored in Postgres; this is the durable
+    // directory that backs /uploads. Mount it as a persistent volume in prod.
+    UPLOAD_DIR: z.string().min(1).default('uploads'),
+
     JWT_ACCESS_SECRET: z.string().min(32),
     JWT_REFRESH_PEPPER: z.string().min(32),
+
+    // Deliberately separate secrets from the user-facing JWT above: an admin
+    // token must never be verifiable (or forgeable) against the client/
+    // provider token space, and vice versa.
+    ADMIN_JWT_ACCESS_SECRET: z.string().min(32),
+    ADMIN_JWT_REFRESH_PEPPER: z.string().min(32),
+    // The one browser origin allowed to send credentialed (cookie-bearing)
+    // requests to /v1/admin/* — CORS is tightened to just this origin rather
+    // than the mobile app's app.enableCors() default, since only a browser
+    // client needs the admin refresh cookie at all.
+    ADMIN_WEB_ORIGIN: z.url().default('http://localhost:5173'),
 
     AUTH_DEV_OTP: z
       .string()

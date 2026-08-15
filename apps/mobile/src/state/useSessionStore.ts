@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clampBrowseRadiusKm, DEFAULT_BROWSE_RADIUS_KM, type ActiveRole } from '@sc/shared';
+import type { ThemeMode } from '@sc/ui';
 
 export interface LatLng {
   lat: number;
@@ -26,6 +27,7 @@ export type LocationSource =
   | 'unavailable';
 
 export interface SessionState {
+  themeMode: ThemeMode;
   activeRole: ActiveRole;
   hasProviderProfile: boolean;
   /** Last known position. Only meaningful as the user's own position when `locationSource === 'device'`. */
@@ -46,6 +48,7 @@ export interface SessionState {
   /** Gates the one-time offline map-tile download (plan §5/§9 item 18) — stands in for "first login" until auth exists. */
   hasDownloadedOfflinePack: boolean;
   setActiveRole: (role: ActiveRole) => void;
+  setThemeMode: (themeMode: ThemeMode) => void;
   setLocation: (location: LatLng, source: LocationSource) => void;
   setLocationSource: (source: LocationSource) => void;
   setAreaLabel: (areaLabel: string | null) => void;
@@ -68,6 +71,9 @@ const HARARE_CENTRE: LatLng = { lat: -17.8252, lng: 31.0335 };
 export const useSessionStore = create<SessionState>()(
   persist(
     (set) => ({
+      // Follow the device appearance until the user explicitly chooses a
+      // fixed light or dark mode from Profile.
+      themeMode: 'system',
       activeRole: 'client',
       hasProviderProfile: false,
       location: HARARE_CENTRE,
@@ -81,6 +87,7 @@ export const useSessionStore = create<SessionState>()(
       maxDistanceKm: DEFAULT_BROWSE_RADIUS_KM,
       hasDownloadedOfflinePack: false,
       setActiveRole: (activeRole) => set({ activeRole }),
+      setThemeMode: (themeMode) => set({ themeMode }),
       setLocation: (location, locationSource) => set({ location, locationSource }),
       setLocationSource: (locationSource) => set({ locationSource }),
       setAreaLabel: (areaLabel) => set({ areaLabel }),
@@ -91,6 +98,14 @@ export const useSessionStore = create<SessionState>()(
     {
       name: 'sc-session',
       storage: createJSONStorage(() => AsyncStorage),
+      // v0 defaulted to light before system-aware appearance existed. Move
+      // those existing sessions to the new system default; explicit choices
+      // made after this version are kept as dark/light overrides.
+      version: 1,
+      migrate: (persisted) => ({
+        ...(persisted as Partial<SessionState>),
+        themeMode: 'system',
+      }),
       /**
        * `locationSource` is deliberately NOT persisted. A coordinate cached
        * from last week is a reasonable starting guess, but "the device is
@@ -99,6 +114,7 @@ export const useSessionStore = create<SessionState>()(
        */
       partialize: (state) => ({
         activeRole: state.activeRole,
+        themeMode: state.themeMode,
         hasProviderProfile: state.hasProviderProfile,
         location: state.location,
         areaLabel: state.areaLabel,

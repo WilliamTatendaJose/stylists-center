@@ -344,6 +344,7 @@ export class AuthService {
       id: user.id,
       phone: user.phone,
       displayName: user.displayName,
+      avatarImageUrl: user.avatarImageUrl,
       activeRole: user.activeRole,
       hasProviderProfile: !!user.providerProfile,
       verificationStatus: user.verificationStatus,
@@ -357,7 +358,10 @@ export class AuthService {
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
-        data: { displayName: input.displayName },
+        data: {
+          displayName: input.displayName,
+          ...(input.avatarImageUrl !== undefined ? { avatarImageUrl: input.avatarImageUrl } : {}),
+        },
       }),
       ...(provider
         ? [

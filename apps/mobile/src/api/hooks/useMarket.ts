@@ -4,6 +4,8 @@ import {
   type CreateOrderInput,
   type CreateOrderResponse,
   type CreateProviderProductInput,
+  type RestockProviderProductInput,
+  type UpdateProviderProductInput,
   type OrderRowDto,
   type ProductDetailDto,
   type ProductPageDto,
@@ -139,14 +141,50 @@ export function useCreateProviderProduct() {
   });
 }
 
-export function useProviderCollectOrder() {
+function useInvalidateProviderProducts() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: PROVIDER_PRODUCTS_KEY });
+    void queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+  };
+}
+
+export function useUpdateProviderProduct() {
+  const invalidate = useInvalidateProviderProducts();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateProviderProductInput }) =>
+      apiFetch<ProviderProductDto>(`/v1/provider/products/${id}`, { method: 'PATCH', body: input }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRestockProviderProduct() {
+  const invalidate = useInvalidateProviderProducts();
+  return useMutation({
+    mutationFn: ({ id, quantity }: { id: string } & RestockProviderProductInput) =>
+      apiFetch<ProviderProductDto>(`/v1/provider/products/${id}/restock`, {
+        method: 'POST',
+        body: { quantity },
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteProviderProduct() {
+  const invalidate = useInvalidateProviderProducts();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/v1/provider/products/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useProviderMarkOrderReady() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (orderId: string) =>
-      apiFetch<void>(`/v1/provider/orders/${orderId}/collect`, { method: 'POST' }),
+      apiFetch<void>(`/v1/provider/orders/${orderId}/ready`, { method: 'POST' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROVIDER_ORDERS_KEY });
-      void queryClient.invalidateQueries({ queryKey: ['provider', 'earnings'] });
     },
   });
 }

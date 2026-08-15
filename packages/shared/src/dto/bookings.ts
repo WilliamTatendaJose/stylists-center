@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { imageUrlSchema } from './uploads.js';
 
 export const paymentMethodSchema = z.enum(['ecocash', 'cash']);
 export const bookingStatusSchema = z.enum([
@@ -35,6 +36,7 @@ export const bookingRowSchema = z.object({
   counterpartyName: z.string(),
   tint: z.string(),
   initials: z.string(),
+  imageUrl: imageUrlSchema.optional(),
   serviceName: z.string(),
   whenLabel: z.string(),
   /**

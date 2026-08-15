@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { color, radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
+import { useTheme } from '../theme.js';
 
 export interface StatTileProps {
   value: string;
@@ -19,8 +20,9 @@ const styles = StyleSheet.create({
 
 /** The 1/3-grid numeral tiles: Rating/Completed/Years, Distance/Driving/Kombi, ETA/To go/Arrive. */
 export function StatTile({ value, caption }: StatTileProps) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.tile}>
+    <View style={[styles.tile, { backgroundColor: colors.surface }]}>
       <Text variant="numeral">{value}</Text>
       <Text variant="statCaption" color="neutral600">
         {caption}

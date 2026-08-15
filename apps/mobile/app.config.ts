@@ -35,7 +35,9 @@ const config: ExpoConfig = {
   version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
-  userInterfaceStyle: 'light',
+  // Keep native surfaces (dialogs, inputs and the status/navigation bars) in
+  // sync with the in-app appearance setting instead of forcing light mode.
+  userInterfaceStyle: 'automatic',
   // No newArchEnabled flag: SDK 57 / RN 0.86 ship the New Architecture only,
   // so the config option was removed rather than defaulted.
   ios: {
@@ -69,6 +71,12 @@ const config: ExpoConfig = {
     'expo-secure-store',
     'expo-notifications',
     'expo-web-browser',
+    [
+      'expo-image-picker',
+      {
+        photosPermission: 'Allow Stylists Center to choose photos for your profile and shop items.',
+      },
+    ],
     [
       'expo-font',
       {

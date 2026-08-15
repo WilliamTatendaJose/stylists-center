@@ -35,3 +35,20 @@ export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   safety: 'Safety concern',
   other: 'Something else',
 };
+
+export type ReportStatus = 'open' | 'reviewing' | 'resolved';
+
+export const REPORT_STATUS_LABELS: Record<ReportStatus, string> = {
+  open: 'Open',
+  reviewing: 'Reviewing',
+  resolved: 'Resolved',
+};
+
+export type AppealStatus = 'none' | 'requested' | 'upheld' | 'overturned';
+
+export const APPEAL_STATUS_LABELS: Record<AppealStatus, string> = {
+  none: 'No appeal',
+  requested: 'Appeal requested',
+  upheld: 'Appeal upheld — ban stands',
+  overturned: 'Appeal overturned — ban lifted',
+};

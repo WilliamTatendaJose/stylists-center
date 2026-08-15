@@ -27,6 +27,7 @@ import {
   ReportSheet,
   EmptyPanel,
   SectionLabel,
+  TextField,
 } from '@sc/ui';
 import {
   useBookingUpdates,
@@ -37,6 +38,7 @@ import {
 } from '../../src/api/hooks/useBookings.js';
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
 import { describeError } from '../../src/api/errorMessage.js';
+import { apiAssetUrl } from '../../src/api/client.js';
 
 const STARS = [1, 2, 3, 4, 5];
 
@@ -61,6 +63,8 @@ const styles = StyleSheet.create({
   sheetError: { marginBottom: space.m },
   sheetBody: { marginBottom: space.xl },
   sheetActions: { gap: space.s },
+  reviewField: { marginBottom: space.s },
+  reviewCount: { marginBottom: space.l },
 });
 
 interface BookingCardProps {
@@ -94,7 +98,12 @@ function BookingCard({
   return (
     <Card bordered style={styles.card}>
       <View style={styles.headerRow}>
-        <Avatar initials={booking.initials} tint={booking.tint} size={44} />
+        <Avatar
+          initials={booking.initials}
+          tint={booking.tint}
+          uri={apiAssetUrl(booking.imageUrl)}
+          size={44}
+        />
         <View style={styles.middle}>
           <Text variant="cardTitle">{booking.counterpartyName}</Text>
           <Text variant="meta" color="neutral700" style={styles.meta}>
@@ -205,6 +214,7 @@ export default function Bookings() {
 
   const [rateTarget, setRateTarget] = useState<BookingRowDto | null>(null);
   const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
   const [rateError, setRateError] = useState<string | null>(null);
   const [reportTarget, setReportTarget] = useState<BookingRowDto | null>(null);
   const [reportOutcome, setReportOutcome] = useState<{ ok: boolean; message: string } | null>(null);
@@ -240,6 +250,8 @@ export default function Bookings() {
 
   const openRate = (booking: BookingRowDto) => {
     setRating(0);
+    setReviewText('');
+    setRateError(null);
     setRateTarget(booking);
   };
 
@@ -254,7 +266,10 @@ export default function Bookings() {
     }
     setRateError(null);
     createReview.mutate(
-      { bookingId: rateTarget.id, input: { rating } },
+      {
+        bookingId: rateTarget.id,
+        input: { rating, ...(reviewText.trim() ? { text: reviewText.trim() } : {}) },
+      },
       {
         onSuccess: closeRate,
         // Previously a failed rating silently left the sheet open with no
@@ -453,6 +468,20 @@ export default function Bookings() {
             </Pressable>
           ))}
         </View>
+        <View style={styles.reviewField}>
+          <TextField
+            label="Add a comment (optional)"
+            value={reviewText}
+            onChangeText={setReviewText}
+            placeholder="What went well? Help other clients know what to expect."
+            maxLength={500}
+            multiline
+            numberOfLines={4}
+          />
+        </View>
+        <Text variant="metaSmall" color="neutral600" align="right" style={styles.reviewCount}>
+          {reviewText.length}/500
+        </Text>
         {rateError ? (
           <Text
             variant="meta"
@@ -465,7 +494,7 @@ export default function Bookings() {
           </Text>
         ) : null}
         <Button
-          label={createReview.isPending ? 'Submitting…' : 'Submit rating'}
+          label={createReview.isPending ? 'Submitting…' : 'Submit review'}
           block
           disabled={rating === 0 || createReview.isPending}
           onPress={submitRating}

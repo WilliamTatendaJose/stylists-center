@@ -155,6 +155,7 @@ export class ProvidersService {
       ratingAvg: row.ratingAvg,
       completedCount: row.completedCount,
       yearsExperience: provider.yearsExperience,
+      profileImageUrl: provider.profileImageUrl,
       portfolioImageUrls: provider.portfolioImageUrls,
       priceDisplay: provider.priceDisplay,
       services: provider.services.map((s) => ({
@@ -162,6 +163,7 @@ export class ProvidersService {
         name: s.name,
         durationMinutes: s.durationMinutes,
         priceUsdCents: s.priceUsdCents,
+        imageUrls: s.imageUrls,
       })),
       ...(provider.fromPriceUsdCents !== null
         ? { fromPriceUsdCents: provider.fromPriceUsdCents }
@@ -232,7 +234,10 @@ export class ProvidersService {
    * client can act on: a category, an area, honest hours, and at least one
    * priced service.
    */
-  async createMyProfile(userId: string, input: CreateProviderProfileInput): Promise<{ id: string }> {
+  async createMyProfile(
+    userId: string,
+    input: CreateProviderProfileInput,
+  ): Promise<{ id: string }> {
     const existing = await this.prisma.providerProfile.findUnique({ where: { userId } });
     if (existing) {
       throw new BadRequestException('You already have a stylist page');

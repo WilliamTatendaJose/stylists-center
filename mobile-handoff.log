@@ -1,0 +1,13 @@
+
+> @sc/mobile@0.0.0 start C:\Users\wjose\source\repos\stylists-center\apps\mobile
+> expo start --dev-client "--" "--localhost"
+
+env: load .env
+env: export EXPO_PUBLIC_API_URL EXPO_PUBLIC_MAPTILER_KEY EXPO_PUBLIC_MAP_ENGINE EXPO_PUBLIC_MAP_TILE_URL
+Starting project at C:\Users\wjose\source\repos\stylists-center\apps\mobile
+Logs: C:\Users\wjose\source\repos\stylists-center\apps\mobile\.expo\dev\logs\start.log
+› Port 8081 is being used by another process
+› Skipping dev server
+C:\Users\wjose\source\repos\stylists-center\apps\mobile:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @sc/mobile@0.0.0 start: `expo start --dev-client "--" "--localhost"`
+Exit status 1

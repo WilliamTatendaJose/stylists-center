@@ -31,6 +31,8 @@ import {
   useSetAvailability,
 } from '../../src/api/hooks/useProviderJobs.js';
 import { describeError } from '../../src/api/errorMessage.js';
+import { apiAssetUrl } from '../../src/api/client.js';
+import { ServerConnectionPanel } from '../../src/components/ServerConnectionPanel.js';
 
 const styles = StyleSheet.create({
   availabilityCard: {
@@ -49,9 +51,17 @@ const styles = StyleSheet.create({
   actionButton: { flex: 1 },
   offerTop: { flexDirection: 'row', alignItems: 'center', gap: space.m },
   note: { marginBottom: space.m },
+  reconcilePanel: {
+    marginTop: space.m,
+    padding: space.m,
+    borderRadius: 16,
+    backgroundColor: color.surface,
+  },
   reconcileNote: { marginTop: space.s },
   sectionGap: { marginTop: space.xl },
 });
+
+const COMPLETED_HISTORY_PREVIEW_COUNT = 2;
 
 /** A live smart-match offer: accept it and it becomes a booking, or it expires. */
 function OfferCardRow({
@@ -112,7 +122,12 @@ function JobCard({
   return (
     <Card bordered style={styles.card}>
       <View style={styles.headerRow}>
-        <Avatar initials={initialsOf(booking.clientName)} tint={color.neutral900} size={44} />
+        <Avatar
+          initials={initialsOf(booking.clientName)}
+          tint={color.neutral900}
+          uri={apiAssetUrl(booking.clientImageUrl)}
+          size={44}
+        />
         <View style={styles.middle}>
           <Text variant="cardTitle">{booking.clientName}</Text>
           <Text variant="meta" color="neutral700" style={styles.meta}>
@@ -159,6 +174,27 @@ function JobCard({
           </Text>
         </>
       ) : null}
+
+      {booking.status === 'confirmed' && booking.paymentMethod === 'ecocash' ? (
+        <View style={styles.reconcilePanel}>
+          <Text variant="bodyStrong">EcoCash payment is secured.</Text>
+          <Text variant="meta" color="neutral700" style={styles.reconcileNote}>
+            After the appointment, {booking.clientName.split(' ')[0]} confirms it is done and your
+            payout is released.
+          </Text>
+        </View>
+      ) : null}
+
+      {booking.status === 'confirmed' &&
+      booking.paymentMethod === 'cash' &&
+      booking.confirmedByProvider ? (
+        <View style={styles.reconcilePanel}>
+          <Text variant="bodyStrong">You marked this job as done.</Text>
+          <Text variant="meta" color="neutral700" style={styles.reconcileNote}>
+            Waiting for {booking.clientName.split(' ')[0]} to confirm and close the cash booking.
+          </Text>
+        </View>
+      ) : null}
     </Card>
   );
 }
@@ -179,7 +215,7 @@ function initialsOf(name: string): string {
  * not be switched off.
  */
 export default function Jobs() {
-  const { data, isError, isLoading, refetch, isRefetching } = useProviderJobs();
+  const { data, isError, error, isLoading, refetch, isRefetching } = useProviderJobs();
   useProviderJobsRealtime();
 
   const confirmBooking = useConfirmBooking();
@@ -190,6 +226,7 @@ export default function Jobs() {
   const setAvailability = useSetAvailability();
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showAllCompletedHistory, setShowAllCompletedHistory] = useState(false);
 
   const busy =
     confirmBooking.isPending ||
@@ -212,6 +249,9 @@ export default function Jobs() {
   const requests = bookings.filter((b) => b.status === 'awaiting_provider');
   const upcoming = bookings.filter((b) => b.status === 'confirmed');
   const completed = bookings.filter((b) => b.status === 'completed');
+  const visibleCompleted = showAllCompletedHistory
+    ? completed
+    : completed.slice(0, COMPLETED_HISTORY_PREVIEW_COUNT);
 
   return (
     <Screen
@@ -241,14 +281,9 @@ export default function Jobs() {
       ) : null}
 
       {isError && !data ? (
-        <EmptyPanel
-          title="Couldn't load your jobs"
-          body="Check your connection and pull down to try again."
-        />
+        <ServerConnectionPanel error={error} onRetry={() => void refetch()} />
       ) : isError ? (
-        <Text variant="meta" color="neutral700" style={styles.note}>
-          Showing your last update — couldn&apos;t reach the server just now.
-        </Text>
+        <ServerConnectionPanel error={error} compact onRetry={() => void refetch()} />
       ) : null}
 
       {data ? (
@@ -370,7 +405,7 @@ export default function Jobs() {
           <SectionLabel label="Completed" count={completed.length} />
         </View>
       ) : null}
-      {completed.map((booking) => (
+      {visibleCompleted.map((booking) => (
         <JobCard
           key={booking.id}
           booking={booking}
@@ -380,6 +415,19 @@ export default function Jobs() {
           onComplete={() => {}}
         />
       ))}
+      {completed.length > COMPLETED_HISTORY_PREVIEW_COUNT ? (
+        <Button
+          label={
+            showAllCompletedHistory ? 'Show less' : `View all history (${String(completed.length)})`
+          }
+          variant="ghost"
+          block
+          style={styles.note}
+          onPress={() => {
+            setShowAllCompletedHistory((current) => !current);
+          }}
+        />
+      ) : null}
 
       {data && offers.length === 0 && bookings.length === 0 ? (
         <EmptyPanel

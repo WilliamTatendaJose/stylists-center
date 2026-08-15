@@ -13,8 +13,12 @@ const BASE_ENV: Env = {
   PORT: 4000,
   DATABASE_URL: 'postgresql://sc:sc@localhost:5433/sc_test',
   REDIS_URL: 'redis://localhost:6380',
+  UPLOAD_DIR: 'uploads',
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
+  ADMIN_JWT_ACCESS_SECRET: 'test-admin-access-secret-at-least-32-characters-long',
+  ADMIN_JWT_REFRESH_PEPPER: 'test-admin-refresh-pepper-at-least-32-characters-long',
+  ADMIN_WEB_ORIGIN: 'http://localhost:5173',
   AUTH_DEV_OTP: '000000',
   INFOBIP_DEFAULT_CHANNEL: 'whatsapp',
   PAYMENT_PROVIDER: 'fake',
@@ -116,6 +120,7 @@ describe('ProviderService management', () => {
       workingHoursLabel: 'Mon-Sat, 8-6',
       lat: -17.79,
       lng: 31.04,
+      profileImageUrl: '/uploads/public-page.jpg',
     });
     expect(updated).toMatchObject({
       displayName: 'New Public Name',
@@ -131,12 +136,25 @@ describe('ProviderService management', () => {
       name: 'Knotless braids',
       durationMinutes: 120,
       priceUsdCents: 2500,
+      imageUrls: ['/uploads/braids.jpg'],
     });
     expect(service.name).toBe('Knotless braids');
+    expect(service.imageUrls).toEqual(['/uploads/braids.jpg']);
     expect((await provider.getProfile(providerId)).services).toContainEqual(service);
+
+    const edited = await provider.updateService(service.id, providerId, {
+      name: 'Small knotless braids',
+      durationMinutes: 150,
+      priceUsdCents: 3000,
+      imageUrls: ['/uploads/braids-2.jpg'],
+    });
+    expect(edited).toMatchObject({
+      name: 'Small knotless braids',
+      imageUrls: ['/uploads/braids-2.jpg'],
+    });
   });
 
-  it('creates inventory, exposes incoming orders, and records cash collection earnings', async () => {
+  it('creates inventory, exposes incoming orders, and leaves collection confirmation to the buyer', async () => {
     const product = await provider.createProduct(providerId, {
       name: 'Braiding hair',
       description: 'One packet',
@@ -168,21 +186,32 @@ describe('ProviderService management', () => {
     expect((await provider.getOrders(providerId))[0]).toMatchObject({
       id: order.id,
       buyerName: 'Test Buyer',
-      canMarkCollected: true,
+      canMarkReady: true,
     });
 
-    await provider.collectOrder(order.id, providerId);
+    // A held payment must stay held until the buyer confirms collection.
+    await prisma.payment.create({
+      data: {
+        orderId: order.id,
+        provider: 'fake-ecocash',
+        status: 'held',
+        amountUsdCents: order.totalUsdCents,
+        createdAt: new Date(Date.now() - 1000),
+      },
+    });
+
+    await provider.markOrderReady(order.id, providerId);
     expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(
-      'collected',
+      'ready_for_collection',
     );
     expect(
       await prisma.payment.findFirst({ where: { orderId: order.id, status: 'released' } }),
-    ).not.toBeNull();
-    const earnings = await provider.getEarnings(providerId);
-    // No per-payment fee — providers pay a flat subscription instead, so the
-    // full $10.00 order amount is released, not $10.00 minus a 5% cut.
-    expect(earnings.releasedUsdCents).toBe(1000);
-    expect(earnings.pendingUsdCents).toBe(0);
+    ).toBeNull();
+    expect((await provider.getOrders(providerId))[0]).toMatchObject({
+      id: order.id,
+      status: 'ready_for_collection',
+      canMarkReady: false,
+    });
   });
 
   describe('subscription', () => {

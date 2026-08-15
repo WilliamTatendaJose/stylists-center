@@ -11,6 +11,7 @@ import { useCategories } from '../../src/api/hooks/useCategories.js';
 import { useGeoSearch } from '../../src/api/hooks/useGeo.js';
 import { useSessionStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
+import { apiAssetUrl } from '../../src/api/client.js';
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -184,7 +185,12 @@ export default function MapSearch() {
           {list.map((provider) => (
             <ListRow
               key={provider.id}
-              avatar={{ initials: provider.initials, tint: provider.tint, size: 40 }}
+              avatar={{
+                initials: provider.initials,
+                tint: provider.tint,
+                uri: apiAssetUrl(provider.imageUrl),
+                size: 40,
+              }}
               title={provider.displayName}
               meta={`${provider.categoryName} · ${provider.distanceKm.toFixed(1)} km · from $${(
                 provider.fromPriceUsdCents / 100

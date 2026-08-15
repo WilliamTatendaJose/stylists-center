@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { MAX_BROWSE_RADIUS_KM, MIN_BROWSE_RADIUS_KM } from '@sc/shared';
+import {
+  clampBrowseRadiusKm,
+  DEFAULT_BROWSE_RADIUS_KM,
+  MAX_BROWSE_RADIUS_KM,
+  MIN_BROWSE_RADIUS_KM,
+} from '@sc/shared';
 import { space } from '@sc/tokens';
 import { RangeInput, Text } from '@sc/ui';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
@@ -26,19 +31,25 @@ const styles = StyleSheet.create({
 export function DistanceFilter() {
   const maxDistanceKm = useSessionStore((s) => s.maxDistanceKm);
   const setMaxDistanceKm = useSessionStore((s) => s.setMaxDistanceKm);
+  const safeStoreValue = Number.isFinite(maxDistanceKm)
+    ? clampBrowseRadiusKm(maxDistanceKm)
+    : DEFAULT_BROWSE_RADIUS_KM;
 
-  const [liveKm, setLiveKm] = useState(maxDistanceKm);
+  const [liveKm, setLiveKm] = useState(safeStoreValue);
   // Stays in sync if the store's value changes for a reason other than this
   // slider's own drag — e.g. Market's slider moving while Find is mounted in
   // the background, since React Navigation tabs are kept alive, not remounted.
   useEffect(() => {
-    setLiveKm(maxDistanceKm);
-  }, [maxDistanceKm]);
+    setLiveKm((current) => (current === safeStoreValue ? current : safeStoreValue));
+  }, [safeStoreValue]);
 
   const debouncedKm = useDebouncedValue(liveKm, 400);
   useEffect(() => {
-    if (debouncedKm !== maxDistanceKm) setMaxDistanceKm(debouncedKm);
-  }, [debouncedKm, maxDistanceKm, setMaxDistanceKm]);
+    const nextValue = Number.isFinite(debouncedKm)
+      ? clampBrowseRadiusKm(debouncedKm)
+      : DEFAULT_BROWSE_RADIUS_KM;
+    if (nextValue !== safeStoreValue) setMaxDistanceKm(nextValue);
+  }, [debouncedKm, safeStoreValue, setMaxDistanceKm]);
 
   return (
     <View style={styles.wrap}>
@@ -55,7 +66,9 @@ export function DistanceFilter() {
         max={MAX_BROWSE_RADIUS_KM}
         step={1}
         value={liveKm}
-        onChange={setLiveKm}
+        onChange={(value) => {
+          if (Number.isFinite(value)) setLiveKm(clampBrowseRadiusKm(value));
+        }}
         accessibilityLabel="Maximum distance to search"
       />
     </View>

@@ -30,6 +30,7 @@ import {
 } from '../payments/payment-gateway.port';
 import { TrustService } from '../trust/trust.service';
 import { toBookingRowDto } from './mappers';
+import { expireStaleBookingRequests } from './booking-expiry';
 
 const NON_BLOCKING_STATUSES = ['cancelled', 'declined'] as const;
 
@@ -151,6 +152,7 @@ export class BookingsService {
   }
 
   async listForClient(clientId: string): Promise<BookingRowDto[]> {
+    await expireStaleBookingRequests(this.prisma, { clientId });
     const bookings = await this.prisma.booking.findMany({
       where: { clientId },
       include: { provider: true, service: true },

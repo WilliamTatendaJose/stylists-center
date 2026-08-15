@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { color, space } from '@sc/tokens';
+import { MessageCircle } from 'lucide-react-native';
+import { color, radius, space } from '@sc/tokens';
 import type { AuthTokens, RequestOtpResponse } from '@sc/shared';
 import { Screen, ScreenHeader, Text, TextField, Button, Pressable } from '@sc/ui';
 import { apiFetch } from '../../src/api/client.js';
@@ -10,7 +11,25 @@ import { useAuthStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
-  body: { marginBottom: space.xxl },
+  channel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    padding: space.l,
+    marginBottom: space.xxl,
+    borderRadius: radius.tile,
+    backgroundColor: color.neutral900,
+  },
+  channelIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: radius.pill,
+    backgroundColor: color.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  grow: { flex: 1, minWidth: 0 },
+  body: { marginTop: 2 },
   field: { marginBottom: space.m },
   error: { marginTop: space.s, marginBottom: space.m },
   resend: { marginTop: space.l, alignSelf: 'center' },
@@ -76,9 +95,19 @@ export default function OtpEntry() {
 
   return (
     <Screen header={<ScreenHeader title="Verify" onBack={onBack} />}>
-      <Text variant="body" color="neutral700" style={styles.body}>
-        Enter the 6-digit code we sent to {params.phone}.
-      </Text>
+      <View style={styles.channel}>
+        <View style={styles.channelIcon}>
+          <MessageCircle size={22} color={color.accent700} strokeWidth={1.9} />
+        </View>
+        <View style={styles.grow}>
+          <Text variant="cardTitle" color={color.onDark.text}>
+            Check your WhatsApp
+          </Text>
+          <Text variant="meta" color={color.onDark.body} style={styles.body}>
+            We sent a 6-digit code to {params.phone}.
+          </Text>
+        </View>
+      </View>
 
       <View style={styles.field}>
         <TextField
@@ -120,7 +149,7 @@ export default function OtpEntry() {
       ) : null}
 
       <Button
-        label={loading ? 'Verifying…' : 'Verify'}
+        label={loading ? 'Verifying…' : 'Verify and continue'}
         block
         size="lg"
         arrow
@@ -140,7 +169,7 @@ export default function OtpEntry() {
         style={styles.resend}
       >
         <Text variant="meta" color={color.accent700}>
-          {resending ? 'Sending SMS…' : "Didn't get it? Send by SMS"}
+          {resending ? 'Sending SMS…' : "Didn't get it? Use SMS instead"}
         </Text>
       </Pressable>
     </Screen>

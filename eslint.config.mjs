@@ -53,6 +53,19 @@ export default tseslint.config(
     },
   },
 
+  // apps/admin is a plain React web app — same strict preset as the API and
+  // packages, since there's no RN-types noise to weigh against it here.
+  {
+    files: ['apps/admin/**/*.ts', 'apps/admin/**/*.tsx'],
+    extends: [tseslint.configs.strictTypeChecked, tseslint.configs.stylisticTypeChecked],
+    languageOptions: {
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+
   // @sc/shared is imported by the NestJS API as well as the app, so it must stay
   // platform-agnostic. Same for the API itself.
   {
@@ -99,6 +112,17 @@ export default tseslint.config(
       'react-native/no-inline-styles': 'error',
       'react-native/no-color-literals': 'error',
       'react-native/no-unused-styles': 'warn',
+    },
+  },
+
+  {
+    files: ['apps/admin/**/*.tsx'],
+    plugins: {
+      'react-hooks': reactHooks,
+    },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
     },
   },
 

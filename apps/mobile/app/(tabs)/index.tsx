@@ -18,6 +18,7 @@ import {
   Button,
   Sheet,
   EmptyPanel,
+  useTheme,
 } from '@sc/ui';
 import { DistanceFilter } from '../../src/components/DistanceFilter.js';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
@@ -28,6 +29,7 @@ import { useMe, useSetActiveRole } from '../../src/api/hooks/useMe.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useRequestStore, useSessionStore } from '../../src/state/index.js';
 import { useDeviceLocation } from '../../src/location/useDeviceLocation.js';
+import { apiAssetUrl } from '../../src/api/client.js';
 
 const styles = StyleSheet.create({
   header: { gap: 8 },
@@ -93,7 +95,12 @@ const MIN_SEARCH_QUERY = 2;
 function ProviderRow({ provider }: { provider: ProviderListRowDto }) {
   return (
     <ListRow
-      avatar={{ initials: provider.initials, tint: provider.tint, size: 54 }}
+      avatar={{
+        initials: provider.initials,
+        tint: provider.tint,
+        uri: apiAssetUrl(provider.imageUrl),
+        size: 54,
+      }}
       title={provider.displayName}
       titleBadge={provider.verified ? <BadgeCheck size={15} color={color.accent} /> : undefined}
       meta={`${provider.categoryName} · ${provider.areaName}`}
@@ -140,6 +147,7 @@ function LoadMore({
 }
 
 export default function Find() {
+  const { colors } = useTheme();
   const maxDistanceKm = useSessionStore((s) => s.maxDistanceKm);
 
   const {
@@ -231,9 +239,9 @@ export default function Find() {
           onPress={() => {
             router.push('/profile');
           }}
-          style={styles.profileButton}
+          style={[styles.profileButton, { borderColor: colors.divider }]}
         >
-          <User size={16} strokeWidth={1.8} color={color.text} />
+          <User size={16} strokeWidth={1.8} color={colors.text} />
         </Pressable>
       </View>
       {/* The label states what is actually true of the coordinates driving
@@ -307,9 +315,9 @@ export default function Find() {
             accessibilityRole="button"
             accessibilityLabel="Search on the map"
             onPress={goMap}
-            style={styles.mapButton}
+            style={[styles.mapButton, { backgroundColor: colors.neutral900 }]}
           >
-            <Compass size={18} strokeWidth={1.7} color={color.bg} />
+            <Compass size={18} strokeWidth={1.7} color={colors.bg} />
           </Pressable>
         </View>
 

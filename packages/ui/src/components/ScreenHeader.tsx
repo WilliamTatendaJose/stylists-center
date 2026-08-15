@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react-native';
 import { color } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface ScreenHeaderProps {
   title?: string;
@@ -37,7 +38,8 @@ export function ScreenHeader({
   right,
   onDark = false,
 }: ScreenHeaderProps) {
-  const ink = onDark ? color.onDark.text : color.text;
+  const { colors } = useTheme();
+  const ink = onDark ? color.onDark.text : colors.text;
 
   return (
     <View>

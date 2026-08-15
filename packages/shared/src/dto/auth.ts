@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { imageUrlSchema } from './uploads.js';
 
 /**
  * Auth DTOs (SRS auth flow, plan §6). Fed into NestJS via nestjs-zod on the
@@ -52,6 +53,7 @@ export const meSchema = z.object({
   id: z.uuid(),
   phone: z.string(),
   displayName: z.string(),
+  avatarImageUrl: imageUrlSchema.nullable(),
   activeRole: activeRoleSchema,
   hasProviderProfile: z.boolean(),
   verificationStatus: z.enum(['unverified', 'pending', 'verified']),
@@ -62,6 +64,7 @@ export type Me = z.infer<typeof meSchema>;
 
 export const updateProfileSchema = z.object({
   displayName: z.string().trim().min(2).max(60),
+  avatarImageUrl: imageUrlSchema.nullable().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 

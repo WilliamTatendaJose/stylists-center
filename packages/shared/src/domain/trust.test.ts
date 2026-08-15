@@ -5,6 +5,8 @@ import {
   NO_SHOW_COUNT_FOR_AUTO_BAN,
   REPORT_COUNT_FOR_ADMIN_REVIEW,
   REPORT_REASON_LABELS,
+  REPORT_STATUS_LABELS,
+  APPEAL_STATUS_LABELS,
 } from './trust.js';
 
 describe('report escalation', () => {
@@ -37,6 +39,22 @@ describe('report reasons', () => {
   it('has a label for every reason offered in the Report a problem sheet', () => {
     for (const reason of ['no_show', 'misconduct', 'safety', 'other'] as const) {
       expect(REPORT_REASON_LABELS[reason]).toBeTruthy();
+    }
+  });
+});
+
+describe('report status labels', () => {
+  it('has a label for every status the admin console can set', () => {
+    for (const status of ['open', 'reviewing', 'resolved'] as const) {
+      expect(REPORT_STATUS_LABELS[status]).toBeTruthy();
+    }
+  });
+});
+
+describe('appeal status labels', () => {
+  it('has a label for every appeal state a ban can be in', () => {
+    for (const status of ['none', 'requested', 'upheld', 'overturned'] as const) {
+      expect(APPEAL_STATUS_LABELS[status]).toBeTruthy();
     }
   });
 });

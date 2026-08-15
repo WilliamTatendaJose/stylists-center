@@ -1,7 +1,9 @@
-import { Body, Controller, Get, Ip, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Ip, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
+import { ImageStorageService, MAX_IMAGE_BYTES, type UploadedImageFile } from '../provider/image-storage.service';
 import {
   RequestOtpDto,
   VerifyOtpDto,
@@ -33,7 +35,10 @@ export class AuthController {
 
 @Controller('me')
 export class MeController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly images: ImageStorageService,
+  ) {}
 
   @UseGuards(JwtAuthGuard)
   @Get()
@@ -51,6 +56,13 @@ export class MeController {
   @Patch()
   updateProfile(@CurrentUser() user: { id: string }, @Body() dto: UpdateProfileDto) {
     return this.auth.updateProfile(user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('images')
+  @UseInterceptors(FileInterceptor('image', { limits: { files: 1, fileSize: MAX_IMAGE_BYTES } }))
+  uploadImage(@UploadedFile() file: UploadedImageFile | undefined) {
+    return this.images.save(file);
   }
 
   @UseGuards(JwtAuthGuard)

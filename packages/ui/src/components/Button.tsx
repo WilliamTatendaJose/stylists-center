@@ -3,6 +3,7 @@ import { ArrowRight } from 'lucide-react-native';
 import { color, radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'outlineOnAccent' | 'whiteOnAccent';
 export type ButtonSize = 'md' | 'lg';
@@ -30,6 +31,9 @@ interface VariantStyle {
 // accentStrong (not accent700) here: this is a FILLED button, so the accent
 // itself is the background, not body-size text on white — the accent700
 // contrast rule (tokens.test.ts) governs text colour, not fills.
+// Kept as the light-palette reference for the variant vocabulary; runtime
+// colours are resolved from the active theme below.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VARIANTS: Record<ButtonVariant, VariantStyle> = {
   primary: { container: { backgroundColor: color.accent }, textColor: color.bg, onDark: true },
   secondary: {
@@ -87,7 +91,14 @@ export function Button({
   arrow = false,
   style,
 }: ButtonProps) {
-  const v = VARIANTS[variant];
+  const { colors } = useTheme();
+  const v: VariantStyle = {
+    primary: { container: { backgroundColor: colors.accent }, textColor: colors.bg, onDark: true },
+    secondary: { container: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider }, textColor: colors.text, onDark: false },
+    ghost: { container: { backgroundColor: 'transparent' }, textColor: colors.neutral700, onDark: false },
+    outlineOnAccent: { container: { backgroundColor: 'transparent', borderWidth: 2, borderColor: colors.bg }, textColor: colors.bg, onDark: true },
+    whiteOnAccent: { container: { backgroundColor: colors.bg }, textColor: colors.accent700, onDark: false },
+  }[variant];
   const sizeStyle = SIZE_PADDING[size];
   // With an arrow, the design pushes it to the far edge (`margin-left:auto`
   // on the icon) rather than centering it next to the label — most visible on

@@ -1,7 +1,8 @@
 import { StyleSheet, type ViewStyle } from 'react-native';
-import { color, radius, space } from '@sc/tokens';
+import { radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface ChipProps {
   label: string;
@@ -25,9 +26,10 @@ const styles = StyleSheet.create({
  * caption pattern).
  */
 export function Chip({ label, selected = false, onPress }: ChipProps) {
+  const { colors } = useTheme();
   const containerStyle: ViewStyle = {
-    backgroundColor: selected ? color.accent : 'transparent',
-    borderColor: selected ? color.accent : color.divider,
+    backgroundColor: selected ? colors.accent : 'transparent',
+    borderColor: selected ? colors.accent : colors.divider,
   };
 
   return (
@@ -38,7 +40,7 @@ export function Chip({ label, selected = false, onPress }: ChipProps) {
       onPress={onPress}
       style={[styles.base, containerStyle]}
     >
-      <Text variant="body" color={selected ? color.bg : color.text}>
+      <Text variant="body" color={selected ? colors.bg : colors.text}>
         {label}
       </Text>
     </Pressable>

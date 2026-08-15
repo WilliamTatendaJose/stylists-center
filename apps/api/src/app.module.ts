@@ -20,6 +20,16 @@ import { WalletModule } from './modules/wallet/wallet.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { MarketModule } from './modules/market/market.module';
 import { ProviderModule } from './modules/provider/provider.module';
+import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
+import { AdminTrustModule } from './modules/admin-trust/admin-trust.module';
+import { AdminProvidersModule } from './modules/admin-providers/admin-providers.module';
+import { AdminOverviewModule } from './modules/admin-overview/admin-overview.module';
+import { AdminAuditModule } from './modules/admin-audit/admin-audit.module';
+import { AdminPaymentsModule } from './modules/admin-payments/admin-payments.module';
+import { AdminStaffModule } from './modules/admin-staff/admin-staff.module';
+import { AdminCatalogModule } from './modules/admin-catalog/admin-catalog.module';
+import { AdminLookupModule } from './modules/admin-lookup/admin-lookup.module';
+import { AdminReviewsModule } from './modules/admin-reviews/admin-reviews.module';
 
 @Module({
   imports: [
@@ -51,6 +61,16 @@ import { ProviderModule } from './modules/provider/provider.module';
     ReportsModule,
     MarketModule,
     ProviderModule,
+    AdminAuthModule,
+    AdminTrustModule,
+    AdminProvidersModule,
+    AdminOverviewModule,
+    AdminAuditModule,
+    AdminPaymentsModule,
+    AdminStaffModule,
+    AdminCatalogModule,
+    AdminLookupModule,
+    AdminReviewsModule,
   ],
   providers: [
     /**

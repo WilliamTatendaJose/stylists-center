@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { bookingStatusSchema, paymentMethodSchema } from './bookings.js';
+import { imageUrlSchema } from './uploads.js';
 
 /**
  * A booking as the STYLIST sees it. Deliberately not BookingRowDto: that one
@@ -11,6 +12,7 @@ export const providerBookingRowSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   clientName: z.string(),
+  clientImageUrl: imageUrlSchema.optional(),
   serviceName: z.string(),
   whenLabel: z.string(),
   startsAt: z.iso.datetime(),

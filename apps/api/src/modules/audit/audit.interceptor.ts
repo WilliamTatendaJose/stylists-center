@@ -5,6 +5,8 @@ import { PrismaService } from '../prisma/prisma.service';
 
 interface AuthenticatedRequest extends Request {
   user?: { id: string };
+  /** Set by AdminJwtAuthGuard on /v1/admin/* routes — mutually exclusive with `user`. */
+  admin?: { id: string };
 }
 
 /**
@@ -45,6 +47,7 @@ export class AuditInterceptor implements NestInterceptor {
               // conversion to be explicit rather than relying on `?.`'s
               // undefined to satisfy it.
               actorId: req.user?.id ?? null,
+              adminActorId: req.admin?.id ?? null,
               // req.path is fully typed as string; req.route.path (the
               // matched-pattern form, e.g. "/bookings/:id") is attached
               // dynamically by Express and typed `any` — not worth an unsafe

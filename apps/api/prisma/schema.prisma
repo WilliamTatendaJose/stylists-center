@@ -125,6 +125,8 @@ model User {
   id                 String             @id @default(uuid())
   phone              String             @unique
   displayName        String
+  /// Client-controlled photo used for their identity in stylist jobs and messages.
+  avatarImageUrl     String?
   activeRole         ActiveRole         @default(client)
   verificationStatus VerificationStatus @default(unverified)
   tokenVersion       Int                @default(0)
@@ -179,6 +181,7 @@ model ProviderProfile {
   cityId             String
   city               City         @relation(fields: [cityId], references: [id])
   yearsExperience    Int          @default(0)
+  profileImageUrl    String?
   portfolioImageUrls String[]     @default([])
   priceDisplay       PriceDisplay @default(list)
   fromPriceUsdCents  Int?
@@ -207,6 +210,7 @@ model ProviderProfile {
   products             Product[]
   orders               Order[]
   subscriptionPayments Payment[]    @relation("SubscriptionPayments")
+  payouts              Payout[]
 
   @@index([categoryId])
   @@index([cityId])
@@ -221,6 +225,7 @@ model Service {
   name            String
   durationMinutes Int
   priceUsdCents   Int
+  imageUrls       String[]        @default([])
   createdAt       DateTime        @default(now())
 
   bookings Booking[]
@@ -355,10 +360,31 @@ model Payment {
   @@index([subscriptionProviderId])
 }
 
+/// `Payment.status = 'released'` only marks escrow as settled inside this
+/// ledger — nothing in this codebase actually moves money to a provider
+/// (see PaymentGatewayPort: createCheckout/verifyCallback, no
+/// transfer/payout method). A Payout row is an admin's attestation that a
+/// real-world transfer (bank, mobile money, cash) happened outside the app;
+/// it doesn't touch Payment, so the escrow ledger and the "did we actually
+/// pay them" record stay two honest, separately-auditable things. Append-only
+/// like Payment, for the same audit-trail reason.
+model Payout {
+  id             String          @id @default(uuid())
+  providerId     String
+  provider       ProviderProfile @relation(fields: [providerId], references: [id])
+  amountUsdCents Int
+  note           String?
+  createdAt      DateTime        @default(now())
+
+  @@index([providerId])
+}
+
 /// Mirrors @sc/shared's OrderStatus exactly.
 enum OrderStatus {
   /// Paid or pledged, stock held for the buyer, waiting to be collected.
-  reserved
+    reserved
+    /// Seller says the goods are packed; buyer may now confirm collection.
+    ready_for_collection
   /// Buyer confirmed they have it; escrow released.
   collected
   cancelled
@@ -448,6 +474,8 @@ model Report {
   booking    Booking?     @relation(fields: [bookingId], references: [id])
   reason     ReportReason
   status     ReportStatus @default(open)
+  /// Set by the admin console when a report moves to `resolved` — the record of why.
+  resolutionNote String?
   createdAt  DateTime     @default(now())
 
   @@index([reportedId])
@@ -476,6 +504,8 @@ model Ban {
   reason       String
   trigger      BanTrigger
   appealStatus AppealStatus @default(none)
+  /// The admin console's rationale for the current appealStatus — set whenever an appeal is upheld or overturned.
+  appealNote   String?
   createdAt    DateTime     @default(now())
 
   @@index([userId])
@@ -513,7 +543,22 @@ model Message {
   text           String
   createdAt      DateTime     @default(now())
 
+  attachments MessageAttachment[]
+
   @@index([conversationId])
+}
+
+model MessageAttachment {
+  id        String   @id @default(uuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url       String
+  name      String
+  mimeType  String
+  sizeBytes Int
+  createdAt DateTime @default(now())
+
+  @@index([messageId])
 }
 
 /// A verified agent's referral identity. `status` gates whether the agent is
@@ -612,16 +657,62 @@ model RefreshToken {
 
 /// Append-only audit trail (SRS NFR: "all admin actions logged with actor and
 /// timestamp"). Written by a global interceptor, never mutated after insert.
+/// `actorId`/`adminActorId` are mutually exclusive — a request is either a
+/// signed-in user's or a staff member's, never both.
 model AuditLog {
-  id         String   @id @default(uuid())
-  actorId    String?
-  actor      User?    @relation(fields: [actorId], references: [id])
-  action     String
-  targetType String?
-  targetId   String?
-  ip         String?
-  at         DateTime @default(now())
+  id           String     @id @default(uuid())
+  actorId      String?
+  actor        User?      @relation(fields: [actorId], references: [id])
+  adminActorId String?
+  adminActor   AdminUser? @relation(fields: [adminActorId], references: [id])
+  action       String
+  targetType   String?
+  targetId     String?
+  ip           String?
+  at           DateTime   @default(now())
 
   @@index([actorId])
+  @@index([adminActorId])
   @@index([at])
+}
+
+/// Staff identity for the admin console — deliberately separate from `User`
+/// (email + password, not phone + OTP): staff aren't clients or providers,
+/// and the two login flows should never be able to authenticate as each
+/// other by construction, not just by convention.
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  /// Same lever as User.tokenVersion: bump to invalidate every live admin session instantly (disabling a staff account).
+  tokenVersion Int      @default(0)
+  /// A revoked staff account — kept rather than deleted so AuditLog.adminActor
+  /// stays resolvable for their past actions. Checked at login and on every
+  /// access-token verification, so revocation takes effect immediately.
+  disabled     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  refreshTokens   AdminRefreshToken[]
+  auditLogEntries AuditLog[]
+
+  @@index([email])
+}
+
+/// Mirrors RefreshToken's rotation-with-reuse-detection scheme exactly, kept
+/// as a separate table so an admin session can never be confused with (or
+/// forged from) a user session's refresh token.
+model AdminRefreshToken {
+  id          String    @id @default(uuid())
+  adminUserId String
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id])
+  familyId    String
+  tokenHash   String    @unique
+  revoked     Boolean   @default(false)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+
+  @@index([adminUserId])
+  @@index([familyId])
 }

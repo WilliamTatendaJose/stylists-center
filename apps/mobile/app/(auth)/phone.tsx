@@ -1,16 +1,30 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { color, space } from '@sc/tokens';
+import { MessageCircle, ShieldCheck } from 'lucide-react-native';
+import { color, radius, space } from '@sc/tokens';
 import type { RequestOtpResponse } from '@sc/shared';
-import { Screen, ScreenHeader, Text, TextField, Button } from '@sc/ui';
+import { Screen, ScreenHeader, Text, TextField, Button, Card } from '@sc/ui';
 import { apiFetch } from '../../src/api/client.js';
 import { describeError, isValidationError } from '../../src/api/errorMessage.js';
 
 const styles = StyleSheet.create({
-  body: { marginBottom: space.xxl },
+  hero: { padding: space.xxl, marginBottom: space.xxl, backgroundColor: color.neutral900 },
+  icon: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: color.bg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.l,
+  },
+  heroTitle: { marginBottom: space.s },
+  body: { marginBottom: space.m },
+  secureRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   field: { marginBottom: space.m },
   error: { marginTop: space.s, marginBottom: space.m },
+  hint: { marginTop: space.m, textAlign: 'center' },
 });
 
 /** Phone entry (SRS auth, plan §6/§11 R4: phone + OTP, WhatsApp-first with SMS fallback). */
@@ -48,9 +62,23 @@ export default function PhoneEntry() {
 
   return (
     <Screen header={<ScreenHeader title="Sign in" showBack={false} />}>
-      <Text variant="body" color="neutral700" style={styles.body}>
-        Enter your phone number to get started. We&apos;ll text you a code — no password needed.
-      </Text>
+      <Card style={styles.hero}>
+        <View style={styles.icon}>
+          <MessageCircle size={25} color={color.accent700} strokeWidth={1.9} />
+        </View>
+        <Text variant="h2Small" color={color.onDark.text} style={styles.heroTitle}>
+          Continue with WhatsApp
+        </Text>
+        <Text variant="body" color={color.onDark.body} style={styles.body}>
+          Enter your Zimbabwean mobile number. We&apos;ll send a 6-digit code to WhatsApp.
+        </Text>
+        <View style={styles.secureRow}>
+          <ShieldCheck size={17} color={color.accent400} strokeWidth={1.9} />
+          <Text variant="meta" color={color.onDark.body}>
+            Secure sign-in. No password to remember.
+          </Text>
+        </View>
+      </Card>
 
       <View style={styles.field}>
         <TextField
@@ -81,7 +109,7 @@ export default function PhoneEntry() {
       ) : null}
 
       <Button
-        label={loading ? 'Sending…' : 'Send code'}
+        label={loading ? 'Sending…' : 'Send WhatsApp code'}
         block
         size="lg"
         arrow
@@ -90,6 +118,9 @@ export default function PhoneEntry() {
           void sendCode();
         }}
       />
+      <Text variant="metaSmall" color="neutral600" style={styles.hint}>
+        If WhatsApp delivery fails, you can request an SMS on the next screen.
+      </Text>
     </Screen>
   );
 }

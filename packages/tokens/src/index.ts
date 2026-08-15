@@ -1,4 +1,4 @@
-export { color, bodyAccent, avatarTint } from './color.js';
+export { color, darkColor, bodyAccent, avatarTint } from './color.js';
 export {
   fontFamily,
   fontAssets,

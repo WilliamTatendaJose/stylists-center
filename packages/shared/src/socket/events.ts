@@ -32,6 +32,7 @@ export interface ServerToClientEvents {
   'match.cancelled': (payload: { matchId: string }) => void;
   'booking.updated': (booking: BookingRowDto) => void;
   'message.created': (message: MessageDto) => void;
+  'conversation.read': (payload: { conversationId: string; readByUserId: string }) => void;
   'message.typing': (payload: { conversationId: string; userId: string }) => void;
   'trip.location': (payload: {
     tripId: string;

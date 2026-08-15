@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { ProviderGuard } from './provider.guard';
 import { CurrentProvider } from './current-provider.decorator';
@@ -9,7 +21,15 @@ import {
   PaySubscriptionDto,
   SetAvailabilityDto,
   UpdateProviderProfileDto,
+  UpdateProviderServiceDto,
+  UpdateProviderProductDto,
+  RestockProviderProductDto,
 } from './dto';
+import {
+  ImageStorageService,
+  MAX_IMAGE_BYTES,
+  type UploadedImageFile,
+} from './image-storage.service';
 
 /**
  * Everything the stylist side of the app can do. JwtAuthGuard establishes
@@ -19,7 +39,16 @@ import {
 @Controller('provider')
 @UseGuards(JwtAuthGuard, ProviderGuard)
 export class ProviderController {
-  constructor(private readonly provider: ProviderService) {}
+  constructor(
+    private readonly provider: ProviderService,
+    private readonly images: ImageStorageService,
+  ) {}
+
+  @Post('images')
+  @UseInterceptors(FileInterceptor('image', { limits: { files: 1, fileSize: MAX_IMAGE_BYTES } }))
+  uploadImage(@UploadedFile() file: UploadedImageFile | undefined) {
+    return this.images.save(file);
+  }
 
   @Get('jobs')
   jobs(@CurrentProvider() providerId: string) {
@@ -46,6 +75,15 @@ export class ProviderController {
     return this.provider.addService(providerId, dto);
   }
 
+  @Patch('services/:id')
+  updateService(
+    @Param('id') id: string,
+    @CurrentProvider() providerId: string,
+    @Body() dto: UpdateProviderServiceDto,
+  ) {
+    return this.provider.updateService(id, providerId, dto);
+  }
+
   @Get('products')
   products(@CurrentProvider() providerId: string) {
     return this.provider.getProducts(providerId);
@@ -56,14 +94,38 @@ export class ProviderController {
     return this.provider.createProduct(providerId, dto);
   }
 
+  @Patch('products/:id')
+  updateProduct(
+    @Param('id') id: string,
+    @CurrentProvider() providerId: string,
+    @Body() dto: UpdateProviderProductDto,
+  ) {
+    return this.provider.updateProduct(id, providerId, dto);
+  }
+
+  @Post('products/:id/restock')
+  restockProduct(
+    @Param('id') id: string,
+    @CurrentProvider() providerId: string,
+    @Body() dto: RestockProviderProductDto,
+  ) {
+    return this.provider.restockProduct(id, providerId, dto.quantity);
+  }
+
+  /** Soft-delete preserves the immutable item snapshots on earlier orders. */
+  @Delete('products/:id')
+  deleteProduct(@Param('id') id: string, @CurrentProvider() providerId: string) {
+    return this.provider.deleteProduct(id, providerId);
+  }
+
   @Get('orders')
   orders(@CurrentProvider() providerId: string) {
     return this.provider.getOrders(providerId);
   }
 
-  @Post('orders/:id/collect')
-  collectOrder(@Param('id') id: string, @CurrentProvider() providerId: string) {
-    return this.provider.collectOrder(id, providerId);
+  @Post('orders/:id/ready')
+  markOrderReady(@Param('id') id: string, @CurrentProvider() providerId: string) {
+    return this.provider.markOrderReady(id, providerId);
   }
 
   @Post('availability')

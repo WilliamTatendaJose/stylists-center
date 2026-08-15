@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { color, radius } from '@sc/tokens';
+import { radius } from '@sc/tokens';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface CardProps {
   children: ReactNode;
@@ -14,16 +15,15 @@ export interface CardProps {
 
 const styles = StyleSheet.create({
   base: { borderRadius: radius.card },
-  bordered: { borderWidth: 1, borderColor: color.divider },
-  surface: { backgroundColor: color.surface },
 });
 
 /** The radius-20 card container used for the smart-match promo, offer cards, payment method cards, etc. */
 export function Card({ children, bordered = false, surface = false, onPress, style }: CardProps) {
+  const { colors } = useTheme();
   const composed = [
     styles.base,
-    bordered ? styles.bordered : null,
-    surface ? styles.surface : null,
+    bordered ? { borderWidth: 1, borderColor: colors.divider } : null,
+    surface ? { backgroundColor: colors.surface } : null,
     style,
   ];
 

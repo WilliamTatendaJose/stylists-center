@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { latLngSchema } from './matching.js';
+import { imageUrlSchema } from './uploads.js';
 
 export const categorySchema = z.object({
   id: z.uuid(),
@@ -13,6 +14,7 @@ export const providerListRowSchema = z.object({
   displayName: z.string(),
   tint: z.string(),
   initials: z.string(),
+  imageUrl: imageUrlSchema.optional(),
   verified: z.boolean(),
   /** Whether the provider is taking work right now — search returns unavailable stylists, so rows must be able to say so. */
   acceptingBookings: z.boolean(),
@@ -43,6 +45,7 @@ export const serviceSchema = z.object({
   name: z.string(),
   durationMinutes: z.number().int(),
   priceUsdCents: z.number().int(),
+  imageUrls: z.array(imageUrlSchema).max(5),
 });
 export type ServiceDto = z.infer<typeof serviceSchema>;
 
@@ -66,7 +69,8 @@ export const providerProfileSchema = z.object({
   ratingAvg: z.number(),
   completedCount: z.number().int(),
   yearsExperience: z.number().int(),
-  portfolioImageUrls: z.array(z.string()).max(5),
+  profileImageUrl: imageUrlSchema.nullable(),
+  portfolioImageUrls: z.array(imageUrlSchema).max(5),
   /** 'list' shows the full priced service menu; 'from' shows a single "from $X" panel. */
   priceDisplay: z.enum(['list', 'from']),
   services: z.array(serviceSchema),
@@ -142,6 +146,7 @@ export const createServiceInputSchema = z.object({
   name: z.string().trim().min(2).max(60),
   durationMinutes: z.number().int().min(10).max(480),
   priceUsdCents: z.number().int().min(100).max(100_000),
+  imageUrls: z.array(imageUrlSchema).max(5).default([]),
 });
 export type CreateServiceInput = z.infer<typeof createServiceInputSchema>;
 
@@ -172,6 +177,8 @@ export const providerManagementProfileSchema = z.object({
   lat: z.number().min(-90).max(90),
   lng: z.number().min(-180).max(180),
   services: z.array(serviceSchema),
+  profileImageUrl: imageUrlSchema.nullable(),
+  portfolioImageUrls: z.array(imageUrlSchema).max(5),
 });
 export type ProviderManagementProfileDto = z.infer<typeof providerManagementProfileSchema>;
 
@@ -180,8 +187,13 @@ export const updateProviderProfileSchema = z.object({
   areaName: z.string().trim().min(2).max(60),
   workingHoursLabel: z.string().trim().min(2).max(80),
   ...latLngSchema.shape,
+  profileImageUrl: imageUrlSchema.nullable().optional(),
+  portfolioImageUrls: z.array(imageUrlSchema).max(5).optional(),
 });
 export type UpdateProviderProfileInput = z.infer<typeof updateProviderProfileSchema>;
 
 export const createProviderServiceSchema = createServiceInputSchema;
 export type CreateProviderServiceInput = z.infer<typeof createProviderServiceSchema>;
+
+export const updateProviderServiceSchema = createServiceInputSchema;
+export type UpdateProviderServiceInput = z.infer<typeof updateProviderServiceSchema>;

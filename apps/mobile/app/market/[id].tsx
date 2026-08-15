@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { BadgeCheck } from 'lucide-react-native';
 import { formatUsd, MAX_ORDER_ITEM_QUANTITY } from '@sc/shared';
@@ -17,9 +17,13 @@ import {
 import { useProduct } from '../../src/api/hooks/useMarket.js';
 import { useCartStore } from '../../src/state/index.js';
 import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
+import { apiAssetUrl } from '../../src/api/client.js';
 
 const styles = StyleSheet.create({
-  image: { height: 220, marginBottom: space.l },
+  gallery: { marginBottom: space.l },
+  galleryContent: { gap: space.s },
+  image: { width: 280, height: 220 },
+  imageEmpty: { height: 220, marginBottom: space.l },
   title: { marginBottom: space.xs },
   price: { marginBottom: space.m },
   sellerRow: { flexDirection: 'row', alignItems: 'center', gap: space.m, marginBottom: space.l },
@@ -93,9 +97,25 @@ export default function ProductDetail() {
         </View>
       }
     >
-      {/* No product photography exists yet (plan R10) — the placeholder is
-          honest about that rather than shipping a fake stock image. */}
-      <ImagePlaceholder label={product.name} style={styles.image} />
+      {product.imageUrls.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.galleryContent}
+          style={styles.gallery}
+        >
+          {product.imageUrls.map((url) => (
+            <ImagePlaceholder
+              key={url}
+              uri={apiAssetUrl(url)}
+              radius={18}
+              style={styles.image}
+            />
+          ))}
+        </ScrollView>
+      ) : (
+        <ImagePlaceholder label={product.name} style={styles.imageEmpty} />
+      )}
 
       <Text variant="h3" style={styles.title}>
         {product.name}
@@ -105,7 +125,12 @@ export default function ProductDetail() {
       </Text>
 
       <View style={styles.sellerRow}>
-        <Avatar initials={product.initials} tint={product.tint} size={44} />
+        <Avatar
+          initials={product.initials}
+          tint={product.tint}
+          uri={apiAssetUrl(product.providerImageUrl)}
+          size={44}
+        />
         <View style={styles.sellerText}>
           <View style={styles.nameRow}>
             <Text variant="cardTitle">{product.providerName}</Text>

@@ -1,6 +1,7 @@
 import { StyleSheet, TextInput, View, type KeyboardTypeOptions } from 'react-native';
 import { color, radius, space, type } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
+import { useTheme } from '../theme.js';
 
 export interface TextFieldProps {
   value: string;
@@ -12,6 +13,8 @@ export interface TextFieldProps {
   autoFocus?: boolean;
   textAlign?: 'left' | 'center';
   editable?: boolean;
+  multiline?: boolean;
+  numberOfLines?: number;
 }
 
 const styles = StyleSheet.create({
@@ -25,6 +28,7 @@ const styles = StyleSheet.create({
     ...type.bodyLarge,
     color: color.text,
   },
+  multiline: { minHeight: 112 },
 });
 
 /** A bordered free-text field — phone/OTP entry, and any future form (provider onboarding). */
@@ -38,7 +42,10 @@ export function TextField({
   autoFocus,
   textAlign = 'left',
   editable = true,
+  multiline = false,
+  numberOfLines,
 }: TextFieldProps) {
+  const { colors } = useTheme();
   const alignStyle = { textAlign };
 
   return (
@@ -52,12 +59,15 @@ export function TextField({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={color.neutral600}
+        placeholderTextColor={colors.neutral600}
         keyboardType={keyboardType}
         maxLength={maxLength}
         autoFocus={autoFocus}
         editable={editable}
-        style={[styles.input, alignStyle]}
+        multiline={multiline}
+        numberOfLines={numberOfLines}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        style={[styles.input, { borderColor: colors.divider, color: colors.text }, multiline ? styles.multiline : null, alignStyle]}
       />
     </View>
   );

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { color, radius, space } from '@sc/tokens';
+import { useTheme } from '../theme.js';
 
 export interface SheetProps {
   open: boolean;
@@ -56,6 +57,7 @@ const styles = StyleSheet.create({
  * dependency to fall out of sync with.
  */
 export function Sheet({ open, onClose, children }: SheetProps) {
+  const { colors } = useTheme();
   const translateY = useRef(new Animated.Value(OFFSCREEN_Y)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   // The Modal must stay mounted through the close animation — dropping it
@@ -103,8 +105,8 @@ export function Sheet({ open, onClose, children }: SheetProps) {
             sheet, which is what stops them from bubbling to the backdrop
             Pressable behind it and closing the sheet on every interaction. */}
         <Pressable onPress={() => undefined}>
-          <Animated.View style={[styles.sheet, { transform: [{ translateY }] }]}>
-            <View style={styles.handle} />
+          <Animated.View style={[styles.sheet, { backgroundColor: colors.bg }, { transform: [{ translateY }] }]}>
+            <View style={[styles.handle, { backgroundColor: colors.divider }]} />
             {children}
           </Animated.View>
         </Pressable>

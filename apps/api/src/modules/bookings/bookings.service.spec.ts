@@ -25,8 +25,12 @@ const BASE_ENV: Env = {
   PORT: 4000,
   DATABASE_URL: TEST_DATABASE_URL,
   REDIS_URL: 'redis://localhost:6380',
+  UPLOAD_DIR: 'uploads',
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
+  ADMIN_JWT_ACCESS_SECRET: 'test-admin-access-secret-at-least-32-characters-long',
+  ADMIN_JWT_REFRESH_PEPPER: 'test-admin-refresh-pepper-at-least-32-characters-long',
+  ADMIN_WEB_ORIGIN: 'http://localhost:5173',
   AUTH_DEV_OTP: '000000',
   INFOBIP_DEFAULT_CHANNEL: 'whatsapp',
   PAYMENT_PROVIDER: 'fake',
@@ -326,6 +330,29 @@ describe('BookingsService', () => {
     );
   });
 
+  it('expires an unanswered booking after one hour and refunds EcoCash', async () => {
+    const created = await bookings.create(clientId, {
+      providerId: providerAId,
+      serviceId: serviceAId,
+      startsAt: futureSlot(10),
+      paymentMethod: 'ecocash',
+    });
+    createdBookingIds.push(created.id);
+    await prisma.booking.update({
+      where: { id: created.id },
+      data: { createdAt: new Date(Date.now() - 61 * 60_000) },
+    });
+
+    const listed = await bookings.listForClient(clientId);
+    expect(listed.find((booking) => booking.id === created.id)?.status).toBe('declined');
+    expect(
+      await prisma.payment.findFirst({
+        where: { bookingId: created.id },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ).toMatchObject({ status: 'refunded', feeUsdCents: 0 });
+  });
+
   it('a cash booking needs both sides confirmed before it completes', async () => {
     const created = await bookings.create(clientId, {
       providerId: providerAId,
@@ -406,7 +433,14 @@ describe('BookingsService', () => {
     createdBookingIds.push(created.id);
     await prisma.booking.update({ where: { id: created.id }, data: { status: 'completed' } });
 
-    await bookings.createReview(created.id, clientId, { rating: 5 });
+    await bookings.createReview(created.id, clientId, {
+      rating: 5,
+      text: 'Friendly, careful, and right on time.',
+    });
+    expect(await prisma.review.findFirst({ where: { bookingId: created.id } })).toMatchObject({
+      rating: 5,
+      text: 'Friendly, careful, and right on time.',
+    });
     const provider = await prisma.providerProfile.findUniqueOrThrow({ where: { id: providerAId } });
     expect(provider.ratingAvg).toBe(5);
 

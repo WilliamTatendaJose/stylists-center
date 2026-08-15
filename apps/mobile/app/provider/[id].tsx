@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MapPin, ChevronRight } from 'lucide-react-native';
 import { color, space } from '@sc/tokens';
-import type { ReportReason } from '@sc/shared';
+import { deriveInitials, type ReportReason } from '@sc/shared';
 import {
   Screen,
   ScreenHeader,
@@ -19,6 +19,7 @@ import {
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
 import { describeError } from '../../src/api/errorMessage.js';
+import { apiAssetUrl } from '../../src/api/client.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -35,12 +36,15 @@ const styles = StyleSheet.create({
   photoRight: { flex: 1, gap: 8 },
   photoRightTop: { height: 150 },
   photoRightBottom: { height: 90 },
+  photoExtras: { flexDirection: 'row', gap: 8, marginTop: 8 },
+  photoExtra: { flex: 1, height: 110 },
   serviceRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: space.m,
     paddingVertical: space.ml,
   },
+  serviceText: { flex: 1, minWidth: 0 },
   serviceRowDivider: { borderBottomWidth: 1, borderBottomColor: color.divider },
   fromPanel: {
     borderWidth: 1,
@@ -167,7 +171,12 @@ export default function ProviderProfile() {
         ) : null}
 
         <View style={styles.identity}>
-          <Avatar initials={provider.initials} tint={provider.tint} size={78} />
+          <Avatar
+            initials={provider.initials}
+            tint={provider.tint}
+            uri={apiAssetUrl(provider.profileImageUrl ?? provider.portfolioImageUrls[0])}
+            size={78}
+          />
           <View style={styles.nameRow}>
             <Text variant="h3">{provider.displayName}</Text>
             {provider.verified ? <Badge label="ID verified" tone="accent100" /> : null}
@@ -188,12 +197,37 @@ export default function ProviderProfile() {
             Work
           </Text>
           <View style={styles.photoRow}>
-            <ImagePlaceholder radius={18} style={styles.photoLeft} label="Portfolio" />
+            <ImagePlaceholder
+              uri={apiAssetUrl(provider.portfolioImageUrls[0])}
+              radius={18}
+              style={styles.photoLeft}
+              label={provider.portfolioImageUrls.length ? undefined : 'No work photos yet'}
+            />
             <View style={styles.photoRight}>
-              <ImagePlaceholder radius={18} style={styles.photoRightTop} />
-              <ImagePlaceholder radius={18} style={styles.photoRightBottom} />
+              <ImagePlaceholder
+                uri={apiAssetUrl(provider.portfolioImageUrls[1])}
+                radius={18}
+                style={styles.photoRightTop}
+              />
+              <ImagePlaceholder
+                uri={apiAssetUrl(provider.portfolioImageUrls[2])}
+                radius={18}
+                style={styles.photoRightBottom}
+              />
             </View>
           </View>
+          {provider.portfolioImageUrls.length > 3 ? (
+            <View style={styles.photoExtras}>
+              {provider.portfolioImageUrls.slice(3).map((url) => (
+                <ImagePlaceholder
+                  key={url}
+                  uri={apiAssetUrl(url)}
+                  radius={18}
+                  style={styles.photoExtra}
+                />
+              ))}
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.section}>
@@ -209,7 +243,12 @@ export default function ProviderProfile() {
                   index < provider.services.length - 1 ? styles.serviceRowDivider : null,
                 ]}
               >
-                <View>
+                <Avatar
+                  initials={deriveInitials(service.name)}
+                  uri={apiAssetUrl(service.imageUrls?.[0])}
+                  size={58}
+                />
+                <View style={styles.serviceText}>
                   <Text variant="body">{service.name}</Text>
                   <Text variant="meta" color="neutral600">
                     {service.durationMinutes} min

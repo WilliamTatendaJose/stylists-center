@@ -64,7 +64,7 @@ export class MarketService {
       SELECT
         p.id, p.name, p.description, p."priceUsdCents", p."stockQty", p."imageUrls",
         pr.id AS "providerId", pr."displayName" AS "providerName",
-        pr.tint, pr.initials, pr.verified, pr."areaName",
+        pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName",
         ST_Distance(pr.location, ${point}) / 1000 AS "distanceKm"
       FROM "Product" p
       JOIN "ProviderProfile" pr ON pr.id = p."providerId"
@@ -86,7 +86,7 @@ export class MarketService {
       SELECT
         p.id, p.name, p.description, p."priceUsdCents", p."stockQty", p."imageUrls",
         pr.id AS "providerId", pr."displayName" AS "providerName",
-        pr.tint, pr.initials, pr.verified, pr."areaName",
+        pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName",
         ST_Distance(pr.location, ${point}) / 1000 AS "distanceKm"
       FROM "Product" p
       JOIN "ProviderProfile" pr ON pr.id = p."providerId"

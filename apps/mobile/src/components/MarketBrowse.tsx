@@ -8,6 +8,8 @@ import { DistanceFilter } from './DistanceFilter.js';
 import { useMyOrders, useProducts } from '../api/hooks/useMarket.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
 import { useSessionStore } from '../state/index.js';
+import { apiAssetUrl } from '../api/client.js';
+import { ServerConnectionPanel } from './ServerConnectionPanel.js';
 
 const MIN_SEARCH_QUERY = 2;
 
@@ -65,26 +67,9 @@ export function MarketBrowse() {
       ) : null}
 
       {products.isError && !items?.length ? (
-        <View style={styles.errorNote}>
-          <Text variant="meta" color={color.accent700} accessibilityRole="alert">
-            Couldn&apos;t load the market.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Try loading the market again"
-            onPress={() => {
-              void products.refetch();
-            }}
-          >
-            <Text variant="meta" color={color.accent}>
-              Try again
-            </Text>
-          </Pressable>
-        </View>
+        <ServerConnectionPanel error={products.error} onRetry={() => void products.refetch()} />
       ) : products.isError ? (
-        <Text variant="meta" color="neutral700" style={styles.errorNote}>
-          Showing the last update — couldn&apos;t reach the server just now.
-        </Text>
+        <ServerConnectionPanel error={products.error} compact onRetry={() => void products.refetch()} />
       ) : null}
 
       <SectionLabel
@@ -99,7 +84,12 @@ export function MarketBrowse() {
           {items.map((product) => (
             <ListRow
               key={product.id}
-              avatar={{ initials: product.initials, tint: product.tint, size: 54 }}
+              avatar={{
+                initials: product.initials,
+                tint: product.tint,
+                uri: apiAssetUrl(product.imageUrls[0]),
+                size: 54,
+              }}
               title={product.name}
               meta={`${product.providerName} · ${product.areaName}`}
               // Stock is called out only when it is low enough to matter:

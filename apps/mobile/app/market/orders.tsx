@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
 import { formatUsd, ORDER_STATUS_LABELS, type OrderRowDto } from '@sc/shared';
 import { color, space } from '@sc/tokens';
 import { Screen, ScreenHeader, Text, Avatar, Badge, Button, Card, Sheet, EmptyPanel } from '@sc/ui';
 import { useCancelOrder, useCollectOrder, useMyOrders } from '../../src/api/hooks/useMarket.js';
+import { useStartOrderConversation } from '../../src/api/hooks/useChat.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
+import { apiAssetUrl } from '../../src/api/client.js';
 
 const styles = StyleSheet.create({
   card: { padding: space.l, marginBottom: space.m },
@@ -13,13 +16,21 @@ const styles = StyleSheet.create({
   middle: { flex: 1, minWidth: 0 },
   meta: { marginTop: 2 },
   itemsBlock: { marginTop: space.m, gap: 2 },
-  actionsRow: { flexDirection: 'row', gap: space.s, marginTop: space.m },
-  actionButton: { flex: 1 },
+  lifecycle: {
+    marginTop: space.m,
+    padding: space.m,
+    borderRadius: 12,
+    backgroundColor: color.surface,
+  },
+  actionsRow: { gap: space.s, marginTop: space.m },
   note: { marginBottom: space.m },
+  historyTitle: { marginTop: space.l, marginBottom: space.m },
   sheetTitle: { marginBottom: space.s },
   sheetBody: { marginBottom: space.xl },
   sheetActions: { gap: space.s },
 });
+
+const ORDER_HISTORY_PREVIEW_COUNT = 2;
 
 /** My orders — where to collect, and the two things a buyer can still do about it. */
 export default function Orders() {
@@ -27,16 +38,40 @@ export default function Orders() {
   const { data: orders = [], isError, isLoading, refetch, isRefetching } = useMyOrders();
   const collectOrder = useCollectOrder();
   const cancelOrder = useCancelOrder();
+  const startConversation = useStartOrderConversation();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<OrderRowDto | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [showAllOrderHistory, setShowAllOrderHistory] = useState(false);
+  const activeOrders = orders.filter(
+    (order) => order.status === 'reserved' || order.status === 'ready_for_collection',
+  );
+  const orderHistory = orders.filter(
+    (order) => order.status === 'collected' || order.status === 'cancelled',
+  );
+  const visibleOrderHistory = showAllOrderHistory
+    ? orderHistory
+    : orderHistory.slice(0, ORDER_HISTORY_PREVIEW_COUNT);
+  const visibleOrders = [...activeOrders, ...visibleOrderHistory];
 
   const confirmCollect = (order: OrderRowDto) => {
     setActionError(null);
     collectOrder.mutate(order.id, {
       onError: (error) => {
         setActionError(describeError(error, "Couldn't confirm that collection. Try again."));
+      },
+    });
+  };
+
+  const messageSeller = (order: OrderRowDto) => {
+    setActionError(null);
+    startConversation.mutate(order.id, {
+      onSuccess: (conversation) => {
+        router.push({ pathname: '/chat/[threadId]', params: { threadId: conversation.id } });
+      },
+      onError: (error) => {
+        setActionError(describeError(error, "Couldn't open your conversation. Try again."));
       },
     });
   };
@@ -98,63 +133,118 @@ export default function Orders() {
           />
         ) : null}
 
-        {orders.map((order) => (
-          <Card key={order.id} bordered style={styles.card}>
-            <View style={styles.headerRow}>
-              <Avatar initials={order.initials} tint={order.tint} size={44} />
-              <View style={styles.middle}>
-                <Text variant="cardTitle">{order.providerName}</Text>
-                <Text variant="meta" color="neutral700" style={styles.meta}>
-                  {order.reference} · {order.areaName}
-                </Text>
-                <Text variant="metaSmall" color="neutral600">
-                  {order.paymentMethod === 'ecocash' ? 'EcoCash — paid' : 'Cash on collection'} ·{' '}
-                  {formatUsd(order.totalUsdCents)}
-                </Text>
-              </View>
-              <Badge
-                label={ORDER_STATUS_LABELS[order.status]}
-                tone={order.status === 'reserved' ? 'accent' : 'neutral'}
-              />
-            </View>
+        {orders.length > 0 && activeOrders.length === 0 ? (
+          <EmptyPanel body="You have no active marketplace orders." />
+        ) : null}
 
-            <View style={styles.itemsBlock}>
-              {order.items.map((item) => (
-                <Text key={item.productId} variant="meta" color="neutral700">
-                  {item.quantity} × {item.name}
-                </Text>
-              ))}
-            </View>
-
-            {order.canCollect || order.canCancel ? (
-              <View style={styles.actionsRow}>
-                {order.canCollect ? (
-                  <Button
-                    label={collectOrder.isPending ? 'Confirming…' : "I've collected it"}
-                    style={styles.actionButton}
-                    disabled={collectOrder.isPending}
-                    onPress={() => {
-                      confirmCollect(order);
-                    }}
-                  />
-                ) : null}
-                {order.canCancel ? (
-                  <Button
-                    label="Cancel"
-                    variant="ghost"
-                    style={styles.actionButton}
-                    onPress={() => {
-                      setCancelError(null);
-                      setCancelTarget(order);
-                    }}
-                  />
-                ) : null}
-              </View>
+        {visibleOrders.map((order, index) => (
+          <Fragment key={order.id}>
+            {index === activeOrders.length && orderHistory.length > 0 ? (
+              <Text variant="sectionLabel" style={styles.historyTitle}>
+                Order history
+              </Text>
             ) : null}
-          </Card>
+            <Card bordered style={styles.card}>
+              <View style={styles.headerRow}>
+                <Avatar
+                  initials={order.initials}
+                  tint={order.tint}
+                  uri={apiAssetUrl(order.providerImageUrl)}
+                  size={44}
+                />
+                <View style={styles.middle}>
+                  <Text variant="cardTitle">{order.providerName}</Text>
+                  <Text variant="meta" color="neutral700" style={styles.meta}>
+                    {order.reference} · {order.areaName}
+                  </Text>
+                  <Text variant="metaSmall" color="neutral600">
+                    {order.paymentMethod === 'ecocash' ? 'EcoCash — paid' : 'Cash on collection'} ·{' '}
+                    {formatUsd(order.totalUsdCents)}
+                  </Text>
+                </View>
+                <Badge
+                  label={ORDER_STATUS_LABELS[order.status]}
+                  tone={
+                    order.status === 'reserved' || order.status === 'ready_for_collection'
+                      ? 'accent'
+                      : 'neutral'
+                  }
+                />
+              </View>
+
+              <View style={styles.itemsBlock}>
+                {order.items.map((item) => (
+                  <Text key={item.productId} variant="meta" color="neutral700">
+                    {item.quantity} × {item.name}
+                  </Text>
+                ))}
+              </View>
+
+              {order.status === 'reserved' || order.status === 'ready_for_collection' ? (
+                <View style={styles.lifecycle}>
+                  <Text variant="meta" color="neutral700">
+                    {order.status === 'reserved'
+                      ? 'The seller is preparing your order. Message them to agree a collection time.'
+                      : `Ready to collect from ${order.areaName}. Confirm only when the items are in your hands.`}
+                  </Text>
+                </View>
+              ) : null}
+
+              {order.status !== 'cancelled' ? (
+                <View style={styles.actionsRow}>
+                  <Button
+                    label={startConversation.isPending ? 'Opening…' : 'Message seller'}
+                    variant="secondary"
+                    block
+                    disabled={startConversation.isPending}
+                    onPress={() => {
+                      messageSeller(order);
+                    }}
+                  />
+                  {order.canCollect ? (
+                    <Button
+                      label={collectOrder.isPending ? 'Confirming…' : "I've collected it"}
+                      block
+                      disabled={collectOrder.isPending}
+                      onPress={() => {
+                        confirmCollect(order);
+                      }}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+              {order.canCancel ? (
+                <Button
+                  label="Cancel order"
+                  variant="ghost"
+                  block
+                  onPress={() => {
+                    setCancelError(null);
+                    setCancelTarget(order);
+                  }}
+                />
+              ) : null}
+            </Card>
+          </Fragment>
         ))}
 
-        {orders.some((o) => o.status === 'reserved') ? (
+        {orderHistory.length > ORDER_HISTORY_PREVIEW_COUNT ? (
+          <Button
+            label={
+              showAllOrderHistory
+                ? 'Show less'
+                : `View all history (${String(orderHistory.length)})`
+            }
+            variant="ghost"
+            block
+            style={styles.note}
+            onPress={() => {
+              setShowAllOrderHistory((current) => !current);
+            }}
+          />
+        ) : null}
+
+        {activeOrders.some((o) => o.status === 'ready_for_collection') ? (
           <Text variant="metaSmall" color="neutral600">
             Confirming collection is what releases payment to the stylist, so only tap it once you
             actually have the items.

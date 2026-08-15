@@ -19,6 +19,7 @@ export interface ProductGeoRow {
   providerName: string;
   tint: string;
   initials: string;
+  providerImageUrl?: string | null;
   verified: boolean;
   areaName: string;
   distanceKm: number;
@@ -35,6 +36,7 @@ export function toProductRow(row: ProductGeoRow): ProductRowDto {
     providerName: row.providerName,
     tint: row.tint,
     initials: row.initials,
+    ...(row.providerImageUrl ? { providerImageUrl: row.providerImageUrl } : {}),
     verified: row.verified,
     areaName: row.areaName,
     distanceKm: row.distanceKm,
@@ -50,6 +52,8 @@ export type OrderWithRelations = Prisma.OrderGetPayload<{
 }>;
 
 export function toOrderRow(order: OrderWithRelations): OrderRowDto {
+  const providerImageUrl =
+    order.provider.profileImageUrl ?? order.provider.portfolioImageUrls[0];
   return {
     id: order.id,
     reference: order.reference,
@@ -61,6 +65,7 @@ export function toOrderRow(order: OrderWithRelations): OrderRowDto {
     providerName: order.provider.displayName,
     tint: order.provider.tint,
     initials: order.provider.initials,
+    ...(providerImageUrl ? { providerImageUrl } : {}),
     areaName: order.provider.areaName,
     // The name and price the buyer agreed to, not whatever the product says now.
     items: order.items.map((item) => ({

@@ -1,0 +1,23 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides", "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+[31m[Nest] 10312  - [39m14/08/2026, 22:12:14 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +4ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:38:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0

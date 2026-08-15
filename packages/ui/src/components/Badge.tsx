@@ -1,6 +1,7 @@
 import { StyleSheet, View, type ViewStyle } from 'react-native';
-import { color, radius, space } from '@sc/tokens';
+import { radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
+import { useTheme } from '../theme.js';
 
 export type BadgeTone = 'accent' | 'neutral' | 'accent100';
 
@@ -16,13 +17,6 @@ interface ToneStyle {
   border?: string;
 }
 
-const TONES: Record<BadgeTone, ToneStyle> = {
-  accent: { bg: color.accent, fg: color.bg },
-  neutral: { bg: color.neutral200, fg: color.neutral700 },
-  // The "ID verified" pill specifically: accent-100 fill, accent-300 border, accent-700 text.
-  accent100: { bg: color.accent100, fg: color.accent700, border: color.accent300 },
-};
-
 const styles = StyleSheet.create({
   base: {
     alignSelf: 'flex-start',
@@ -37,7 +31,12 @@ const styles = StyleSheet.create({
 
 /** Status badges (Bookings rows) and the "ID verified" trust pill. */
 export function Badge({ label, tone = 'neutral', size = 'sm' }: BadgeProps) {
-  const t = TONES[tone];
+  const { colors } = useTheme();
+  const t: ToneStyle = {
+    accent: { bg: colors.accent, fg: colors.bg },
+    neutral: { bg: colors.neutral200, fg: colors.neutral700 },
+    accent100: { bg: colors.accent100, fg: colors.accent700, border: colors.accent300 },
+  }[tone];
   const fillStyle: ViewStyle = { backgroundColor: t.bg, borderColor: t.border };
   const sizeStyle = size === 'sm' ? styles.sm : styles.md;
 

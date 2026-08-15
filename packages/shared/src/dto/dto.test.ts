@@ -2,6 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { createMatchRequestSchema } from './matching.js';
 import { createBookingSchema } from './bookings.js';
 import { requestOtpSchema, verifyOtpSchema } from './auth.js';
+import { imageUrlSchema } from './uploads.js';
+import {
+  adminLoginSchema,
+  createManualBanSchema,
+  resolveAppealSchema,
+  updateProviderAdminSchema,
+  updateReportStatusSchema,
+} from './admin.js';
 
 /**
  * These schemas are the actual API contract — a thin smoke test that they
@@ -15,6 +23,21 @@ import { requestOtpSchema, verifyOtpSchema } from './auth.js';
  */
 const PROVIDER_ID = '11111111-1111-4111-8111-111111111111';
 const SERVICE_ID = '22222222-2222-4222-8222-222222222222';
+
+describe('imageUrlSchema', () => {
+  it('accepts API uploads and HTTPS-hosted images', () => {
+    expect(
+      imageUrlSchema.safeParse('/uploads/3a6f010d-1d13-4a06-a747-0ae1b4be35d0.jpg').success,
+    ).toBe(true);
+    expect(imageUrlSchema.safeParse('https://cdn.example.com/work.webp').success).toBe(true);
+  });
+
+  it('rejects scripts, local files, and arbitrary relative paths', () => {
+    expect(imageUrlSchema.safeParse('javascript:alert(1)').success).toBe(false);
+    expect(imageUrlSchema.safeParse('file:///private/photo.jpg').success).toBe(false);
+    expect(imageUrlSchema.safeParse('../photo.jpg').success).toBe(false);
+  });
+});
 
 describe('createMatchRequestSchema', () => {
   const valid = {
@@ -95,5 +118,50 @@ describe('auth schemas', () => {
     expect(verifyOtpSchema.safeParse({ challengeId, code: '12345' }).success).toBe(false);
     expect(verifyOtpSchema.safeParse({ challengeId, code: 'abcdef' }).success).toBe(false);
     expect(verifyOtpSchema.safeParse({ challengeId, code: '000000' }).success).toBe(true);
+  });
+});
+
+describe('admin schemas', () => {
+  it('rejects an admin login with a malformed email or an empty password', () => {
+    expect(adminLoginSchema.safeParse({ email: 'not-an-email', password: 'x' }).success).toBe(
+      false,
+    );
+    expect(adminLoginSchema.safeParse({ email: 'staff@example.com', password: '' }).success).toBe(
+      false,
+    );
+    expect(
+      adminLoginSchema.safeParse({ email: 'staff@example.com', password: 'x' }).success,
+    ).toBe(true);
+  });
+
+  it('rejects a manual ban with no reason', () => {
+    expect(createManualBanSchema.safeParse({ userId: PROVIDER_ID, reason: '' }).success).toBe(
+      false,
+    );
+    expect(
+      createManualBanSchema.safeParse({ userId: PROVIDER_ID, reason: 'Repeated harassment' })
+        .success,
+    ).toBe(true);
+  });
+
+  it('rejects resolving an appeal back to "none" — that is not a resolution', () => {
+    expect(resolveAppealSchema.safeParse({ appealStatus: 'none' }).success).toBe(false);
+    expect(resolveAppealSchema.safeParse({ appealStatus: 'overturned' }).success).toBe(true);
+  });
+
+  it('accepts a report status transition with an optional note', () => {
+    expect(updateReportStatusSchema.safeParse({ status: 'reviewing' }).success).toBe(true);
+    expect(
+      updateReportStatusSchema.safeParse({ status: 'resolved', resolutionNote: 'Warned user' })
+        .success,
+    ).toBe(true);
+  });
+
+  it('rejects a provider update with neither field set', () => {
+    expect(updateProviderAdminSchema.safeParse({}).success).toBe(false);
+    expect(updateProviderAdminSchema.safeParse({ verified: true }).success).toBe(true);
+    expect(
+      updateProviderAdminSchema.safeParse({ subscriptionPriceUsdCents: 500 }).success,
+    ).toBe(true);
   });
 });

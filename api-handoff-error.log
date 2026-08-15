@@ -1,0 +1,779 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides", "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+[31m[Nest] 52016  - [39m15/08/2026, 09:24:04 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +5ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:38:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 36948  - [39m15/08/2026, 10:12:15 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +9ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:38:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 47952  - [39m15/08/2026, 10:44:35 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +3ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 15052  - [39m15/08/2026, 10:47:15 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +4ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 13596  - [39m15/08/2026, 10:49:00 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +18ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 35748  - [39m15/08/2026, 10:52:51 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +10ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 38568  - [39m15/08/2026, 10:54:23 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +6ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 17284  - [39m15/08/2026, 10:55:12 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +10ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 27196  - [39m15/08/2026, 10:59:12 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +12ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 4280  - [39m15/08/2026, 11:04:33 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +12ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 44120  - [39m15/08/2026, 11:05:48 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +11ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 39668  - [39m15/08/2026, 11:06:44 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +4ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 40224  - [39m15/08/2026, 11:16:06 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +6ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 40876  - [39m15/08/2026, 11:18:09 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +5ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 37248  - [39m15/08/2026, 11:24:00 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +5ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 18924  - [39m15/08/2026, 11:26:36 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +7ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 33948  - [39m15/08/2026, 11:38:26 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +13ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 41780  - [39m15/08/2026, 11:42:11 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +3ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 24056  - [39m15/08/2026, 11:47:34 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +4ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 3940  - [39m15/08/2026, 11:47:55 [31m  ERROR[39m [38;5;3m[ExceptionsHandler] [39mPrismaClientKnownRequestError: 
+Invalid `this.prisma.user.findUnique()` invocation in
+C:\Users\wjose\source\repos\stylists-center\apps\api\src\modules\auth\auth.service.ts:437:41
+
+  434   throw new UnauthorizedException('Session no longer valid');
+  435 }
+  436 
+→ 437 const user = await this.prisma.user.findUnique(
+The column `User.avatarImageUrl` does not exist in the current database.
+    at Jr.handleRequestError [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:8286[90m)[39m
+    at Jr.handleAndLogRequestError [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:7581[90m)[39m
+    at Jr.request [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:7288[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async a [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:103:6862[90m)[39m
+    at async AuthService.verifyAccessToken [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39msrc\modules\auth\auth.service.ts:437:18[90m)[39m
+    at async JwtAuthGuard.canActivate [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39msrc\modules\auth\jwt-auth.guard.ts:27:16[90m)[39m
+    at async GuardsConsumer.tryActivate (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\guards\guards-consumer.js:22:17)
+    at async canActivateFn (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\router\router-execution-context.js:138:33)
+    at async C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\router\router-execution-context.js:42:31 {
+  code: [32m'P2022'[39m,
+  meta: {
+    modelName: [32m'User'[39m,
+    driverAdapterError: DriverAdapterError: ColumnNotFound
+        at PrismaPgAdapter.onError (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:675:11)
+        at PrismaPgAdapter.performIO (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:670:12)
+    [90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+        at async PrismaPgAdapter.queryRaw (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:604:30)
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:44895[90m)[39m
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:45339[90m)[39m
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:46559[90m)[39m
+        at async e.run [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:43609[90m)[39m
+        at async e.execute [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:61:815[90m)[39m
+        at async Ut.request [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:62:2421[90m)[39m {
+      cause: {
+        originalCode: [32m'42703'[39m,
+        originalMessage: [32m'column User.avatarImageUrl does not exist'[39m,
+        kind: [32m'ColumnNotFound'[39m,
+        column: [32m'User.avatarImageUrl'[39m
+      }
+    }
+  },
+  clientVersion: [32m'7.9.1'[39m
+}
+[31m[Nest] 3940  - [39m15/08/2026, 11:47:55 [31m  ERROR[39m [38;5;3m[ExceptionsHandler] [39mPrismaClientKnownRequestError: 
+Invalid `this.prisma.user.findUnique()` invocation in
+C:\Users\wjose\source\repos\stylists-center\apps\api\src\modules\auth\auth.service.ts:437:41
+
+  434   throw new UnauthorizedException('Session no longer valid');
+  435 }
+  436 
+→ 437 const user = await this.prisma.user.findUnique(
+The column `User.avatarImageUrl` does not exist in the current database.
+    at Jr.handleRequestError [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:8286[90m)[39m
+    at Jr.handleAndLogRequestError [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:7581[90m)[39m
+    at Jr.request [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:7288[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async a [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:103:6862[90m)[39m
+    at async AuthService.verifyAccessToken [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39msrc\modules\auth\auth.service.ts:437:18[90m)[39m
+    at async JwtAuthGuard.canActivate [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39msrc\modules\auth\jwt-auth.guard.ts:27:16[90m)[39m
+    at async GuardsConsumer.tryActivate (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\guards\guards-consumer.js:22:17)
+    at async canActivateFn (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\router\router-execution-context.js:138:33)
+    at async C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\router\router-execution-context.js:42:31 {
+  code: [32m'P2022'[39m,
+  meta: {
+    modelName: [32m'User'[39m,
+    driverAdapterError: DriverAdapterError: ColumnNotFound
+        at PrismaPgAdapter.onError (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:675:11)
+        at PrismaPgAdapter.performIO (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:670:12)
+    [90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+        at async PrismaPgAdapter.queryRaw (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:604:30)
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:44895[90m)[39m
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:45339[90m)[39m
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:46559[90m)[39m
+        at async e.run [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:43609[90m)[39m
+        at async e.execute [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:61:815[90m)[39m
+        at async Ut.request [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:62:2421[90m)[39m {
+      cause: {
+        originalCode: [32m'42703'[39m,
+        originalMessage: [32m'column User.avatarImageUrl does not exist'[39m,
+        kind: [32m'ColumnNotFound'[39m,
+        column: [32m'User.avatarImageUrl'[39m
+      }
+    }
+  },
+  clientVersion: [32m'7.9.1'[39m
+}
+[31m[Nest] 3940  - [39m15/08/2026, 11:47:55 [31m  ERROR[39m [38;5;3m[ExceptionsHandler] [39mPrismaClientKnownRequestError: 
+Invalid `this.prisma.user.findUnique()` invocation in
+C:\Users\wjose\source\repos\stylists-center\apps\api\src\modules\auth\auth.service.ts:437:41
+
+  434   throw new UnauthorizedException('Session no longer valid');
+  435 }
+  436 
+→ 437 const user = await this.prisma.user.findUnique(
+The column `User.avatarImageUrl` does not exist in the current database.
+    at Jr.handleRequestError [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:8286[90m)[39m
+    at Jr.handleAndLogRequestError [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:7581[90m)[39m
+    at Jr.request [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:7288[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async a [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:103:6862[90m)[39m
+    at async AuthService.verifyAccessToken [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39msrc\modules\auth\auth.service.ts:437:18[90m)[39m
+    at async JwtAuthGuard.canActivate [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39msrc\modules\auth\jwt-auth.guard.ts:27:16[90m)[39m
+    at async GuardsConsumer.tryActivate (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\guards\guards-consumer.js:22:17)
+    at async canActivateFn (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\router\router-execution-context.js:138:33)
+    at async C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\router\router-execution-context.js:42:31 {
+  code: [32m'P2022'[39m,
+  meta: {
+    modelName: [32m'User'[39m,
+    driverAdapterError: DriverAdapterError: ColumnNotFound
+        at PrismaPgAdapter.onError (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:675:11)
+        at PrismaPgAdapter.performIO (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:670:12)
+    [90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+        at async PrismaPgAdapter.queryRaw (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:604:30)
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:44895[90m)[39m
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:45339[90m)[39m
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:46559[90m)[39m
+        at async e.run [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:43609[90m)[39m
+        at async e.execute [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:61:815[90m)[39m
+        at async Ut.request [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:62:2421[90m)[39m {
+      cause: {
+        originalCode: [32m'42703'[39m,
+        originalMessage: [32m'column User.avatarImageUrl does not exist'[39m,
+        kind: [32m'ColumnNotFound'[39m,
+        column: [32m'User.avatarImageUrl'[39m
+      }
+    }
+  },
+  clientVersion: [32m'7.9.1'[39m
+}
+[31m[Nest] 3940  - [39m15/08/2026, 11:47:55 [31m  ERROR[39m [38;5;3m[ExceptionsHandler] [39mPrismaClientKnownRequestError: 
+Invalid `this.prisma.user.findUnique()` invocation in
+C:\Users\wjose\source\repos\stylists-center\apps\api\src\modules\auth\auth.service.ts:437:41
+
+  434   throw new UnauthorizedException('Session no longer valid');
+  435 }
+  436 
+→ 437 const user = await this.prisma.user.findUnique(
+The column `User.avatarImageUrl` does not exist in the current database.
+    at Jr.handleRequestError [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:8286[90m)[39m
+    at Jr.handleAndLogRequestError [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:7581[90m)[39m
+    at Jr.request [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:69:7288[90m)[39m
+[90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+    at async a [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:103:6862[90m)[39m
+    at async AuthService.verifyAccessToken [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39msrc\modules\auth\auth.service.ts:437:18[90m)[39m
+    at async JwtAuthGuard.canActivate [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39msrc\modules\auth\jwt-auth.guard.ts:27:16[90m)[39m
+    at async GuardsConsumer.tryActivate (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\guards\guards-consumer.js:22:17)
+    at async canActivateFn (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\router\router-execution-context.js:138:33)
+    at async C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@nestjs\core[24m\router\router-execution-context.js:42:31 {
+  code: [32m'P2022'[39m,
+  meta: {
+    modelName: [32m'User'[39m,
+    driverAdapterError: DriverAdapterError: ColumnNotFound
+        at PrismaPgAdapter.onError (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:675:11)
+        at PrismaPgAdapter.performIO (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:670:12)
+    [90m    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)[39m
+        at async PrismaPgAdapter.queryRaw (C:\Users\wjose\source\repos\stylists-center\node_modules\[4m@prisma\adapter-pg[24m\dist\index.js:604:30)
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:44895[90m)[39m
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:45339[90m)[39m
+        at async e.interpretNode [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:46559[90m)[39m
+        at async e.run [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:15:43609[90m)[39m
+        at async e.execute [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:61:815[90m)[39m
+        at async Ut.request [90m(C:\Users\wjose\source\repos\stylists-center\apps\api\[39mdist\generated\prisma\runtime\client.js:62:2421[90m)[39m {
+      cause: {
+        originalCode: [32m'42703'[39m,
+        originalMessage: [32m'column User.avatarImageUrl does not exist'[39m,
+        kind: [32m'ColumnNotFound'[39m,
+        column: [32m'User.avatarImageUrl'[39m
+      }
+    }
+  },
+  clientVersion: [32m'7.9.1'[39m
+}
+[31m[Nest] 49132  - [39m15/08/2026, 11:49:52 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +3ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 27764  - [39m15/08/2026, 11:54:44 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +2ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 32988  - [39m15/08/2026, 11:59:06 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +2ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 51680  - [39m15/08/2026, 11:59:55 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +3ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 28372  - [39m15/08/2026, 12:15:18 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +6ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+[31m[Nest] 52152  - [39m15/08/2026, 12:15:57 [31m  ERROR[39m [38;5;3m[NestApplication] [39m[31mError: listen EADDRINUSE: address already in use :::4000[39m[38;5;3m +13ms[39m
+node:net:2008
+    const ex = new UVExceptionWithHostPort(err, 'listen', address, port);
+               ^
+
+Error: listen EADDRINUSE: address already in use :::4000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at ExpressAdapter.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\platform-express\adapters\express-adapter.js:115:32)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:190:30
+    at new Promise (<anonymous>)
+    at NestApplication.listen (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\core\nest-application.js:180:16)
+    at async bootstrap (C:\Users\wjose\source\repos\stylists-center\apps\api\src\main.ts:47:3) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 4000
+}
+
+Node.js v24.16.0
+ERROR: The process with PID 13064 (child process of PID 34992) could not be terminated.
+Reason: There is no running instance of the task.
+ERROR: The process "13064" not found.
+node:child_process:1000
+    throw err;
+    ^
+
+Error: Command failed: taskkill /pid 13064 /T /F
+ERROR: The process with PID 13064 (child process of PID 34992) could not be terminated.
+Reason: There is no running instance of the task.
+
+    at genericNodeError (node:internal/errors:985:15)
+    at wrappedFn (node:internal/errors:539:14)
+    at checkExecSyncError (node:child_process:925:11)
+    at execSync (node:child_process:997:15)
+    at treeKillSync (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\cli\lib\utils\tree-kill.js:7:38)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\cli\actions\start.action.js:92:46
+    at Object.onWatchStatusChange (C:\Users\wjose\source\repos\stylists-center\node_modules\@nestjs\cli\lib\compiler\watch-compiler.js:82:17)
+    at C:\Users\wjose\source\repos\stylists-center\node_modules\typescript\lib\typescript.js:133916:30
+    at emitFilesAndReportErrors (C:\Users\wjose\source\repos\stylists-center\node_modules\typescript\lib\typescript.js:133737:5)
+    at result.afterProgramCreate (C:\Users\wjose\source\repos\stylists-center\node_modules\typescript\lib\typescript.js:133912:5) {
+  status: 255,
+  signal: null,
+  output: [
+    null,
+    Buffer(0) [Uint8Array] [],
+    Buffer(141) [Uint8Array] [
+       69,  82,  82,  79,  82,  58,  32,  84, 104, 101,  32, 112,
+      114, 111,  99, 101, 115, 115,  32, 119, 105, 116, 104,  32,
+       80,  73,  68,  32,  49,  51,  48,  54,  52,  32,  40,  99,
+      104, 105, 108, 100,  32, 112, 114, 111,  99, 101, 115, 115,
+       32, 111, 102,  32,  80,  73,  68,  32,  51,  52,  57,  57,
+       50,  41,  32,  99, 111, 117, 108, 100,  32, 110, 111, 116,
+       32,  98, 101,  32, 116, 101, 114, 109, 105, 110,  97, 116,
+      101, 100,  46,  13,  10,  82, 101,  97, 115, 111, 110,  58,
+       32,  84, 104, 101,
+      ... 41 more items
+    ]
+  ],
+  pid: 24408,
+  stdout: Buffer(0) [Uint8Array] [],
+  stderr: Buffer(141) [Uint8Array] [
+     69,  82,  82,  79,  82,  58,  32,  84, 104, 101,  32, 112,
+    114, 111,  99, 101, 115, 115,  32, 119, 105, 116, 104,  32,
+     80,  73,  68,  32,  49,  51,  48,  54,  52,  32,  40,  99,
+    104, 105, 108, 100,  32, 112, 114, 111,  99, 101, 115, 115,
+     32, 111, 102,  32,  80,  73,  68,  32,  51,  52,  57,  57,
+     50,  41,  32,  99, 111, 117, 108, 100,  32, 110, 111, 116,
+     32,  98, 101,  32, 116, 101, 114, 109, 105, 110,  97, 116,
+    101, 100,  46,  13,  10,  82, 101,  97, 115, 111, 110,  58,
+     32,  84, 104, 101,
+    ... 41 more items
+  ]
+}
+
+Node.js v24.16.0

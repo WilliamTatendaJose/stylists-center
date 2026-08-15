@@ -5,6 +5,7 @@ import {
   type TextStyle,
 } from 'react-native';
 import { color, type, type TypeVariant } from '@sc/tokens';
+import { useTheme } from '../theme.js';
 
 export interface TextProps extends Omit<RNTextProps, 'style'> {
   /** The type scale variant to render — the only way font size/weight/spacing are set. */
@@ -20,13 +21,13 @@ export interface TextProps extends Omit<RNTextProps, 'style'> {
   style?: StyleProp<TextStyle>;
 }
 
-function resolveColor(value: TextProps['color']): string {
-  if (!value) return color.text;
-  if (value in color) {
-    const v = color[value as keyof typeof color];
-    return typeof v === 'string' ? v : color.text;
+function resolveColor(value: TextProps['color'], themeColor: { text: string; [key: string]: unknown }): string {
+  if (!value) return themeColor.text;
+  if (value in themeColor) {
+    const v = themeColor[value as keyof typeof themeColor];
+    return typeof v === 'string' ? v : themeColor.text;
   }
-  return value;
+  return typeof value === 'string' ? value : themeColor.text;
 }
 
 /**
@@ -36,7 +37,8 @@ function resolveColor(value: TextProps['color']): string {
  * file.
  */
 export function Text({ variant = 'body', color: colorProp, align, style, ...props }: TextProps) {
-  const colorStyle: TextStyle = { color: resolveColor(colorProp) };
+  const { colors } = useTheme();
+  const colorStyle: TextStyle = { color: resolveColor(colorProp, colors) };
   const alignStyle: TextStyle | undefined = align ? { textAlign: align } : undefined;
 
   return <RNText {...props} style={[type[variant], colorStyle, alignStyle, style]} />;

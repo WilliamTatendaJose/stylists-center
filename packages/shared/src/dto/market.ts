@@ -1,17 +1,19 @@
 import { z } from 'zod';
 import { paymentMethodSchema } from './bookings.js';
+import { imageUrlSchema } from './uploads.js';
 
 export const productRowSchema = z.object({
   id: z.uuid(),
   name: z.string(),
   priceUsdCents: z.number().int(),
   stockQty: z.number().int(),
-  imageUrls: z.array(z.string()),
+  imageUrls: z.array(imageUrlSchema).max(5),
   /** Seller identity travels with every row — a buyer collects from a person, so the row is meaningless without them. */
   providerId: z.uuid(),
   providerName: z.string(),
   tint: z.string(),
   initials: z.string(),
+  providerImageUrl: imageUrlSchema.optional(),
   verified: z.boolean(),
   areaName: z.string(),
   distanceKm: z.number(),
@@ -40,7 +42,12 @@ export const orderItemSchema = z.object({
 });
 export type OrderItemDto = z.infer<typeof orderItemSchema>;
 
-export const orderStatusSchema = z.enum(['reserved', 'collected', 'cancelled']);
+export const orderStatusSchema = z.enum([
+  'reserved',
+  'ready_for_collection',
+  'collected',
+  'cancelled',
+]);
 
 export const orderRowSchema = z.object({
   id: z.uuid(),
@@ -53,6 +60,7 @@ export const orderRowSchema = z.object({
   providerName: z.string(),
   tint: z.string(),
   initials: z.string(),
+  providerImageUrl: imageUrlSchema.optional(),
   areaName: z.string(),
   items: z.array(orderItemSchema),
   /** Server-decided, so the button a buyer sees and the rule the API enforces cannot drift. */
@@ -96,7 +104,7 @@ export const providerProductSchema = z.object({
   description: z.string(),
   priceUsdCents: z.number().int(),
   stockQty: z.number().int(),
-  imageUrls: z.array(z.string()),
+  imageUrls: z.array(imageUrlSchema).max(5),
   active: z.boolean(),
 });
 export type ProviderProductDto = z.infer<typeof providerProductSchema>;
@@ -106,9 +114,19 @@ export const createProviderProductSchema = z.object({
   description: z.string().trim().min(2).max(500),
   priceUsdCents: z.number().int().min(100).max(1_000_000),
   stockQty: z.number().int().min(0).max(100_000),
-  imageUrls: z.array(z.url()).max(5).default([]),
+  imageUrls: z.array(imageUrlSchema).max(5).default([]),
 });
 export type CreateProviderProductInput = z.infer<typeof createProviderProductSchema>;
+
+/** Full editable storefront item. Keeping stock here lets a correction be made deliberately. */
+export const updateProviderProductSchema = createProviderProductSchema;
+export type UpdateProviderProductInput = z.infer<typeof updateProviderProductSchema>;
+
+/** A quick stock increment for deliveries received after the item was listed. */
+export const restockProviderProductSchema = z.object({
+  quantity: z.number().int().min(1).max(100_000),
+});
+export type RestockProviderProductInput = z.infer<typeof restockProviderProductSchema>;
 
 /** An incoming order as the seller sees it. */
 export const providerOrderSchema = z.object({
@@ -120,6 +138,6 @@ export const providerOrderSchema = z.object({
   totalUsdCents: z.number().int(),
   createdAt: z.iso.datetime(),
   items: z.array(orderItemSchema),
-  canMarkCollected: z.boolean(),
+  canMarkReady: z.boolean(),
 });
 export type ProviderOrderDto = z.infer<typeof providerOrderSchema>;

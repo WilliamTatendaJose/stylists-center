@@ -16,6 +16,7 @@ import { downloadAvondaleAreaPack } from '../src/offline/downloadAreaPack.js';
 import { useAuthGate } from '../src/auth/useAuthGate.js';
 import { AppErrorBoundary } from '../src/errors/AppErrorBoundary.js';
 import { registerPushToken } from '../src/notifications/registerPushToken.js';
+import { ThemeProvider } from '@sc/ui';
 
 // expo-router renders a route's exported `ErrorBoundary` when that segment
 // throws. Exported from the root layout so it covers every screen.
@@ -42,6 +43,8 @@ export default function RootLayout() {
   });
   const hasDownloadedOfflinePack = useSessionStore((s) => s.hasDownloadedOfflinePack);
   const setHasDownloadedOfflinePack = useSessionStore((s) => s.setHasDownloadedOfflinePack);
+  const themeMode = useSessionStore((s) => s.themeMode);
+  const setThemeMode = useSessionStore((s) => s.setThemeMode);
 
   // Stands in for "on first login" (plan §5/§9 item 18) until auth exists —
   // downloads the client's home-area tile pack once so the map screens work
@@ -74,7 +77,9 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <PersistQueryClientProvider client={queryClient} persistOptions={PERSIST_OPTIONS}>
-          <AuthGatedNavigator fontsReady={fontsReady} />
+          <ThemeProvider mode={themeMode} onModeChange={setThemeMode}>
+            <AuthGatedNavigator fontsReady={fontsReady} />
+          </ThemeProvider>
         </PersistQueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

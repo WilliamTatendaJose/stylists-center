@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, layout, motion, radius, shadow, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 /**
  * A minimal structural subset of React Navigation's BottomTabBarProps (which
@@ -62,6 +63,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     backgroundColor: color.neutral900,
     borderRadius: radius.pill,
+    borderWidth: 1,
     padding: layout.tabBarPadding,
     gap: layout.tabBarGap,
     flexDirection: 'row',
@@ -91,6 +93,7 @@ const styles = StyleSheet.create({
  * that's configured per-app in the Tabs.Screen options.
  */
 export function FloatingTabBar({ state, descriptors, navigation }: FloatingTabBarProps) {
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const barStyle: ViewStyle = {
     left: layout.tabBarSideInset,
@@ -99,7 +102,16 @@ export function FloatingTabBar({ state, descriptors, navigation }: FloatingTabBa
   };
 
   return (
-    <View style={[styles.bar, barStyle]}>
+    <View
+      style={[
+        styles.bar,
+        {
+          backgroundColor: isDark ? colors.surface : colors.neutral900,
+          borderColor: colors.divider,
+        },
+        barStyle,
+      ]}
+    >
       {state.routes.map((route, index) => {
         const descriptor = descriptors[route.key];
         if (!descriptor) return null;
@@ -145,6 +157,7 @@ interface FloatingTabProps {
 }
 
 function FloatingTab({ focused, label, onPress, renderIcon }: FloatingTabProps) {
+  const { colors, isDark } = useTheme();
   // 0 = inactive (black fill, white icon/label), 1 = active (white fill,
   // accent icon/label, flexGrow 1.9). Driven off `focused` rather than a
   // press gesture — the morph follows route changes, matching the design.
@@ -156,7 +169,11 @@ function FloatingTab({ focused, label, onPress, renderIcon }: FloatingTabProps) 
 
   const containerStyle = useAnimatedStyle(() => ({
     flexGrow: motion.tab.flexFrom + progress.value * (motion.tab.flexTo - motion.tab.flexFrom),
-    backgroundColor: interpolateColor(progress.value, [0, 1], [color.neutral900, color.bg]),
+    backgroundColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      [isDark ? colors.surface : colors.neutral900, isDark ? colors.neutral200 : colors.bg],
+    ),
   }));
 
   const labelStyle = useAnimatedStyle(() => ({
@@ -168,7 +185,7 @@ function FloatingTab({ focused, label, onPress, renderIcon }: FloatingTabProps) 
   // Icon/label tint doesn't need its own worklet — it only has two states and
   // isn't itself animated position/opacity, just recoloured at the same pace
   // as the container via the shared `focused` boolean.
-  const tint = focused ? color.accent : color.bg;
+  const tint = focused ? colors.accent : isDark ? colors.onDark.text : colors.bg;
 
   // The flexGrow/background morph animates on an Animated.View (a plain host
   // component Reanimated can drive directly); the actual touch target is a

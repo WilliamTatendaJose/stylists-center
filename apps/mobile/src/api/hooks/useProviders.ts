@@ -13,6 +13,7 @@ import {
   type ProviderSubscriptionDto,
   type ServiceDto,
   type UpdateProviderProfileInput,
+  type UpdateProviderServiceInput,
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { ME_QUERY_KEY } from './useMe.js';
@@ -177,6 +178,18 @@ export function useAddProviderService() {
   return useMutation({
     mutationFn: (input: CreateProviderServiceInput) =>
       apiFetch<ServiceDto>('/v1/provider/services', { method: 'POST', body: input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_PROFILE_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['providers'] });
+    },
+  });
+}
+
+export function useUpdateProviderService() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: UpdateProviderServiceInput }) =>
+      apiFetch<ServiceDto>(`/v1/provider/services/${id}`, { method: 'PATCH', body: input }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROVIDER_PROFILE_KEY });
       void queryClient.invalidateQueries({ queryKey: ['providers'] });

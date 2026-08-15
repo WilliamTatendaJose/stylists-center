@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
-import { color, radius, space } from '@sc/tokens';
+import { radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface RadioCardProps {
   title: string;
@@ -64,10 +65,11 @@ export function RadioCard({
   fillWhenSelected = false,
   right,
 }: RadioCardProps) {
+  const { colors } = useTheme();
   if (fillWhenSelected) {
     const flatStyle: ViewStyle = {
-      backgroundColor: selected ? color.accent : color.bg,
-      borderColor: selected ? color.accent : color.divider,
+      backgroundColor: selected ? colors.accent : colors.bg,
+      borderColor: selected ? colors.accent : colors.divider,
     };
     return (
       <Pressable
@@ -77,7 +79,7 @@ export function RadioCard({
         onPress={onPress}
         style={[styles.flat, flatStyle]}
       >
-        <Text variant="body" color={selected ? color.bg : color.text} style={styles.body}>
+        <Text variant="body" color={selected ? colors.bg : colors.text} style={styles.body}>
           {title}
         </Text>
         {right}
@@ -86,16 +88,16 @@ export function RadioCard({
   }
 
   const cardStyle: ViewStyle = {
-    borderColor: selected ? color.accent : color.divider,
-    backgroundColor: selected ? color.accent100 : color.bg,
+    borderColor: selected ? colors.accent : colors.divider,
+    backgroundColor: selected ? colors.accent100 : colors.bg,
   };
   // Selected: solid accent centre with a lighter accent-100 ring around it
   // (the handoff's `inset 0 0 0 3px accent-100`) — approximated with a 3px
   // border in the ring colour rather than the fill colour, so the ring is
   // actually visible instead of blending into a plain solid circle.
   const dotStyle: ViewStyle = {
-    borderColor: selected ? color.accent100 : color.neutral600,
-    backgroundColor: selected ? color.accent : 'transparent',
+    borderColor: selected ? colors.accent100 : colors.neutral600,
+    backgroundColor: selected ? colors.accent : 'transparent',
   };
 
   return (

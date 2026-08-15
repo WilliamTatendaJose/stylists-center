@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { formatBookingReference, SUBSCRIPTION_CYCLE_DAYS } from '@sc/shared';
 import { PrismaClient } from '../src/generated/prisma/index.js';
+import { hashPassword } from '../src/modules/admin-auth/password.js';
 
 /**
  * Every id below is fixed rather than @default(uuid())'d, and matches
@@ -201,6 +202,12 @@ const PAYMENT_IDS = {
 } as const;
 
 const CONVERSATION_TARIRO_ID = '55555555-5555-4555-8555-555555555551';
+
+// Dev-only bootstrap credential for the admin console (apps/admin) — there is
+// no self-serve signup for staff, so something has to create the first
+// account. Rotate this before the database is ever shared beyond a laptop.
+const ADMIN_EMAIL = 'admin@stylistscenter.local';
+const ADMIN_PASSWORD = 'ChangeMe123!';
 
 async function main() {
   await prisma.city.upsert({
@@ -517,9 +524,19 @@ async function main() {
     });
   }
 
+  await prisma.adminUser.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: {},
+    create: {
+      email: ADMIN_EMAIL,
+      passwordHash: await hashPassword(ADMIN_PASSWORD),
+      displayName: 'Admin',
+    },
+  });
+
   // eslint-disable-next-line no-console
   console.log(
-    `Seed complete: 1 city, 7 categories, 6 users, 5 providers, 3 bookings, 1 conversation, 1 agent, ${String(PRODUCTS.length)} products.`,
+    `Seed complete: 1 city, 7 categories, 6 users, 5 providers, 3 bookings, 1 conversation, 1 agent, ${String(PRODUCTS.length)} products, 1 admin user (${ADMIN_EMAIL} / ${ADMIN_PASSWORD}).`,
   );
 }
 

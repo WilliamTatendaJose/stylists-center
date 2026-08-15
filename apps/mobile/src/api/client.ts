@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { fetch as expoFetch } from 'expo/fetch';
 import { Platform } from 'react-native';
 import { useAuthStore } from '../state/useAuthStore.js';
 import { getStoredTokens, setStoredTokens, clearStoredTokens } from '../auth/tokenStorage.js';
@@ -80,7 +81,8 @@ export interface ApiFetchOptions {
  */
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { method = 'GET', body, auth = true } = options;
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+  const headers: Record<string, string> = isFormData ? {} : { 'Content-Type': 'application/json' };
 
   if (auth) {
     const token = useAuthStore.getState().accessToken;
@@ -89,10 +91,14 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   const doFetch = async () => {
     try {
-      return await fetch(`${BASE_URL}${path}`, {
+      // Expo's native fetch can stream URI-backed FormData parts on Android.
+      // React Native's global fetch rejects those parts before the request is
+      // sent, which made image uploads surface as a generic network failure.
+      const request = isFormData ? expoFetch : fetch;
+      return await request(`${BASE_URL}${path}`, {
         method,
         headers,
-        body: body ? JSON.stringify(body) : undefined,
+        body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
       });
     } catch (cause) {
       // fetch only rejects when the request never completed; every HTTP status,
@@ -121,4 +127,10 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
+}
+
+/** Resolves API-owned origin-relative media without baking a dev-machine host into the database. */
+export function apiAssetUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  return url.startsWith('/') ? `${BASE_URL}${url}` : url;
 }

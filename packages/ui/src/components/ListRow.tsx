@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
 import { Avatar } from './Avatar.js';
+import { useTheme } from '../theme.js';
 
 export interface ListRowAvatarProps {
   initials: string;
@@ -34,7 +35,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.ml,
     alignItems: 'flex-start',
   },
-  divider: { borderBottomWidth: 1, borderBottomColor: color.divider },
   middle: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   right: { alignItems: 'flex-end' },
@@ -59,6 +59,7 @@ export function ListRow({
   divider = true,
   onPress,
 }: ListRowProps) {
+  const { colors } = useTheme();
   const content = (
     <>
       <Avatar initials={avatar.initials} tint={avatar.tint} uri={avatar.uri} size={avatar.size} />
@@ -94,7 +95,7 @@ export function ListRow({
     </>
   );
 
-  const rowStyle = divider ? [styles.row, styles.divider] : styles.row;
+  const rowStyle = divider ? [styles.row, { borderBottomColor: colors.divider }] : styles.row;
 
   if (!onPress) {
     return <View style={rowStyle}>{content}</View>;

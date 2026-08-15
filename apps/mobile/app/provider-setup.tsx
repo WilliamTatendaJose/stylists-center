@@ -84,6 +84,7 @@ export default function ProviderSetup() {
             name: serviceName.trim(),
             durationMinutes,
             priceUsdCents: Math.round(priceUsd * 100),
+            imageUrls: [],
           },
         ],
       },
@@ -125,8 +126,8 @@ export default function ProviderSetup() {
       }
     >
       <Text variant="body" color="neutral700" style={styles.intro}>
-        This gets your page bookable — a category, your area, your hours, and one priced service.
-        ID and selfie verification aren&apos;t part of this yet.
+        This gets your page bookable — a category, your area, your hours, and one priced service. ID
+        and selfie verification aren&apos;t part of this yet.
       </Text>
 
       <View style={styles.section}>

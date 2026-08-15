@@ -16,6 +16,9 @@ export function toBookingRowDto(
     counterpartyName: booking.provider.displayName,
     tint: booking.provider.tint,
     initials: booking.provider.initials,
+    ...((booking.provider.profileImageUrl ?? booking.provider.portfolioImageUrls[0])
+      ? { imageUrl: booking.provider.profileImageUrl ?? booking.provider.portfolioImageUrls[0] }
+      : {}),
     serviceName: booking.service.name,
     whenLabel: formatBookingWhen(booking.startsAt.toISOString()),
     startsAt: booking.startsAt.toISOString(),

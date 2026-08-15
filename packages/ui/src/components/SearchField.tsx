@@ -3,6 +3,7 @@ import { Search } from 'lucide-react-native';
 import { color, radius, space, type } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface SearchFieldProps {
   value?: string;
@@ -30,16 +31,20 @@ const styles = StyleSheet.create({
 
 /** The pill search row — Home's tap-to-map version (onPress) or a real text field elsewhere. */
 export function SearchField({ value, onChangeText, placeholder, onPress }: SearchFieldProps) {
+  const { colors } = useTheme();
+  const baseStyle = [styles.base, { backgroundColor: colors.surface, borderColor: colors.divider }];
+  const inputViewStyle = styles.input;
+  const inputTextStyle = [styles.input, { color: colors.text }];
   if (onPress) {
     return (
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={placeholder}
         onPress={onPress}
-        style={styles.base}
+        style={baseStyle}
       >
-        <Search size={15} strokeWidth={1.7} color={color.neutral600} />
-        <View style={styles.input}>
+        <Search size={15} strokeWidth={1.7} color={colors.neutral600} />
+        <View style={inputViewStyle}>
           <Text variant="body" color="neutral600" numberOfLines={1}>
             {placeholder}
           </Text>
@@ -49,14 +54,14 @@ export function SearchField({ value, onChangeText, placeholder, onPress }: Searc
   }
 
   return (
-    <View style={styles.base}>
-      <Search size={15} strokeWidth={1.7} color={color.neutral600} />
+    <View style={baseStyle}>
+      <Search size={15} strokeWidth={1.7} color={colors.neutral600} />
       <TextInput
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={color.neutral600}
-        style={styles.input}
+        placeholderTextColor={colors.neutral600}
+        style={inputTextStyle}
       />
     </View>
   );

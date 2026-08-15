@@ -1,0 +1,24 @@
+.git
+.github
+.claude
+.turbo
+.pnpm-store
+**/node_modules
+**/dist
+**/dist-esm
+**/.expo
+**/coverage
+**/*.log
+**/*.apk
+**/*.aab
+android/
+ios/
+uploads
+apps/api/src/generated
+
+# Env — never bake a secret into an image; each Dockerfile takes what it
+# needs as explicit ARG/ENV instead.
+.env
+**/.env
+**/.env.*
+!**/.env.example

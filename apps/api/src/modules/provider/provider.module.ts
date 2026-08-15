@@ -6,10 +6,11 @@ import { PaymentsModule } from '../payments/payments.module';
 import { ProviderService } from './provider.service';
 import { ProviderController } from './provider.controller';
 import { ProviderGuard } from './provider.guard';
+import { ImageStorageService } from './image-storage.service';
 
 @Module({
   imports: [AuthModule, RealtimeModule, MatchingModule, PaymentsModule],
   controllers: [ProviderController],
-  providers: [ProviderService, ProviderGuard],
+  providers: [ProviderService, ProviderGuard, ImageStorageService],
 })
 export class ProviderModule {}

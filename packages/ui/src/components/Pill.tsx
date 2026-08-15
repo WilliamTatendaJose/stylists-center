@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react-native';
 import { color, radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface PillProps {
   label: string;
@@ -47,8 +48,9 @@ export function Pill({
   onDark = false,
   style,
 }: PillProps) {
-  const borderColor = selected ? color.accent : onDark ? color.onDark.border : color.divider;
-  const textColor = onDark ? color.onDark.text : color.text;
+  const { colors } = useTheme();
+  const borderColor = selected ? colors.accent : onDark ? color.onDark.border : colors.divider;
+  const textColor = onDark ? color.onDark.text : colors.text;
   const containerStyle: ViewStyle = { borderColor };
 
   const content = (
@@ -58,7 +60,7 @@ export function Pill({
         {label}
       </Text>
       {caption ? (
-        <Text variant="kicker" color={color.accent700}>
+        <Text variant="kicker" color={colors.accent700}>
           {caption}
         </Text>
       ) : null}

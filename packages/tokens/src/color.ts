@@ -77,6 +77,28 @@ export const color = {
 } as const;
 
 /**
+ * Semantic colours for the app's optional dark appearance.  The original
+ * palette remains exported as `color` for the light design and for the
+ * deliberately dark, full-bleed flows (Smart Match, live trip, etc.).
+ */
+export const darkColor = {
+  ...color,
+  bg: '#0b0b0b',
+  surface: '#1a1918',
+  divider: 'rgba(255,255,255,0.16)',
+  text: '#ffffff',
+  neutral700: '#b7b2b0',
+  neutral600: '#918c8a',
+  neutral200: '#302e2d',
+  accent100: '#3b201c',
+  accent300: '#a94e43',
+  accent700: '#ff9588',
+  accent800: '#ffb1a7',
+  mapBackground: '#151313',
+  mapOverlayBg: 'rgba(26,25,24,0.92)',
+} as const;
+
+/**
  * Body-size text must never be set in `color.accent` — it lands around 3:1 on
  * white, which is fine for icons, chrome and large type but fails for body
  * copy. Exported so the typography guardrail test can assert it, and so screens

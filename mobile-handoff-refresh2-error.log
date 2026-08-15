@@ -1,0 +1,3 @@
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides", "pnpm.onlyBuiltDependencies". See https://pnpm.io/settings for the new home of each setting.
+Could not open editor.
+You can set an editor for Expo to open by defining the $EXPO_EDITOR or $VISUAL environment variable (e.g. "vscode" or "atom")

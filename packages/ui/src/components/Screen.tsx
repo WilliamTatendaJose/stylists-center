@@ -12,6 +12,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated from 'react-native-reanimated';
 import { color, layout, space } from '@sc/tokens';
+import { useTheme } from '../theme.js';
 import { scIn } from '../motion/index.js';
 import {
   resolveHeaderTopPadding,
@@ -97,15 +98,18 @@ export function Screen({
   contentStyle,
   children,
 }: ScreenProps) {
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const rootStyle: ViewStyle = { backgroundColor: THEME_BACKGROUND[theme] };
+  const effectiveTheme = theme === 'light' && isDark ? 'dark' : theme;
+  const themeBackground = effectiveTheme === 'dark' ? colors.bg : THEME_BACKGROUND[effectiveTheme];
+  const rootStyle: ViewStyle = { backgroundColor: themeBackground };
 
   const headerStyle: ViewStyle = {
     paddingTop: resolveHeaderTopPadding(insets.top),
     paddingHorizontal: layout.screenX,
     paddingBottom: space.s,
-    borderBottomColor: HEADER_BORDER_COLOR[theme],
+    borderBottomColor: effectiveTheme === 'dark' ? colors.divider : HEADER_BORDER_COLOR[effectiveTheme],
   };
 
   // Content padding: top clears the safe area only when there is no fixed
@@ -125,7 +129,7 @@ export function Screen({
     paddingHorizontal: layout.screenX,
     paddingTop: space.ml,
     paddingBottom: resolveFooterBottomPadding(insets.bottom),
-    borderTopColor: color.divider,
+    borderTopColor: effectiveTheme === 'dark' ? colors.divider : color.divider,
   };
 
   const body = (
@@ -137,7 +141,7 @@ export function Screen({
 
   return (
     <Root style={[styles.root, rootStyle]} {...enteringProp}>
-      <StatusBar style={STATUS_BAR_CONTENT[theme]} />
+      <StatusBar style={STATUS_BAR_CONTENT[effectiveTheme]} />
       {header ? (
         <View style={[headerStyle, headerBordered ? styles.headerBorder : null]}>{header}</View>
       ) : null}

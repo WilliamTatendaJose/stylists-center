@@ -16,6 +16,7 @@ export function toProviderListRow(row: ProviderGeoRow): ProviderListRowDto {
     displayName: row.displayName,
     tint: row.tint,
     initials: row.initials,
+    ...(row.imageUrl ? { imageUrl: row.imageUrl } : {}),
     verified: row.verified,
     acceptingBookings: row.acceptingBookings,
     categoryName: row.categoryName,

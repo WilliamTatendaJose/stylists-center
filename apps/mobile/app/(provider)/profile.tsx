@@ -1,21 +1,26 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { MapPin } from 'lucide-react-native';
+import { Clock3, LogOut, MapPin, UserRound } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
-import { deriveInitials, formatInHarare, formatUsd, type PaymentMethod } from '@sc/shared';
+import {
+  deriveInitials,
+  formatInHarare,
+  formatUsd,
+  type PaymentMethod,
+  type ServiceDto,
+} from '@sc/shared';
 import { color, space } from '@sc/tokens';
 import {
-  Avatar,
   Badge,
   Button,
   Card,
   EmptyPanel,
   ListRow,
+  Pressable,
   RadioCard,
   Screen,
   ScreenHeader,
-  SectionLabel,
   Sheet,
   Text,
   TextField,
@@ -26,44 +31,66 @@ import {
   useProviderManagementProfile,
   useProviderSubscription,
   useUpdateProviderProfile,
+  useUpdateProviderService,
 } from '../../src/api/hooks/useProviders.js';
 import { useSetActiveRole } from '../../src/api/hooks/useMe.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useAuthStore } from '../../src/state/useAuthStore.js';
 import { useSessionStore } from '../../src/state/index.js';
+import { PhotoPicker } from '../../src/components/PhotoPicker.js';
+import { apiAssetUrl } from '../../src/api/client.js';
+import {
+  ProfileHero,
+  ProfileIconTile,
+  ProfileInfoRow,
+  ProfileSection,
+} from '../../src/components/ProfileChrome.js';
 
 const styles = StyleSheet.create({
-  section: { marginBottom: space.xxl },
-  title: { marginBottom: space.m },
-  field: { marginBottom: space.m },
-  row: { flexDirection: 'row', justifyContent: 'space-between', gap: space.m },
-  submitButton: { marginTop: space.m },
-  grow: { flex: 1, minWidth: 0 },
   error: { marginBottom: space.m },
-  roleSwitch: { marginTop: space.l },
-  signOut: { marginTop: space.m },
-  previewCard: { padding: space.l, marginBottom: space.xxl },
-  previewRow: { flexDirection: 'row', alignItems: 'center', gap: space.m },
-  previewText: { flex: 1, minWidth: 0 },
-  previewLabel: { marginBottom: space.m },
-  subscriptionCard: { padding: space.l, marginBottom: space.xxl },
+  contentCard: { padding: space.l },
+  detailsCard: { paddingHorizontal: space.l },
+  cardAction: { marginTop: space.l },
+  accountGap: { marginTop: space.s },
   subscriptionTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  grow: { flex: 1, minWidth: 0 },
   subscriptionMeta: { marginTop: 2 },
-  subscriptionAction: { marginTop: space.m },
+  photoHelp: { marginTop: space.s },
+  roleTop: { flexDirection: 'row', alignItems: 'flex-start', gap: space.m },
+  roleCopy: { flex: 1, minWidth: 0 },
+  roleBody: { marginTop: space.xs },
+  signOutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.s,
+    paddingVertical: space.m,
+    marginTop: space.m,
+  },
   sheetTitle: { marginBottom: space.s },
   sheetBody: { marginBottom: space.xl },
-  radioGap: { marginBottom: space.s },
+  sheetField: { marginBottom: space.m },
   sheetError: { marginBottom: space.m },
+  row: { flexDirection: 'row', justifyContent: 'space-between', gap: space.m },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    marginTop: space.s,
+    marginBottom: space.m,
+  },
+  radioGap: { marginBottom: space.s },
 });
 
 export default function ProviderProfile() {
   const { data, isError, refetch } = useProviderManagementProfile();
   const updateProfile = useUpdateProviderProfile();
   const addService = useAddProviderService();
+  const updateService = useUpdateProviderService();
   const { data: subscription } = useProviderSubscription();
   const paySubscription = usePaySubscription();
   const setActiveRole = useSetActiveRole();
@@ -74,12 +101,18 @@ export default function ProviderProfile() {
   const [displayName, setDisplayName] = useState('');
   const [areaName, setAreaName] = useState('');
   const [workingHoursLabel, setWorkingHoursLabel] = useState('');
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
+  const [portfolioImageUrls, setPortfolioImageUrls] = useState<string[]>([]);
   const [lat, setLat] = useState(0);
   const [lng, setLng] = useState(0);
   const [serviceName, setServiceName] = useState('');
   const [duration, setDuration] = useState('60');
   const [price, setPrice] = useState('20');
+  const [serviceImageUrls, setServiceImageUrls] = useState<string[]>([]);
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
+  const [serviceSheetOpen, setServiceSheetOpen] = useState(false);
   const [payMethod, setPayMethod] = useState<PaymentMethod>('ecocash');
   const [subSheetOpen, setSubSheetOpen] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
@@ -89,6 +122,8 @@ export default function ProviderProfile() {
     setDisplayName(data.displayName);
     setAreaName(data.areaName);
     setWorkingHoursLabel(data.workingHoursLabel);
+    setProfileImageUrl(data.profileImageUrl ?? null);
+    setPortfolioImageUrls(data.portfolioImageUrls);
     setLat(data.lat);
     setLng(data.lng);
   }, [data]);
@@ -102,37 +137,93 @@ export default function ProviderProfile() {
     );
   }
 
-  const save = () => {
+  const profileInput = (nextImages = portfolioImageUrls, nextProfileImage = profileImageUrl) => ({
+    displayName: displayName.trim(),
+    areaName: areaName.trim(),
+    workingHoursLabel: workingHoursLabel.trim(),
+    lat,
+    lng,
+    profileImageUrl: nextProfileImage,
+    portfolioImageUrls: nextImages,
+  });
+
+  const saveDetails = () => {
     setError(null);
-    updateProfile.mutate(
-      {
-        displayName: displayName.trim(),
-        areaName: areaName.trim(),
-        workingHoursLabel: workingHoursLabel.trim(),
-        lat,
-        lng,
-      },
-      { onError: (reason) => setError(describeError(reason, "Couldn't save your page.")) },
-    );
+    updateProfile.mutate(profileInput(), {
+      onSuccess: () => setDetailsSheetOpen(false),
+      onError: (reason) => setError(describeError(reason, "Couldn't save your page.")),
+    });
   };
 
-  const createService = () => {
+  const savePhotos = (nextImages: string[]) => {
+    const previousImages = portfolioImageUrls;
+    setPortfolioImageUrls(nextImages);
     setError(null);
-    addService.mutate(
-      {
-        name: serviceName.trim(),
-        durationMinutes: Number(duration),
-        priceUsdCents: Math.round(Number(price) * 100),
+    updateProfile.mutate(profileInput(nextImages), {
+      onError: (reason) => {
+        setPortfolioImageUrls(previousImages);
+        setError(describeError(reason, "Couldn't save those photos."));
       },
-      {
-        onSuccess: () => {
-          setServiceName('');
-          setDuration('60');
-          setPrice('20');
-        },
-        onError: (reason) => setError(describeError(reason, "Couldn't add that service.")),
+    });
+  };
+
+  const saveProfilePhoto = (nextImages: string[]) => {
+    const previousImage = profileImageUrl;
+    const nextImage = nextImages[0] ?? null;
+    setProfileImageUrl(nextImage);
+    setError(null);
+    updateProfile.mutate(profileInput(portfolioImageUrls, nextImage), {
+      onError: (reason) => {
+        setProfileImageUrl(previousImage);
+        setError(describeError(reason, "Couldn't save your public page photo."));
       },
-    );
+    });
+  };
+
+  const openNewService = () => {
+    setEditingServiceId(null);
+    setServiceName('');
+    setDuration('60');
+    setPrice('20');
+    setServiceImageUrls([]);
+    setError(null);
+    setServiceSheetOpen(true);
+  };
+
+  const openService = (service: ServiceDto) => {
+    setEditingServiceId(service.id);
+    setServiceName(service.name);
+    setDuration(String(service.durationMinutes));
+    setPrice((service.priceUsdCents / 100).toFixed(2));
+    setServiceImageUrls(service.imageUrls ?? []);
+    setError(null);
+    setServiceSheetOpen(true);
+  };
+
+  const saveService = () => {
+    setError(null);
+    const input = {
+      name: serviceName.trim(),
+      durationMinutes: Number(duration),
+      priceUsdCents: Math.round(Number(price) * 100),
+      imageUrls: serviceImageUrls,
+    };
+    const options = {
+      onSuccess: () => {
+        setEditingServiceId(null);
+        setServiceName('');
+        setDuration('60');
+        setPrice('20');
+        setServiceImageUrls([]);
+        setServiceSheetOpen(false);
+      },
+      onError: (reason: Error) => setError(describeError(reason, "Couldn't save that service.")),
+    };
+    if (editingServiceId) {
+      updateService.mutate({ id: editingServiceId, input }, options);
+    } else {
+      addService.mutate(input, options);
+    }
   };
 
   const paySub = () => {
@@ -153,9 +244,7 @@ export default function ProviderProfile() {
   const switchToClient = () => {
     setError(null);
     setActiveRole.mutate('client', {
-      onSuccess: () => {
-        router.replace('/(tabs)');
-      },
+      onSuccess: () => router.replace('/(tabs)'),
       onError: (reason) => setError(describeError(reason, "Couldn't switch roles. Try again.")),
     });
   };
@@ -166,203 +255,323 @@ export default function ProviderProfile() {
     workingHoursLabel.trim().length >= 2;
   const serviceValid =
     serviceName.trim().length >= 2 && Number(duration) >= 10 && Number(price) >= 1;
+  const serviceSaving = addService.isPending || updateService.isPending;
 
   return (
     <>
       <Screen hasTabBar header={<ScreenHeader title="My page" showBack={false} />}>
         {error ? (
-          <Text variant="meta" color={color.accent700} style={styles.error}>
+          <Text
+            variant="meta"
+            color={color.accent700}
+            style={styles.error}
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
             {error}
           </Text>
         ) : null}
 
-        {subscription ? (
-          <Card bordered style={styles.subscriptionCard}>
-            <View style={styles.subscriptionTop}>
-              <View style={styles.grow}>
-                <Text variant="cardTitle">Subscription</Text>
-                <Text variant="meta" color="neutral700" style={styles.subscriptionMeta}>
-                  {formatUsd(subscription.priceUsdCents)} / month
-                </Text>
-                {subscription.paidUntil ? (
-                  <Text variant="metaSmall" color="neutral600" style={styles.subscriptionMeta}>
-                    {subscription.active ? 'Renews' : 'Expired'}{' '}
-                    {formatInHarare(subscription.paidUntil, 'd MMM yyyy')}
-                  </Text>
-                ) : null}
-              </View>
-              <Badge
-                label={subscription.active ? 'Active' : 'Past due'}
-                tone={subscription.active ? 'accent100' : 'accent'}
+        <ProfileHero
+          name={displayName || 'Your name'}
+          subtitle={areaName || 'Your area'}
+          note={
+            workingHoursLabel
+              ? `Available ${workingHoursLabel}`
+              : 'Add your working hours so clients know when to book.'
+          }
+          roleLabel="Stylist"
+          imageUrl={apiAssetUrl(profileImageUrl ?? portfolioImageUrls[0])}
+        />
+
+        <ProfileSection label="Public page">
+          <Card bordered style={styles.detailsCard}>
+            <View style={styles.cardAction}>
+              <PhotoPicker
+                label="Public page photo"
+                urls={profileImageUrl ? [profileImageUrl] : []}
+                maxPhotos={1}
+                helpText="Shown beside your name in search, bookings, and on your public page."
+                disabled={updateProfile.isPending}
+                onChange={saveProfilePhoto}
+                onError={(message) => setError(message || null)}
               />
             </View>
-            {!subscription.active ? (
-              <Text variant="meta" color="neutral700" style={styles.subscriptionMeta}>
-                You won&apos;t appear in search or smart-match until this is paid.
-              </Text>
-            ) : null}
+            <ProfileInfoRow
+              icon={<MapPin size={20} color={color.neutral700} />}
+              label="Service area"
+              value={areaName || 'Not set'}
+            />
+            <ProfileInfoRow
+              icon={<Clock3 size={20} color={color.neutral700} />}
+              label="Working hours"
+              value={workingHoursLabel || 'Not set'}
+              divided
+            />
             <Button
-              label={
-                subscription.active ? 'Renew early' : `Pay ${formatUsd(subscription.priceUsdCents)}`
-              }
-              variant={subscription.active ? 'secondary' : 'primary'}
+              label="Edit public details"
+              variant="secondary"
               block
-              style={styles.subscriptionAction}
               onPress={() => {
-                setSubError(null);
-                setSubSheetOpen(true);
+                setError(null);
+                setDetailsSheetOpen(true);
               }}
             />
+            {data ? (
+              <Button
+                label="View as a client"
+                variant="ghost"
+                block
+                style={styles.accountGap}
+                onPress={() =>
+                  router.push({
+                    pathname: '/provider/[id]',
+                    params: { id: data.id, back: '/(provider)/profile' },
+                  })
+                }
+              />
+            ) : null}
           </Card>
-        ) : null}
+        </ProfileSection>
 
-        <Card bordered style={styles.previewCard}>
-          <Text variant="metaSmall" color="neutral600" style={styles.previewLabel}>
-            HOW CLIENTS SEE YOU
-          </Text>
-          <View style={styles.previewRow}>
-            <Avatar initials={deriveInitials(displayName || 'Your name')} size={54} />
-            <View style={styles.previewText}>
-              <Text variant="cardTitle" numberOfLines={1}>
-                {displayName || 'Your name'}
-              </Text>
-              <Text variant="meta" color="neutral700" numberOfLines={1}>
-                {areaName || 'Your area'}
-              </Text>
-              <Text variant="metaSmall" color="neutral600" numberOfLines={1}>
-                {workingHoursLabel || 'Working hours'}
-              </Text>
-            </View>
-          </View>
-        </Card>
-
-        <View style={styles.section}>
-          <Text variant="sectionLabel" style={styles.title}>
-            Public details
-          </Text>
-          <View style={styles.field}>
-            <TextField label="Provider name" value={displayName} onChangeText={setDisplayName} />
-          </View>
-          <View style={styles.field}>
-            <TextField label="Area" value={areaName} onChangeText={setAreaName} />
-          </View>
-          <View style={styles.field}>
-            <TextField
-              label="Working hours"
-              value={workingHoursLabel}
-              onChangeText={setWorkingHoursLabel}
+        <ProfileSection label="Portfolio">
+          <Card bordered style={styles.contentCard}>
+            <PhotoPicker
+              label="Your work"
+              urls={portfolioImageUrls}
+              disabled={updateProfile.isPending}
+              onChange={savePhotos}
+              onError={(message) => setError(message || null)}
             />
-          </View>
-          <Button
-            label={
-              locationSource === 'device'
-                ? 'Use my current location'
-                : 'Current location unavailable'
-            }
-            variant="secondary"
-            disabled={locationSource !== 'device'}
-            onPress={() => {
-              setLat(deviceLocation.lat);
-              setLng(deviceLocation.lng);
-            }}
-          />
-          <View style={[styles.row, { marginTop: space.s }]}>
-            <MapPin size={16} color={color.neutral700} />
-            <Text variant="meta" color="neutral700" style={styles.grow}>
-              {lat.toFixed(5)}, {lng.toFixed(5)}
+            <Text variant="metaSmall" color="neutral600" style={styles.photoHelp}>
+              Work photos save automatically and appear in your public portfolio.
             </Text>
-          </View>
-          <Button
-            label={updateProfile.isPending ? 'Saving…' : 'Save page'}
-            block
-            style={styles.submitButton}
-            disabled={!profileValid || updateProfile.isPending}
-            onPress={save}
-          />
-        </View>
+          </Card>
+        </ProfileSection>
 
-        <View style={styles.section}>
-          <SectionLabel label="Services" count={data?.services.length} />
+        <ProfileSection label="Services" count={data?.services.length}>
           {data?.services.length === 0 ? (
-            <EmptyPanel body="No services yet — add your first one below." />
+            <EmptyPanel body="Add a service so clients can see your price and book you." />
           ) : (
             data?.services.map((service) => (
               <ListRow
                 key={service.id}
-                avatar={{ initials: deriveInitials(service.name), size: 44 }}
+                avatar={{
+                  initials: deriveInitials(service.name),
+                  uri: apiAssetUrl(service.imageUrls?.[0]),
+                  size: 44,
+                }}
                 title={service.name}
                 meta={`${service.durationMinutes} min`}
+                subMeta="Tap to edit details and photos"
                 rightPrimary={formatUsd(service.priceUsdCents)}
+                onPress={() => openService(service)}
               />
             ))
           )}
-          <View style={[styles.field, { marginTop: space.m }]}>
-            <TextField
-              label="New service"
-              value={serviceName}
-              onChangeText={setServiceName}
-              placeholder="e.g. Knotless braids"
-            />
-          </View>
-          <View style={styles.row}>
-            <View style={styles.grow}>
-              <TextField
-                label="Minutes"
-                value={duration}
-                onChangeText={setDuration}
-                keyboardType="number-pad"
-              />
-            </View>
-            <View style={styles.grow}>
-              <TextField
-                label="Price (USD)"
-                value={price}
-                onChangeText={setPrice}
-                keyboardType="decimal-pad"
-              />
-            </View>
-          </View>
           <Button
-            label={addService.isPending ? 'Adding…' : 'Add service'}
+            label="Add a service"
             variant="secondary"
             block
-            style={styles.submitButton}
-            disabled={!serviceValid || addService.isPending}
-            onPress={createService}
+            style={styles.cardAction}
+            onPress={openNewService}
           />
-        </View>
+        </ProfileSection>
 
-        <Button
-          label={setActiveRole.isPending ? 'Switching…' : 'Switch to client view'}
-          variant="secondary"
-          block
-          style={styles.roleSwitch}
-          disabled={setActiveRole.isPending}
-          onPress={switchToClient}
-        />
+        {subscription ? (
+          <ProfileSection label="Plan and visibility">
+            <Card bordered style={styles.contentCard}>
+              <View style={styles.subscriptionTop}>
+                <View style={styles.grow}>
+                  <Text variant="cardTitle">Subscription</Text>
+                  <Text variant="meta" color="neutral700" style={styles.subscriptionMeta}>
+                    {formatUsd(subscription.priceUsdCents)} / month
+                  </Text>
+                  {subscription.paidUntil ? (
+                    <Text variant="metaSmall" color="neutral600" style={styles.subscriptionMeta}>
+                      {subscription.active ? 'Renews' : 'Expired'}{' '}
+                      {formatInHarare(subscription.paidUntil, 'd MMM yyyy')}
+                    </Text>
+                  ) : null}
+                </View>
+                <Badge
+                  label={subscription.active ? 'Active' : 'Past due'}
+                  tone={subscription.active ? 'accent100' : 'accent'}
+                />
+              </View>
+              {!subscription.active ? (
+                <Text variant="meta" color="neutral700" style={styles.subscriptionMeta}>
+                  Pay to appear in search and smart-match.
+                </Text>
+              ) : null}
+              <Button
+                label={
+                  subscription.active
+                    ? 'Renew early'
+                    : `Pay ${formatUsd(subscription.priceUsdCents)}`
+                }
+                variant={subscription.active ? 'secondary' : 'primary'}
+                block
+                style={styles.cardAction}
+                onPress={() => {
+                  setSubError(null);
+                  setSubSheetOpen(true);
+                }}
+              />
+            </Card>
+          </ProfileSection>
+        ) : null}
 
-        <Button
-          label="Sign out"
-          variant="ghost"
-          style={styles.signOut}
-          onPress={() => void signOut()}
-        />
+        <ProfileSection label="Account">
+          <Card bordered style={styles.contentCard}>
+            <View style={styles.roleTop}>
+              <ProfileIconTile>
+                <UserRound size={20} color={color.neutral700} />
+              </ProfileIconTile>
+              <View style={styles.roleCopy}>
+                <Text variant="bodyStrong">Client view</Text>
+                <Text variant="meta" color="neutral700" style={styles.roleBody}>
+                  Browse stylists, shop the market, and manage your own bookings.
+                </Text>
+              </View>
+            </View>
+            <Button
+              label={setActiveRole.isPending ? 'Switching…' : 'Switch to client view'}
+              block
+              style={styles.cardAction}
+              disabled={setActiveRole.isPending}
+              onPress={switchToClient}
+            />
+          </Card>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+            onPress={() => void signOut()}
+            style={styles.signOutRow}
+          >
+            <LogOut size={18} strokeWidth={1.8} color={color.accent700} />
+            <Text variant="bodyStrong" color={color.accent700}>
+              Sign out
+            </Text>
+          </Pressable>
+        </ProfileSection>
       </Screen>
 
-      <Sheet
-        open={subSheetOpen}
-        onClose={() => {
-          setSubSheetOpen(false);
-        }}
-      >
+      <Sheet open={detailsSheetOpen} onClose={() => setDetailsSheetOpen(false)}>
+        <Text variant="cardTitle" style={styles.sheetTitle}>
+          Edit public details
+        </Text>
+        <Text variant="body" color="neutral700" style={styles.sheetBody}>
+          Keep this clear and current so clients know where and when you work.
+        </Text>
+        {error ? (
+          <Text variant="meta" color={color.accent700} style={styles.sheetError}>
+            {error}
+          </Text>
+        ) : null}
+        <View style={styles.sheetField}>
+          <TextField label="Provider name" value={displayName} onChangeText={setDisplayName} />
+        </View>
+        <View style={styles.sheetField}>
+          <TextField label="Area" value={areaName} onChangeText={setAreaName} />
+        </View>
+        <View style={styles.sheetField}>
+          <TextField
+            label="Working hours"
+            value={workingHoursLabel}
+            onChangeText={setWorkingHoursLabel}
+          />
+        </View>
+        <Button
+          label={
+            locationSource === 'device' ? 'Use my current location' : 'Current location unavailable'
+          }
+          variant="secondary"
+          block
+          disabled={locationSource !== 'device'}
+          onPress={() => {
+            setLat(deviceLocation.lat);
+            setLng(deviceLocation.lng);
+          }}
+        />
+        <View style={styles.locationRow}>
+          <MapPin size={16} color={color.neutral700} />
+          <Text variant="meta" color="neutral700">
+            {lat.toFixed(5)}, {lng.toFixed(5)}
+          </Text>
+        </View>
+        <Button
+          label={updateProfile.isPending ? 'Saving…' : 'Save changes'}
+          block
+          disabled={!profileValid || updateProfile.isPending}
+          onPress={saveDetails}
+        />
+      </Sheet>
+
+      <Sheet open={serviceSheetOpen} onClose={() => setServiceSheetOpen(false)}>
+        <Text variant="cardTitle" style={styles.sheetTitle}>
+          {editingServiceId ? 'Edit service' : 'Add a service'}
+        </Text>
+        <Text variant="body" color="neutral700" style={styles.sheetBody}>
+          Give clients a clear service name, duration, price, and examples of the result.
+        </Text>
+        {error ? (
+          <Text variant="meta" color={color.accent700} style={styles.sheetError}>
+            {error}
+          </Text>
+        ) : null}
+        <View style={styles.sheetField}>
+          <TextField
+            label="Service name"
+            value={serviceName}
+            onChangeText={setServiceName}
+            placeholder="e.g. Knotless braids"
+            autoFocus
+          />
+        </View>
+        <View style={styles.row}>
+          <View style={styles.grow}>
+            <TextField
+              label="Minutes"
+              value={duration}
+              onChangeText={setDuration}
+              keyboardType="number-pad"
+            />
+          </View>
+          <View style={styles.grow}>
+            <TextField
+              label="Price (USD)"
+              value={price}
+              onChangeText={setPrice}
+              keyboardType="decimal-pad"
+            />
+          </View>
+        </View>
+        <View style={styles.cardAction}>
+          <PhotoPicker
+            label="Service photos"
+            urls={serviceImageUrls}
+            disabled={serviceSaving}
+            onChange={setServiceImageUrls}
+            onError={(message) => setError(message || null)}
+          />
+        </View>
+        <Button
+          label={serviceSaving ? 'Saving…' : editingServiceId ? 'Save service' : 'Add service'}
+          block
+          style={styles.cardAction}
+          disabled={!serviceValid || serviceSaving}
+          onPress={saveService}
+        />
+      </Sheet>
+
+      <Sheet open={subSheetOpen} onClose={() => setSubSheetOpen(false)}>
         <Text variant="cardTitle" style={styles.sheetTitle}>
           Pay {subscription ? formatUsd(subscription.priceUsdCents) : ''}
         </Text>
         <Text variant="body" color="neutral700" style={styles.sheetBody}>
-          Extends your subscription by 30 days from today (or from your current renewal date, if it
-          hasn&apos;t lapsed yet).
+          Extends your subscription by 30 days from today, or from your current renewal date.
         </Text>
-
         {subError ? (
           <Text
             variant="meta"
@@ -374,31 +583,26 @@ export default function ProviderProfile() {
             {subError}
           </Text>
         ) : null}
-
         <View style={styles.radioGap}>
           <RadioCard
             title="Paynow — pay securely"
             description="Choose EcoCash, card, or another supported Paynow method."
             dot
             selected={payMethod === 'ecocash'}
-            onPress={() => {
-              setPayMethod('ecocash');
-            }}
+            onPress={() => setPayMethod('ecocash')}
           />
         </View>
         <RadioCard
           title="Cash"
-          description="You've paid the platform directly (e.g. in person or via agent) and are confirming it here."
+          description="Confirm a platform payment made directly, for example in person or through an agent."
           dot
           selected={payMethod === 'cash'}
-          onPress={() => {
-            setPayMethod('cash');
-          }}
+          onPress={() => setPayMethod('cash')}
         />
         <Button
           label={paySubscription.isPending ? 'Paying…' : 'Pay'}
           block
-          style={styles.subscriptionAction}
+          style={styles.cardAction}
           disabled={paySubscription.isPending}
           onPress={paySub}
         />

@@ -1,10 +1,11 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
-import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { ChatService } from './chat.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
+import { AttachmentStorageService } from './attachment-storage.service';
 
 /** Against real Postgres (sc_test) — no Testcontainers daemon in this sandbox. */
 const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
@@ -13,8 +14,12 @@ const BASE_ENV: Env = {
   PORT: 4000,
   DATABASE_URL: TEST_DATABASE_URL,
   REDIS_URL: 'redis://localhost:6380',
+  UPLOAD_DIR: 'uploads',
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
+  ADMIN_JWT_ACCESS_SECRET: 'test-admin-access-secret-at-least-32-characters-long',
+  ADMIN_JWT_REFRESH_PEPPER: 'test-admin-refresh-pepper-at-least-32-characters-long',
+  ADMIN_WEB_ORIGIN: 'http://localhost:5173',
   AUTH_DEV_OTP: '000000',
   INFOBIP_DEFAULT_CHANNEL: 'whatsapp',
   PAYMENT_PROVIDER: 'fake',
@@ -113,7 +118,19 @@ describe('ChatService', () => {
 
   beforeEach(() => {
     const socketEmitter = new SocketEmitterService();
-    chat = new ChatService(prisma, socketEmitter);
+    const attachmentStorage = {
+      saveMany: vi.fn((files: { originalname: string; mimetype: string; size: number }[]) =>
+        Promise.resolve(
+          files.map((file, index) => ({
+            url: `/uploads/test-${String(index)}.txt`,
+            name: file.originalname,
+            mimeType: file.mimetype,
+            sizeBytes: file.size,
+          })),
+        ),
+      ),
+    } as unknown as AttachmentStorageService;
+    chat = new ChatService(prisma, socketEmitter, attachmentStorage);
   });
 
   it('creates a conversation with a provider on first message, and reuses it on a second call', async () => {
@@ -132,6 +149,8 @@ describe('ChatService', () => {
     });
     expect(sent.mine).toBe(true);
     expect(sent.text).toBe('Hi, are you free today?');
+    expect(sent.read).toBe(false);
+    expect(sent.attachments).toEqual([]);
 
     const messages = await chat.getMessages(conversation.id, clientId);
     expect(messages).toHaveLength(1);
@@ -143,6 +162,25 @@ describe('ChatService', () => {
     await expect(
       chat.sendMessage(conversation.id, otherClientId, { text: 'not my conversation' }),
     ).rejects.toThrow();
+  });
+
+  it('sends an attachment-only message and uses its filename in the inbox preview', async () => {
+    const conversation = await chat.getOrCreateByProvider(clientId, providerId);
+    const sent = await chat.sendMessage(conversation.id, clientId, { text: '' }, [
+      {
+        buffer: Buffer.from('appointment notes'),
+        mimetype: 'text/plain',
+        originalname: 'appointment-notes.txt',
+        size: 17,
+      },
+    ]);
+
+    expect(sent.text).toBe('');
+    expect(sent.attachments[0]?.name).toBe('appointment-notes.txt');
+    const inbox = await chat.list(providerUserId);
+    expect(inbox.find((row) => row.id === conversation.id)?.lastMessagePreview).toBe(
+      'Attachment: appointment-notes.txt',
+    );
   });
 
   it('counts unread messages from the other party, and clears them once the thread is viewed', async () => {
@@ -177,6 +215,10 @@ describe('ChatService', () => {
 
     const providerMessages = await chat.getMessages(conversation.id, providerUserId);
     expect(providerMessages.some((message) => message.text === 'Provider-side test')).toBe(true);
+    const clientAfterRead = await chat.getMessages(conversation.id, clientId);
+    expect(clientAfterRead.find((message) => message.text === 'Provider-side test')?.read).toBe(
+      true,
+    );
     expect(
       (await chat.list(providerUserId)).find((row) => row.id === conversation.id)?.unreadCount,
     ).toBe(0);
@@ -187,5 +229,29 @@ describe('ChatService', () => {
     expect(reply.mine).toBe(true);
     const clientMessages = await chat.getMessages(conversation.id, clientId);
     expect(clientMessages.some((message) => message.text === 'Provider reply')).toBe(true);
+  });
+
+  it('opens the same order conversation for its buyer and seller, but nobody else', async () => {
+    const order = await prisma.order.create({
+      data: {
+        reference: `CHAT-ORDER-${String(Date.now())}`,
+        buyerId: clientId,
+        providerId,
+        paymentMethod: 'cash',
+        totalUsdCents: 500,
+      },
+    });
+    try {
+      const buyerThread = await chat.getOrCreateByOrder(order.id, clientId);
+      expect(buyerThread.counterpartyName).toBe('Chat Provider');
+
+      const sellerThread = await chat.getOrCreateByOrder(order.id, providerUserId);
+      expect(sellerThread.id).toBe(buyerThread.id);
+      expect(sellerThread.counterpartyName).toBe('Chat Client');
+
+      await expect(chat.getOrCreateByOrder(order.id, otherClientId)).rejects.toThrow();
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+    }
   });
 });

@@ -1,51 +1,140 @@
+import { useMemo, useState } from 'react';
+import { RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatBookingWhen } from '@sc/shared';
-import { Screen, ScreenHeader, ListRow, Badge, EmptyPanel } from '@sc/ui';
+import { color, space } from '@sc/tokens';
+import {
+  Screen,
+  ScreenHeader,
+  ListRow,
+  Badge,
+  EmptyPanel,
+  SearchField,
+  SegmentedPills,
+} from '@sc/ui';
 import { useConversations } from '../../src/api/hooks/useChat.js';
+import { apiAssetUrl } from '../../src/api/client.js';
+import { ServerConnectionPanel } from '../../src/components/ServerConnectionPanel.js';
 
-/** Messages inbox (thread list; conversations open at /chat/[threadId]). */
+type InboxFilter = 'all' | 'unread';
+
+const styles = StyleSheet.create({
+  controls: { gap: space.m, marginBottom: space.s },
+  searchRow: { flexDirection: 'row' },
+  unreadRow: {
+    backgroundColor: color.accent100,
+    marginHorizontal: -space.s,
+    paddingHorizontal: space.s,
+  },
+});
+
+/** Searchable Messages inbox with an explicit unread queue. */
 export default function Messages() {
-  const { data: conversations = [], isError, isLoading } = useConversations();
-  const sorted = [...conversations].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+  const {
+    data: conversations = [],
+    isError,
+    error,
+    isLoading,
+    isRefetching,
+    refetch,
+  } = useConversations();
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<InboxFilter>('all');
 
-  const openThread = (threadId: string) => {
-    router.push({ pathname: '/chat/[threadId]', params: { threadId } });
-  };
+  const sorted = useMemo(
+    () => [...conversations].sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt)),
+    [conversations],
+  );
+  const unreadTotal = conversations.reduce((total, row) => total + row.unreadCount, 0);
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  const visible = sorted.filter((conversation) => {
+    if (filter === 'unread' && conversation.unreadCount === 0) return false;
+    if (!normalizedQuery) return true;
+    return `${conversation.counterpartyName} ${conversation.lastMessagePreview}`
+      .toLocaleLowerCase()
+      .includes(normalizedQuery);
+  });
+
+  const emptyBody = normalizedQuery
+    ? `No conversations match “${query.trim()}”.`
+    : filter === 'unread'
+      ? 'You’re all caught up — there are no unread messages.'
+      : isLoading
+        ? 'Loading your conversations…'
+        : 'No conversations yet — message a stylist or buyer to start one.';
 
   return (
-    <Screen hasTabBar header={<ScreenHeader title="Messages" showBack={false} />}>
-      {isError ? (
-        <EmptyPanel
-          title="Couldn't load your messages"
-          body="Check your connection and try again — showing what we last had, if anything."
-        />
-      ) : null}
-
-      {!isError && sorted.length === 0 ? (
-        <EmptyPanel
-          body={
-            isLoading
-              ? 'Loading your conversations…'
-              : 'No conversations yet — message a stylist from their profile to start one.'
+    <Screen
+      hasTabBar
+      header={
+        <ScreenHeader
+          title="Messages"
+          showBack={false}
+          right={
+            unreadTotal > 0 ? <Badge label={`${String(unreadTotal)} unread`} tone="accent" /> : null
           }
         />
-      ) : (
-        sorted.map((conversation) => (
-          <ListRow
-            key={conversation.id}
-            avatar={{ initials: conversation.initials, tint: conversation.tint, size: 48 }}
-            title={conversation.counterpartyName}
-            meta={conversation.lastMessagePreview || 'Say hello…'}
-            rightCaption={formatBookingWhen(conversation.lastMessageAt)}
-            right={
-              conversation.unreadCount > 0 ? (
-                <Badge label={String(conversation.unreadCount)} tone="accent" />
-              ) : null
-            }
-            onPress={() => {
-              openThread(conversation.id);
-            }}
+      }
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          tintColor={color.accent}
+          colors={[color.accent]}
+          onRefresh={() => void refetch()}
+        />
+      }
+    >
+      <View style={styles.controls}>
+        <View style={styles.searchRow}>
+          <SearchField
+            placeholder="Search people or messages"
+            value={query}
+            onChangeText={setQuery}
           />
+        </View>
+        <SegmentedPills
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all', label: `All (${String(conversations.length)})` },
+            { value: 'unread', label: `Unread (${String(unreadTotal)})` },
+          ]}
+        />
+      </View>
+
+      {isError ? <ServerConnectionPanel error={error} onRetry={() => void refetch()} /> : null}
+
+      {!isError && visible.length === 0 ? (
+        <EmptyPanel body={emptyBody} />
+      ) : (
+        visible.map((conversation) => (
+          <View
+            key={conversation.id}
+            style={conversation.unreadCount > 0 ? styles.unreadRow : undefined}
+          >
+            <ListRow
+              avatar={{
+                initials: conversation.initials,
+                tint: conversation.tint,
+                uri: apiAssetUrl(conversation.imageUrl),
+                size: 48,
+              }}
+              title={conversation.counterpartyName}
+              meta={conversation.lastMessagePreview || 'Say hello…'}
+              rightCaption={formatBookingWhen(conversation.lastMessageAt)}
+              right={
+                conversation.unreadCount > 0 ? (
+                  <Badge label={String(conversation.unreadCount)} tone="accent" />
+                ) : null
+              }
+              onPress={() => {
+                router.push({
+                  pathname: '/chat/[threadId]',
+                  params: { threadId: conversation.id },
+                });
+              }}
+            />
+          </View>
         ))
       )}
     </Screen>

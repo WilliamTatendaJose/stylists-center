@@ -14,6 +14,7 @@ import {
   needsCashReconciliation,
   nextSubscriptionPaidUntil,
   type CreateProviderProductInput,
+  type UpdateProviderProductInput,
   type CreateProviderServiceInput,
   type PaySubscriptionInput,
   type PaySubscriptionResponse,
@@ -30,12 +31,14 @@ import {
   type ProviderSubscriptionDto,
   type ServiceDto,
   type UpdateProviderProfileInput,
+  type UpdateProviderServiceInput,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { MatchingService } from '../matching/matching.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
 import { toBookingRowDto } from '../bookings/mappers';
+import { expireStaleBookingRequests } from '../bookings/booking-expiry';
 
 /** Statuses a stylist still has something to do about, plus recent history for context. */
 const VISIBLE_STATUSES = ['awaiting_provider', 'confirmed', 'completed'] as const;
@@ -75,11 +78,14 @@ export class ProviderService {
       workingHoursLabel: profile.workingHoursLabel,
       lat: profile.latitude,
       lng: profile.longitude,
-      services: profile.services.map(({ id, name, durationMinutes, priceUsdCents }) => ({
+      profileImageUrl: profile.profileImageUrl,
+      portfolioImageUrls: profile.portfolioImageUrls,
+      services: profile.services.map(({ id, name, durationMinutes, priceUsdCents, imageUrls }) => ({
         id,
         name,
         durationMinutes,
         priceUsdCents,
+        imageUrls,
       })),
     };
   }
@@ -105,6 +111,10 @@ export class ProviderService {
           workingHoursLabel: input.workingHoursLabel,
           latitude: input.lat,
           longitude: input.lng,
+          ...(input.profileImageUrl !== undefined
+            ? { profileImageUrl: input.profileImageUrl }
+            : {}),
+          ...(input.portfolioImageUrls ? { portfolioImageUrls: input.portfolioImageUrls } : {}),
         },
       }),
       this.prisma.user.update({
@@ -140,12 +150,42 @@ export class ProviderService {
       name: service.name,
       durationMinutes: service.durationMinutes,
       priceUsdCents: service.priceUsdCents,
+      imageUrls: service.imageUrls,
+    };
+  }
+
+  async updateService(
+    serviceId: string,
+    providerProfileId: string,
+    input: UpdateProviderServiceInput,
+  ): Promise<ServiceDto> {
+    const existing = await this.prisma.service.findFirst({
+      where: { id: serviceId, providerId: providerProfileId },
+      select: { id: true },
+    });
+    if (!existing) throw new NotFoundException('Service not found');
+
+    const service = await this.prisma.service.update({ where: { id: serviceId }, data: input });
+    const cheapest = await this.prisma.service.aggregate({
+      where: { providerId: providerProfileId },
+      _min: { priceUsdCents: true },
+    });
+    await this.prisma.providerProfile.update({
+      where: { id: providerProfileId },
+      data: { fromPriceUsdCents: cheapest._min.priceUsdCents },
+    });
+    return {
+      id: service.id,
+      name: service.name,
+      durationMinutes: service.durationMinutes,
+      priceUsdCents: service.priceUsdCents,
+      imageUrls: service.imageUrls,
     };
   }
 
   async getProducts(providerProfileId: string): Promise<ProviderProductDto[]> {
     const products = await this.prisma.product.findMany({
-      where: { providerId: providerProfileId },
+      where: { providerId: providerProfileId, active: true },
       orderBy: { createdAt: 'desc' },
     });
     return products.map(
@@ -168,6 +208,32 @@ export class ProviderService {
     return this.prisma.product.create({ data: { providerId: providerProfileId, ...input } });
   }
 
+  async updateProduct(
+    productId: string,
+    providerProfileId: string,
+    input: UpdateProviderProductInput,
+  ): Promise<ProviderProductDto> {
+    await this.requireOwnProduct(productId, providerProfileId);
+    return this.prisma.product.update({ where: { id: productId }, data: input });
+  }
+
+  async restockProduct(
+    productId: string,
+    providerProfileId: string,
+    quantity: number,
+  ): Promise<ProviderProductDto> {
+    await this.requireOwnProduct(productId, providerProfileId);
+    return this.prisma.product.update({
+      where: { id: productId },
+      data: { stockQty: { increment: quantity }, active: true },
+    });
+  }
+
+  async deleteProduct(productId: string, providerProfileId: string): Promise<void> {
+    await this.requireOwnProduct(productId, providerProfileId);
+    await this.prisma.product.update({ where: { id: productId }, data: { active: false } });
+  }
+
   async getOrders(providerProfileId: string): Promise<ProviderOrderDto[]> {
     const orders = await this.prisma.order.findMany({
       where: { providerId: providerProfileId },
@@ -188,83 +254,59 @@ export class ProviderService {
         priceUsdCents: item.priceUsdCents,
         quantity: item.quantity,
       })),
-      canMarkCollected: order.status === 'reserved',
+      canMarkReady: order.status === 'reserved',
     }));
   }
 
-  async collectOrder(orderId: string, providerProfileId: string): Promise<void> {
+  /** Seller confirms packing is complete; the buyer still controls final collection and escrow release. */
+  async markOrderReady(orderId: string, providerProfileId: string): Promise<void> {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Order not found');
     if (order.providerId !== providerProfileId) throw new ForbiddenException();
-    if (order.status === 'collected') return;
+    if (order.status === 'ready_for_collection' || order.status === 'collected') return;
     if (order.status !== 'reserved') {
-      throw new BadRequestException(`Cannot collect an order that is ${order.status}`);
+      throw new BadRequestException(`Cannot prepare an order that is ${order.status}`);
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.order.updateMany({
-        where: { id: orderId, providerId: providerProfileId, status: 'reserved' },
-        data: { status: 'collected' },
-      });
-      if (!updated.count) return;
-
-      if (order.paymentMethod === 'ecocash') {
-        const held = await tx.payment.findFirst({
-          where: { orderId, status: { in: ['paid', 'held'] } },
-          orderBy: { createdAt: 'desc' },
-        });
-        if (!held) throw new BadRequestException('Payment has not cleared yet');
-        await tx.payment.create({
-          data: {
-            orderId,
-            provider: held.provider,
-            status: 'released',
-            amountUsdCents: held.amountUsdCents,
-            feeUsdCents: held.feeUsdCents,
-            externalRef: held.externalRef,
-          },
-        });
-      } else {
-        await tx.payment.create({
-          data: {
-            orderId,
-            provider: 'cash',
-            status: 'released',
-            amountUsdCents: order.totalUsdCents,
-          },
-        });
-      }
+    await this.prisma.order.updateMany({
+      where: { id: orderId, providerId: providerProfileId, status: 'reserved' },
+      data: { status: 'ready_for_collection' },
     });
   }
 
   private async listBookings(providerProfileId: string): Promise<ProviderBookingRowDto[]> {
+    await expireStaleBookingRequests(this.prisma, { providerId: providerProfileId });
     const bookings = await this.prisma.booking.findMany({
       where: { providerId: providerProfileId, status: { in: [...VISIBLE_STATUSES] } },
-      include: { client: true, service: true },
+      include: { client: { include: { providerProfile: true } }, service: true },
       orderBy: { startsAt: 'desc' },
       take: 50,
     });
 
-    return bookings.map((b) => ({
-      id: b.id,
-      reference: b.reference,
-      clientName: b.client.displayName,
-      serviceName: b.service.name,
-      whenLabel: formatBookingWhen(b.startsAt.toISOString()),
-      startsAt: b.startsAt.toISOString(),
-      paymentMethod: b.paymentMethod,
-      priceUsdCents: b.priceUsdCents,
-      status: b.status,
-      confirmedByClient: b.confirmedByClient,
-      confirmedByProvider: b.confirmedByProvider,
-      canConfirm: canProviderRespond(b.status),
-      canDecline: canProviderRespond(b.status),
-      canConfirmCompletion: providerOwesCompletion({
+    return bookings.map((b) => {
+      const clientImageUrl = b.client.avatarImageUrl ?? b.client.providerProfile?.profileImageUrl;
+      return {
+        id: b.id,
+        reference: b.reference,
+        clientName: b.client.displayName,
+        ...(clientImageUrl ? { clientImageUrl } : {}),
+        serviceName: b.service.name,
+        whenLabel: formatBookingWhen(b.startsAt.toISOString()),
+        startsAt: b.startsAt.toISOString(),
         paymentMethod: b.paymentMethod,
+        priceUsdCents: b.priceUsdCents,
         status: b.status,
+        confirmedByClient: b.confirmedByClient,
         confirmedByProvider: b.confirmedByProvider,
-      }),
-    }));
+        canConfirm: canProviderRespond(b.status),
+        canDecline: canProviderRespond(b.status),
+        canConfirmCompletion: providerOwesCompletion({
+          paymentMethod: b.paymentMethod,
+          status: b.status,
+          confirmedByProvider: b.confirmedByProvider,
+        }),
+      };
+    });
   }
 
   private async listOffers(providerProfileId: string): Promise<ProviderOfferDto[]> {
@@ -517,6 +559,14 @@ export class ProviderService {
     return booking;
   }
 
+  private async requireOwnProduct(productId: string, providerProfileId: string) {
+    const product = await this.prisma.product.findUnique({ where: { id: productId } });
+    if (product?.providerId !== providerProfileId) {
+      throw new NotFoundException('Marketplace item not found');
+    }
+    return product;
+  }
+
   /** The client's Bookings screen listens for this, so their view updates without a refresh. */
   private async notifyClient(bookingId: string, clientId: string): Promise<void> {
     const booking = await this.prisma.booking.findUniqueOrThrow({
@@ -564,12 +614,14 @@ export class ProviderService {
     // row and a newer released row. Totals describe the current state of
     // each booking/order, not the sum of every historical movement.
     const countedSubjects = new Set<string>();
+    const currentPayments: typeof payments = [];
     for (const payment of payments) {
       const subject = payment.bookingId
         ? `booking:${payment.bookingId}`
         : `order:${String(payment.orderId)}`;
       if (countedSubjects.has(subject)) continue;
       countedSubjects.add(subject);
+      currentPayments.push(payment);
       if (payment.status === 'released') {
         releasedUsdCents += payment.amountUsdCents - payment.feeUsdCents;
       } else if (['pending', 'paid', 'held', 'disputed'].includes(payment.status)) {
@@ -577,7 +629,11 @@ export class ProviderService {
       }
     }
 
-    const entries: ProviderEarningsEntryDto[] = payments.map((payment) => {
+    // History is a provider-facing statement of where each job/order stands
+    // now, not the internal escrow audit trail. Rendering every ledger row
+    // made one completed job appear twice as both "In progress" and "Paid
+    // out", even though the totals above already treated it as one payout.
+    const entries: ProviderEarningsEntryDto[] = currentPayments.map((payment) => {
       return {
         id: payment.id,
         reference: payment.booking?.reference ?? payment.order?.reference ?? '',

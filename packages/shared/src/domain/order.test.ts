@@ -45,9 +45,11 @@ describe('stock availability', () => {
 });
 
 describe('order lifecycle', () => {
-  it('only a reserved order can be cancelled or collected', () => {
+  it('allows cancellation before handoff, but collection only after the seller marks ready', () => {
     expect(canCancelOrder('reserved')).toBe(true);
-    expect(canCollectOrder('reserved')).toBe(true);
+    expect(canCancelOrder('ready_for_collection')).toBe(true);
+    expect(canCollectOrder('reserved')).toBe(false);
+    expect(canCollectOrder('ready_for_collection')).toBe(true);
   });
 
   it('terminal orders are terminal', () => {
