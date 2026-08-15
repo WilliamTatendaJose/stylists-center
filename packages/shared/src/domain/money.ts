@@ -11,6 +11,9 @@ export type UsdCents = number;
 /** 1 SC Coin = $0.50. */
 export const COIN_USD_CENTS = 50;
 
+/** Coins released to the referring agent after a referred user's first completed booking. */
+export const REFERRAL_REWARD_COINS = 6;
+
 /** Cash-out unlocks once the wallet balance EXCEEDS $5 — 500 is not enough, 501 is. */
 export const CASH_OUT_MIN_USD_CENTS = 500;
 

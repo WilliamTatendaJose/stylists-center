@@ -15,6 +15,7 @@ web-build/
 # Native build output
 android/
 ios/
+.gradle-home/
 *.apk
 *.aab
 *.keystore

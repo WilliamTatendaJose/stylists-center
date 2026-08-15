@@ -5,6 +5,8 @@ import { ApiError } from '../api/client';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
 
+const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000';
+
 const FILTERS: { label: string; value: boolean | undefined }[] = [
   { label: 'All', value: undefined },
   { label: 'Unverified', value: false },
@@ -37,6 +39,37 @@ function ProviderRow({ provider }: { provider: AdminProviderRowDto }) {
           {provider.categoryName} · {provider.areaName} · {provider.ratingAvg.toFixed(1)}★ ·{' '}
           {provider.completedCount} done
         </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-neutral-600 dark:text-dark-muted">
+          <Badge
+            label={`Identity: ${provider.verificationStatus}`}
+            tone={provider.verificationStatus === 'verified' ? 'neutral' : 'accent'}
+          />
+          {provider.verificationIdDocumentUrl ? (
+            <a
+              className="underline hover:text-neutral-900 dark:hover:text-dark-text"
+              href={`${API_ORIGIN}${provider.verificationIdDocumentUrl}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open ID
+            </a>
+          ) : null}
+          {provider.verificationSelfieImageUrl ? (
+            <a
+              className="underline hover:text-neutral-900 dark:hover:text-dark-text"
+              href={`${API_ORIGIN}${provider.verificationSelfieImageUrl}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Open selfie
+            </a>
+          ) : null}
+        </div>
+        {provider.verificationNote ? (
+          <p className="mt-1 text-xs text-accent-700 dark:text-dark-accent">
+            Review note: {provider.verificationNote}
+          </p>
+        ) : null}
         {error ? <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
       </div>
 

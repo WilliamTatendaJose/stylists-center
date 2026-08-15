@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { verificationStatusSchema } from './verification.js';
 
 export const walletSchema = z.object({
   coins: z.number().int(),
@@ -8,6 +9,8 @@ export const walletSchema = z.object({
   canCashOut: z.boolean(),
   cashOutMinUsdCents: z.number().int(),
   isVerifiedAgent: z.boolean(),
+  verificationStatus: verificationStatusSchema,
+  canBecomeAgent: z.boolean(),
 });
 export type WalletDto = z.infer<typeof walletSchema>;
 
@@ -27,3 +30,8 @@ export const cashOutRequestResponseSchema = z.object({
   status: z.literal('pending'),
 });
 export type CashOutRequestResponse = z.infer<typeof cashOutRequestResponseSchema>;
+
+export const enrollAgentSchema = z.object({
+  referralCode: z.string().trim().toUpperCase().min(3).max(32).optional(),
+});
+export type EnrollAgentInput = z.infer<typeof enrollAgentSchema>;

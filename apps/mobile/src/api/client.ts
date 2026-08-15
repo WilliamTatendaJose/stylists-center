@@ -125,8 +125,15 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     throw new ApiError(res.status, extractMessage(text, res.status, res.statusText));
   }
 
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
+  // Nest's default status for a `void`-returning POST/PATCH/DELETE handler is
+  // 200/201, not 204 — checking status alone missed those, so a successful
+  // empty-body response (e.g. submitting a review) tried to JSON-parse ""
+  // and threw, surfacing as a failure even though the request had already
+  // gone through server-side. Any empty body means "nothing to parse" now,
+  // regardless of which success status carried it.
+  const text = await res.text();
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 /** Resolves API-owned origin-relative media without baking a dev-machine host into the database. */

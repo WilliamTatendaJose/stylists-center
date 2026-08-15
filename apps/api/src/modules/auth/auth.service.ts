@@ -23,6 +23,8 @@ import {
   type RequestOtpResponse,
   type RegisterPushTokenInput,
   type UpdateProfileInput,
+  type VerificationDto,
+  type VerificationSubmissionInput,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { REDIS_CLIENT } from '../redis/redis.module';
@@ -393,6 +395,56 @@ export class AuthService {
         platform: input.platform,
       },
     });
+  }
+
+  async getVerification(userId: string): Promise<VerificationDto> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: {
+        verificationStatus: true,
+        verificationIdDocumentUrl: true,
+        verificationSelfieImageUrl: true,
+        verificationNote: true,
+        verificationSubmittedAt: true,
+      },
+    });
+    return {
+      status: user.verificationStatus,
+      idDocumentUrl: user.verificationIdDocumentUrl,
+      selfieImageUrl: user.verificationSelfieImageUrl,
+      note: user.verificationNote,
+      submittedAt: user.verificationSubmittedAt?.toISOString() ?? null,
+    };
+  }
+
+  async submitVerification(
+    userId: string,
+    input: VerificationSubmissionInput,
+  ): Promise<VerificationDto> {
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { verificationStatus: true },
+      });
+      if (user.verificationStatus === 'verified') {
+        throw new BadRequestException('Your identity is already verified');
+      }
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          verificationStatus: 'pending',
+          verificationIdDocumentUrl: input.idDocumentUrl,
+          verificationSelfieImageUrl: input.selfieImageUrl,
+          verificationNote: null,
+          verificationSubmittedAt: new Date(),
+        },
+      });
+      await tx.agent.updateMany({
+        where: { userId },
+        data: { verificationStatus: 'pending' },
+      });
+    });
+    return this.getVerification(userId);
   }
   async setActiveRole(userId: string, role: ActiveRole): Promise<Me> {
     if (role === 'provider') {

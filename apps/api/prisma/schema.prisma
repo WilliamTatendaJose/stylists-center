@@ -129,6 +129,10 @@ model User {
   avatarImageUrl     String?
   activeRole         ActiveRole         @default(client)
   verificationStatus VerificationStatus @default(unverified)
+  verificationIdDocumentUrl String?
+  verificationSelfieImageUrl String?
+  verificationNote String?
+  verificationSubmittedAt DateTime?
   tokenVersion       Int                @default(0)
   cityId             String
   city               City               @relation(fields: [cityId], references: [id])
@@ -137,6 +141,7 @@ model User {
 
   providerProfile ProviderProfile?
   agent           Agent?
+  referralRecord  Referral?           @relation("ReferralReferredUser")
 
   matchRequests       MatchRequest[]
   bookingsAsClient    Booking[]           @relation("BookingClient")
@@ -581,6 +586,8 @@ model Referral {
   agentId      String
   agent        Agent          @relation(fields: [agentId], references: [id])
   referredName String
+  referredUserId String? @unique
+  referredUser User? @relation("ReferralReferredUser", fields: [referredUserId], references: [id])
   coinsAwarded Int
   status       ReferralStatus @default(pending)
   createdAt    DateTime       @default(now())

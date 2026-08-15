@@ -11,6 +11,7 @@ import {
   SetActiveRoleDto,
   UpdateProfileDto,
   RegisterPushTokenDto,
+  VerificationSubmissionDto,
 } from './dto';
 
 @Controller('auth')
@@ -69,5 +70,20 @@ export class MeController {
   @Post('push-token')
   registerPushToken(@CurrentUser() user: { id: string }, @Body() dto: RegisterPushTokenDto) {
     return this.auth.registerPushToken(user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('verification')
+  verification(@CurrentUser() user: { id: string }) {
+    return this.auth.getVerification(user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('verification')
+  submitVerification(
+    @CurrentUser() user: { id: string },
+    @Body() dto: VerificationSubmissionDto,
+  ) {
+    return this.auth.submitVerification(user.id, dto);
   }
 }

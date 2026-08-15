@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { CashOutRequestResponse, ReferralRowDto, WalletDto } from '@sc/shared';
+import type {
+  CashOutRequestResponse,
+  EnrollAgentInput,
+  ReferralRowDto,
+  WalletDto,
+} from '@sc/shared';
 import { apiFetch } from '../client.js';
 
 /** `GET /v1/wallet`. */
@@ -26,6 +31,18 @@ export function useCashOut() {
     mutationFn: () => apiFetch<CashOutRequestResponse>('/v1/wallet/cash-out', { method: 'POST' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+    },
+  });
+}
+
+export function useEnrollAgent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: EnrollAgentInput) =>
+      apiFetch<WalletDto>('/v1/wallet/enroll', { method: 'POST', body: input }),
+    onSuccess: (wallet) => {
+      queryClient.setQueryData(['wallet'], wallet);
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'referrals'] });
     },
   });
 }

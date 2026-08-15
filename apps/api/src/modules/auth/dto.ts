@@ -6,6 +6,7 @@ import {
   setActiveRoleSchema,
   updateProfileSchema,
   registerPushTokenSchema,
+  verificationSubmissionSchema,
 } from '@sc/shared';
 
 /**
@@ -20,3 +21,4 @@ export class RefreshDto extends createZodDto(refreshSchema) {}
 export class SetActiveRoleDto extends createZodDto(setActiveRoleSchema) {}
 export class UpdateProfileDto extends createZodDto(updateProfileSchema) {}
 export class RegisterPushTokenDto extends createZodDto(registerPushTokenSchema) {}
+export class VerificationSubmissionDto extends createZodDto(verificationSubmissionSchema) {}

@@ -272,6 +272,15 @@ export default function Profile() {
                 {roleError}
               </Text>
             ) : null}
+            {me.verificationStatus !== 'verified' ? (
+              <Button
+                label={me.verificationStatus === 'pending' ? 'Review verification' : 'Verify identity'}
+                variant="secondary"
+                block
+                style={styles.professionalAction}
+                onPress={() => router.push('/verify')}
+              />
+            ) : null}
             <Button
               label={
                 setActiveRole.isPending

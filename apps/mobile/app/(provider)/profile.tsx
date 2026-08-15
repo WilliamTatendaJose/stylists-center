@@ -34,7 +34,7 @@ import {
   useUpdateProviderProfile,
   useUpdateProviderService,
 } from '../../src/api/hooks/useProviders.js';
-import { useSetActiveRole } from '../../src/api/hooks/useMe.js';
+import { useMe, useSetActiveRole } from '../../src/api/hooks/useMe.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useAuthStore } from '../../src/state/useAuthStore.js';
 import { useSessionStore } from '../../src/state/index.js';
@@ -90,6 +90,7 @@ const styles = StyleSheet.create({
 export default function ProviderProfile() {
   const { colors } = useTheme();
   const { data, isError, refetch } = useProviderManagementProfile();
+  const { data: me } = useMe();
   const updateProfile = useUpdateProviderProfile();
   const addService = useAddProviderService();
   const updateService = useUpdateProviderService();
@@ -285,6 +286,32 @@ export default function ProviderProfile() {
           roleLabel="Stylist"
           imageUrl={apiAssetUrl(profileImageUrl ?? portfolioImageUrls[0])}
         />
+
+        <ProfileSection label="Identity and rewards">
+          <Card bordered style={styles.contentCard}>
+            <Text variant="bodyStrong">
+              {me?.verificationStatus === 'verified'
+                ? 'Identity verified'
+                : me?.verificationStatus === 'pending'
+                  ? 'Verification in review'
+                  : 'Verify to build trust'}
+            </Text>
+            <Text variant="meta" color="neutral700" style={styles.roleBody}>
+              {me?.verificationStatus === 'verified'
+                ? 'Your identity badge and agent rewards are unlocked.'
+                : 'Submit an ID and selfie once. The review team keeps them private.'}
+            </Text>
+            {me?.verificationStatus !== 'verified' ? (
+              <Button
+                label={me?.verificationStatus === 'pending' ? 'Review submission' : 'Verify identity'}
+                variant="secondary"
+                block
+                style={styles.cardAction}
+                onPress={() => router.push('/verify')}
+              />
+            ) : null}
+          </Card>
+        </ProfileSection>
 
         <ProfileSection label="Public page">
           <Card bordered style={styles.detailsCard}>

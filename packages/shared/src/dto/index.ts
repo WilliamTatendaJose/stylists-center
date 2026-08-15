@@ -9,4 +9,5 @@ export * from './market.js';
 export * from './provider-jobs.js';
 export * from './subscription.js';
 export * from './uploads.js';
+export * from './verification.js';
 export * from './admin.js';

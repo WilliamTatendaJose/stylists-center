@@ -15,6 +15,7 @@ android/
 ios/
 uploads
 apps/api/src/generated
+.gradle-home
 
 # Env — never bake a secret into an image; each Dockerfile takes what it
 # needs as explicit ARG/ENV instead.

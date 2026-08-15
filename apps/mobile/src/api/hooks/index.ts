@@ -5,3 +5,4 @@ export * from './useProviderJobs.js';
 export * from './useGeo.js';
 export * from './useProviders.js';
 export * from './useWallet.js';
+export * from './useVerification.js';

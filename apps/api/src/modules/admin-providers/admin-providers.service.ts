@@ -1,10 +1,24 @@
 import { Injectable } from '@nestjs/common';
-import { isSubscriptionActive, nextSubscriptionPaidUntil, type AdminProviderRowDto } from '@sc/shared';
+import {
+  isSubscriptionActive,
+  nextSubscriptionPaidUntil,
+  type AdminProviderRowDto,
+  type UpdateProviderAdminInput,
+} from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 
 const PROVIDER_INCLUDE = {
-  user: { select: { phone: true } },
+  user: {
+    select: {
+      phone: true,
+      verificationStatus: true,
+      verificationIdDocumentUrl: true,
+      verificationSelfieImageUrl: true,
+      verificationNote: true,
+      verificationSubmittedAt: true,
+    },
+  },
   category: { select: { name: true } },
 } satisfies Prisma.ProviderProfileInclude;
 
@@ -39,17 +53,44 @@ export class AdminProvidersService {
 
   async update(
     id: string,
-    input: { verified?: boolean | undefined; subscriptionPriceUsdCents?: number | undefined },
+    input: UpdateProviderAdminInput,
   ): Promise<AdminProviderRowDto> {
-    const updated = await this.prisma.providerProfile.update({
+    const provider = await this.prisma.providerProfile.findUniqueOrThrow({
       where: { id },
-      data: {
-        ...(input.verified !== undefined ? { verified: input.verified } : {}),
-        ...(input.subscriptionPriceUsdCents !== undefined
-          ? { subscriptionPriceUsdCents: input.subscriptionPriceUsdCents }
-          : {}),
-      },
-      include: PROVIDER_INCLUDE,
+      select: { userId: true },
+    });
+    const status =
+      input.verificationStatus ??
+      (input.verified !== undefined ? (input.verified ? 'verified' : 'unverified') : undefined);
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.providerProfile.update({
+        where: { id },
+        data: {
+          ...(input.verified !== undefined ? { verified: input.verified } : {}),
+          ...(input.subscriptionPriceUsdCents !== undefined
+            ? { subscriptionPriceUsdCents: input.subscriptionPriceUsdCents }
+            : {}),
+        },
+      });
+      if (status || input.verificationNote !== undefined) {
+        await tx.user.update({
+          where: { id: provider.userId },
+          data: {
+            ...(status ? { verificationStatus: status } : {}),
+            ...(input.verificationNote !== undefined
+              ? { verificationNote: input.verificationNote }
+              : {}),
+          },
+        });
+        await tx.agent.updateMany({
+          where: { userId: provider.userId },
+          data: status ? { verificationStatus: status } : {},
+        });
+      }
+      return tx.providerProfile.findUniqueOrThrow({
+        where: { id },
+        include: PROVIDER_INCLUDE,
+      });
     });
     return toRow(updated);
   }
@@ -102,6 +143,11 @@ function toRow(provider: ProviderWithRelations): AdminProviderRowDto {
     areaName: provider.areaName,
     categoryName: provider.category.name,
     verified: provider.verified,
+    verificationStatus: provider.user.verificationStatus,
+    verificationIdDocumentUrl: provider.user.verificationIdDocumentUrl,
+    verificationSelfieImageUrl: provider.user.verificationSelfieImageUrl,
+    verificationNote: provider.user.verificationNote,
+    verificationSubmittedAt: provider.user.verificationSubmittedAt?.toISOString() ?? null,
     ratingAvg: provider.ratingAvg,
     completedCount: provider.completedCount,
     subscriptionPriceUsdCents: provider.subscriptionPriceUsdCents,

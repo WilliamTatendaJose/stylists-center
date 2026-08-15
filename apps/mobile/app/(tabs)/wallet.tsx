@@ -1,9 +1,16 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
 import { formatUsd } from '@sc/shared';
-import { Screen, ScreenHeader, Text, Badge, Card, Button, EmptyPanel } from '@sc/ui';
+import { Screen, ScreenHeader, Text, Badge, Card, Button, EmptyPanel, TextField } from '@sc/ui';
 import { color, space } from '@sc/tokens';
-import { useCashOut, useReferrals, useWallet } from '../../src/api/hooks/index.js';
+import {
+  useCashOut,
+  useEnrollAgent,
+  useReferrals,
+  useVerification,
+  useWallet,
+} from '../../src/api/hooks/index.js';
 import { describeError } from '../../src/api/errorMessage.js';
 
 const styles = StyleSheet.create({
@@ -39,15 +46,18 @@ const styles = StyleSheet.create({
   emptyBody: { marginTop: space.s, marginBottom: space.xl },
 });
 
-/** Agent wallet (handoff screen 11). Non-agents get an explicit "become an agent" CTA — unspecified in the handoff, but this tab needs some state for a client who hasn't verified yet. */
+/** Agent wallet (handoff screen 11). Non-agents get an explicit "become an agent" CTA â€” unspecified in the handoff, but this tab needs some state for a client who hasn't verified yet. */
 export default function WalletScreen() {
   const { data: wallet, isError } = useWallet();
   const { data: referrals } = useReferrals();
   const cashOut = useCashOut();
+  const enrollAgent = useEnrollAgent();
+  const { data: verification } = useVerification();
   const [cashOutError, setCashOutError] = useState<string | null>(null);
+  const [referralCode, setReferralCode] = useState('');
 
   if (!wallet) {
-    if (!isError) return null; // still loading — Screen renders nothing rather than flash empty content
+    if (!isError) return null; // still loading â€” Screen renders nothing rather than flash empty content
     return (
       <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} />}>
         <EmptyPanel title="Couldn't load your wallet" body="Check your connection and try again." />
@@ -60,17 +70,48 @@ export default function WalletScreen() {
       <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} />}>
         <Text variant="h3">Become an agent</Text>
         <Text variant="body" color="neutral700" style={styles.emptyBody}>
-          Verify to become an agent and start earning SC Coins — 0.5 coins for every stylist and
-          client you refer who completes a booking.
+          Verify to become an agent and start earning SC Coins â€” 6 coins for every stylist and
+          client you refer who completes a booking. The first completed booking releases the reward.
         </Text>
-        <Button label="Get verified" block />
+        {verification?.status === 'verified' || wallet.canBecomeAgent ? (
+          <>
+            <TextField
+              label="Referral code (optional)"
+              value={referralCode}
+              onChangeText={setReferralCode}
+              placeholder="e.g. SC-TARI7"
+            />
+            <Button
+              label={enrollAgent.isPending ? 'Joining rewardsâ€¦' : 'Join the rewards programme'}
+              block
+              disabled={enrollAgent.isPending}
+              onPress={() => {
+                enrollAgent.mutate(
+                  referralCode.trim() ? { referralCode: referralCode.trim() } : {},
+                  {
+                    onError: (error) => {
+                      setCashOutError(describeError(error, "Couldn't join rewards."));
+                    },
+                  },
+                );
+              }}
+            />
+          </>
+        ) : (
+          <Button label="Get verified" block onPress={() => router.push('/verify')} />
+        )}
+        {cashOutError ? (
+          <Text variant="meta" color="accent700" style={styles.cashOutNote}>
+            {cashOutError}
+          </Text>
+        ) : null}
       </Screen>
     );
   }
 
   const shareCode = () => {
     void Share.share({
-      message: `Join Stylists Center with my code ${wallet.referralCode} and we both earn SC Coins.`,
+      message: `Join Stylists Center with my code ${wallet.referralCode}. I earn SC Coins when you complete your first booking.`,
     });
   };
 
@@ -93,10 +134,10 @@ export default function WalletScreen() {
           SC Coins
         </Text>
         <Text variant="meta" color="neutral700" style={styles.conversion}>
-          = {formatUsd(wallet.usdCents)} · 1 coin = {formatUsd(wallet.coinUsdCents)}
+          = {formatUsd(wallet.usdCents)} Â· 1 coin = {formatUsd(wallet.coinUsdCents)}
         </Text>
         <Button
-          label={cashOut.isPending ? 'Submitting…' : `Cash out ${formatUsd(wallet.usdCents)}`}
+          label={cashOut.isPending ? 'Submittingâ€¦' : `Cash out ${formatUsd(wallet.usdCents)}`}
           block
           size="lg"
           disabled={!wallet.canCashOut || cashOut.isPending}
@@ -104,7 +145,7 @@ export default function WalletScreen() {
             setCashOutError(null);
             cashOut.mutate(undefined, {
               // A cash-out that failed silently was indistinguishable from one
-              // that worked — for a withdrawal, that is the one thing a user
+              // that worked â€” for a withdrawal, that is the one thing a user
               // cannot be left guessing about.
               onError: (error) => {
                 setCashOutError(describeError(error, "Couldn't submit that cash-out. Try again."));
@@ -125,7 +166,7 @@ export default function WalletScreen() {
         ) : (
           <Text variant="metaSmall" color="neutral600" style={styles.cashOutNote}>
             {cashOut.isSuccess
-              ? 'Submitted — paid to your EcoCash number shortly.'
+              ? 'Submitted â€” paid to your EcoCash number shortly.'
               : `Cash-out unlocks above ${formatUsd(wallet.cashOutMinUsdCents)}. Paid to your EcoCash number.`}
           </Text>
         )}

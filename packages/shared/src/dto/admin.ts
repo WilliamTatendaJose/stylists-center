@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { imageUrlSchema } from './uploads.js';
+import { verificationStatusSchema } from './verification.js';
 
 /**
  * Admin console DTOs (apps/admin). Deliberately separate from the client/
@@ -102,6 +104,11 @@ export const adminProviderRowSchema = z.object({
   areaName: z.string(),
   categoryName: z.string(),
   verified: z.boolean(),
+  verificationStatus: verificationStatusSchema,
+  verificationIdDocumentUrl: imageUrlSchema.nullable(),
+  verificationSelfieImageUrl: imageUrlSchema.nullable(),
+  verificationNote: z.string().nullable(),
+  verificationSubmittedAt: z.iso.datetime().nullable(),
   ratingAvg: z.number(),
   completedCount: z.number().int(),
   subscriptionPriceUsdCents: z.number().int(),
@@ -114,11 +121,20 @@ export type AdminProviderRowDto = z.infer<typeof adminProviderRowSchema>;
 export const updateProviderAdminSchema = z
   .object({
     verified: z.boolean().optional(),
+    verificationStatus: verificationStatusSchema.optional(),
+    verificationNote: z.string().trim().max(2000).nullable().optional(),
     subscriptionPriceUsdCents: z.number().int().min(0).optional(),
   })
-  .refine((input) => input.verified !== undefined || input.subscriptionPriceUsdCents !== undefined, {
+  .refine(
+    (input) =>
+      input.verified !== undefined ||
+      input.verificationStatus !== undefined ||
+      input.verificationNote !== undefined ||
+      input.subscriptionPriceUsdCents !== undefined,
+    {
     message: 'Provide at least one field to update',
-  });
+    },
+  );
 export type UpdateProviderAdminInput = z.infer<typeof updateProviderAdminSchema>;
 
 // --- Overview / dashboard stats -----------------------------------------

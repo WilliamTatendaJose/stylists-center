@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
 import {
   CASH_OUT_MIN_USD_CENTS,
   canCashOut,
@@ -6,6 +7,7 @@ import {
   type CashOutRequestResponse,
   type ReferralRowDto,
   type WalletDto,
+  REFERRAL_REWARD_COINS,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -14,7 +16,10 @@ export class WalletService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getWallet(userId: string): Promise<WalletDto> {
-    const agent = await this.prisma.agent.findUnique({ where: { userId } });
+    const [agent, user] = await Promise.all([
+      this.prisma.agent.findUnique({ where: { userId } }),
+      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { verificationStatus: true } }),
+    ]);
     const balance = await this.balance(userId);
 
     return {
@@ -27,7 +32,51 @@ export class WalletService {
       isVerifiedAgent: agent
         ? agent.verificationStatus === 'verified' && agent.status === 'active'
         : false,
+      verificationStatus: user.verificationStatus,
+      canBecomeAgent: user.verificationStatus === 'verified' && !agent,
     };
+  }
+
+  async enrollAgent(userId: string, referralCode?: string): Promise<WalletDto> {
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { displayName: true, verificationStatus: true },
+      });
+      if (user.verificationStatus !== 'verified') {
+        throw new BadRequestException('Verify your identity before becoming an agent');
+      }
+      const existing = await tx.agent.findUnique({ where: { userId } });
+      if (existing) return;
+
+      const referrer = referralCode
+        ? await tx.agent.findUnique({ where: { referralCode }, select: { id: true, userId: true, status: true } })
+        : null;
+      if (referralCode && (!referrer || referrer.status !== 'active')) {
+        throw new BadRequestException('That referral code is not active');
+      }
+
+      const referralCodeForNewAgent = `SC-${randomBytes(4).toString('hex').toUpperCase()}`;
+      await tx.agent.create({
+        data: {
+          userId,
+          referralCode: referralCodeForNewAgent,
+          verificationStatus: 'verified',
+          status: 'active',
+        },
+      });
+      if (referrer && referrer.userId !== userId) {
+        await tx.referral.create({
+          data: {
+            agentId: referrer.id,
+            referredUserId: userId,
+            referredName: user.displayName,
+            coinsAwarded: REFERRAL_REWARD_COINS,
+          },
+        });
+      }
+    });
+    return this.getWallet(userId);
   }
 
   async listReferrals(userId: string): Promise<ReferralRowDto[]> {

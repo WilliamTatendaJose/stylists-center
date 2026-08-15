@@ -1,7 +1,8 @@
-import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { WalletService } from './wallet.service';
+import { EnrollAgentDto } from './dto';
 
 @Controller('wallet')
 @UseGuards(JwtAuthGuard)
@@ -16,6 +17,11 @@ export class WalletController {
   @Get('referrals')
   referrals(@CurrentUser() user: { id: string }) {
     return this.wallet.listReferrals(user.id);
+  }
+
+  @Post('enroll')
+  enroll(@CurrentUser() user: { id: string }, @Body() dto: EnrollAgentDto) {
+    return this.wallet.enrollAgent(user.id, dto.referralCode);
   }
 
   @Post('cash-out')
