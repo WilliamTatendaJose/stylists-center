@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { MapPin, Compass, BadgeCheck, User } from 'lucide-react-native';
 import type { ProviderListRowDto } from '@sc/shared';
-import { color, layout, space } from '@sc/tokens';
+import { layout, space } from '@sc/tokens';
 import {
   Screen,
   Text,
@@ -40,7 +40,6 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: color.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -56,7 +55,6 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: color.neutral900,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -93,6 +91,7 @@ const MIN_SEARCH_QUERY = 2;
  * `titleBadge` slot for exactly this.
  */
 function ProviderRow({ provider }: { provider: ProviderListRowDto }) {
+  const { colors } = useTheme();
   return (
     <ListRow
       avatar={{
@@ -102,7 +101,7 @@ function ProviderRow({ provider }: { provider: ProviderListRowDto }) {
         size: 54,
       }}
       title={provider.displayName}
-      titleBadge={provider.verified ? <BadgeCheck size={15} color={color.accent} /> : undefined}
+      titleBadge={provider.verified ? <BadgeCheck size={15} color={colors.accent} /> : undefined}
       meta={`${provider.categoryName} · ${provider.areaName}`}
       subMeta={
         provider.acceptingBookings
@@ -130,6 +129,7 @@ function LoadMore({
   isFetching: boolean;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
   if (!hasNextPage) return null;
   return (
     <Pressable
@@ -139,7 +139,7 @@ function LoadMore({
       onPress={onPress}
       style={styles.loadMore}
     >
-      <Text variant="meta" color={color.accent}>
+      <Text variant="meta" color={colors.accent}>
         {isFetching ? 'Loading…' : 'Show more'}
       </Text>
     </Pressable>
@@ -258,7 +258,7 @@ export default function Find() {
         }}
         style={styles.locationRow}
       >
-        <MapPin size={12} strokeWidth={1.8} color={color.accent} />
+        <MapPin size={12} strokeWidth={1.8} color={colors.accent} />
         <Text variant="meta" color="neutral700">
           {locationSource === 'device'
             ? `${areaLabel ?? 'Your area'} · located`
@@ -283,7 +283,7 @@ export default function Find() {
             perfectly good screen on one dropped request. */}
         {hasNothingToShow ? (
           <View style={styles.errorNote}>
-            <Text variant="meta" color={color.accent700} accessibilityRole="alert">
+            <Text variant="meta" color={colors.accent700} accessibilityRole="alert">
               Couldn&apos;t load stylists near you.
             </Text>
             <Pressable
@@ -294,7 +294,7 @@ export default function Find() {
                 void refetchCategories();
               }}
             >
-              <Text variant="meta" color={color.accent}>
+              <Text variant="meta" color={colors.accent}>
                 Try again
               </Text>
             </Pressable>
@@ -408,7 +408,7 @@ export default function Find() {
               right={
                 <View style={styles.liveRow}>
                   <LiveDot />
-                  <Text variant="meta" color={color.accent700}>
+                  <Text variant="meta" color={colors.accent700}>
                     live
                   </Text>
                 </View>
@@ -444,7 +444,7 @@ export default function Find() {
 
         <View style={styles.spacer} />
         <Card bordered style={styles.promoCard}>
-          <Text variant="sectionLabel" color={color.accent} style={styles.promoKicker}>
+          <Text variant="sectionLabel" color={colors.accent} style={styles.promoKicker}>
             Smart match
           </Text>
           <Text variant="cardTitle" style={styles.promoTitle}>
@@ -477,7 +477,7 @@ export default function Find() {
         {roleError ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.sheetBody}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"

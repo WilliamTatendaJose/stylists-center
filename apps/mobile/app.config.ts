@@ -30,7 +30,7 @@ if (isReleaseProfile && !process.env.EXPO_PUBLIC_MAPTILER_KEY?.trim()) {
  */
 const config: ExpoConfig = {
   name: 'Stylists Center',
-  slug: 'stylists-center',
+  slug: 'style-center',
   scheme: 'stylistscenter',
   version: '0.1.0',
   orientation: 'portrait',

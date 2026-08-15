@@ -6,7 +6,7 @@ import {
   type ProviderBookingRowDto,
   type ProviderOfferDto,
 } from '@sc/shared';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import {
   Screen,
   ScreenHeader,
@@ -19,6 +19,7 @@ import {
   Countdown,
   SectionLabel,
   EmptyPanel,
+  useTheme,
 } from '@sc/ui';
 import {
   useAcceptOffer,
@@ -55,7 +56,6 @@ const styles = StyleSheet.create({
     marginTop: space.m,
     padding: space.m,
     borderRadius: 16,
-    backgroundColor: color.surface,
   },
   reconcileNote: { marginTop: space.s },
   sectionGap: { marginTop: space.xl },
@@ -119,12 +119,13 @@ function JobCard({
   onDecline: () => void;
   onComplete: () => void;
 }) {
+  const { colors } = useTheme();
   return (
     <Card bordered style={styles.card}>
       <View style={styles.headerRow}>
         <Avatar
           initials={initialsOf(booking.clientName)}
-          tint={color.neutral900}
+          tint={colors.neutral900}
           uri={apiAssetUrl(booking.clientImageUrl)}
           size={44}
         />
@@ -176,7 +177,7 @@ function JobCard({
       ) : null}
 
       {booking.status === 'confirmed' && booking.paymentMethod === 'ecocash' ? (
-        <View style={styles.reconcilePanel}>
+        <View style={[styles.reconcilePanel, { backgroundColor: colors.surface }]}>
           <Text variant="bodyStrong">EcoCash payment is secured.</Text>
           <Text variant="meta" color="neutral700" style={styles.reconcileNote}>
             After the appointment, {booking.clientName.split(' ')[0]} confirms it is done and your
@@ -188,7 +189,7 @@ function JobCard({
       {booking.status === 'confirmed' &&
       booking.paymentMethod === 'cash' &&
       booking.confirmedByProvider ? (
-        <View style={styles.reconcilePanel}>
+        <View style={[styles.reconcilePanel, { backgroundColor: colors.surface }]}>
           <Text variant="bodyStrong">You marked this job as done.</Text>
           <Text variant="meta" color="neutral700" style={styles.reconcileNote}>
             Waiting for {booking.clientName.split(' ')[0]} to confirm and close the cash booking.
@@ -215,6 +216,7 @@ function initialsOf(name: string): string {
  * not be switched off.
  */
 export default function Jobs() {
+  const { colors } = useTheme();
   const { data, isError, error, isLoading, refetch, isRefetching } = useProviderJobs();
   useProviderJobsRealtime();
 
@@ -263,15 +265,15 @@ export default function Jobs() {
           onRefresh={() => {
             void refetch();
           }}
-          tintColor={color.accent}
-          colors={[color.accent]}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
         />
       }
     >
       {actionError ? (
         <Text
           variant="meta"
-          color={color.accent700}
+          color={colors.accent700}
           style={styles.note}
           accessibilityLiveRegion="polite"
           accessibilityRole="alert"

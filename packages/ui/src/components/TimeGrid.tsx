@@ -1,7 +1,8 @@
 import { StyleSheet, View, type ViewStyle } from 'react-native';
-import { color, radius, space } from '@sc/tokens';
+import { radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface TimeSlotOption {
   time: string;
@@ -30,15 +31,16 @@ const styles = StyleSheet.create({
 
 /** The 3-column time-slot grid on Choose a slot — taken slots are visibly disabled, not just dimmed. */
 export function TimeGrid({ slots, value, onChange }: TimeGridProps) {
+  const { colors } = useTheme();
   return (
     <View style={styles.grid}>
       {slots.map((slot) => {
         const selected = slot.time === value;
         const pillStyle: ViewStyle = {
-          backgroundColor: slot.available ? (selected ? color.accent : color.bg) : color.surface,
-          borderColor: slot.available ? (selected ? color.accent : color.divider) : color.divider,
+          backgroundColor: slot.available ? (selected ? colors.accent : colors.bg) : colors.surface,
+          borderColor: slot.available ? (selected ? colors.accent : colors.divider) : colors.divider,
         };
-        const textColor = !slot.available ? color.neutral600 : selected ? color.bg : color.text;
+        const textColor = !slot.available ? colors.neutral600 : selected ? colors.bg : colors.text;
 
         return (
           <Pressable

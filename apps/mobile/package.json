@@ -9,7 +9,8 @@
     "ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "lint": "eslint app src",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "eas-build-post-install": "pnpm --filter @sc/shared run build"
   },
   "dependencies": {
     "@expo-google-fonts/archivo": "^0.4.2",

@@ -1,7 +1,8 @@
 import { StyleSheet, View, type ViewStyle } from 'react-native';
-import { color, radius, space } from '@sc/tokens';
+import { radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface DateStripItem {
   /** An opaque key the caller resolves (an ISO date, typically). */
@@ -29,15 +30,16 @@ const styles = StyleSheet.create({
 
 /** The 4-card date strip on Choose a slot: uppercase weekday + day number. */
 export function DateStrip({ dates, value, onChange }: DateStripProps) {
+  const { colors } = useTheme();
   return (
     <View style={styles.row}>
       {dates.map((d) => {
         const selected = d.value === value;
         const cardStyle: ViewStyle = {
-          backgroundColor: selected ? color.accent : 'transparent',
-          borderColor: selected ? color.accent : color.divider,
+          backgroundColor: selected ? colors.accent : 'transparent',
+          borderColor: selected ? colors.accent : colors.divider,
         };
-        const ink = selected ? color.bg : color.text;
+        const ink = selected ? colors.bg : colors.text;
         return (
           <Pressable
             key={d.value}

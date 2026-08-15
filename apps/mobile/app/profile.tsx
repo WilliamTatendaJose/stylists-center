@@ -11,7 +11,7 @@ import {
   Sun,
   UserRound,
 } from 'lucide-react-native';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import {
   Button,
   Card,
@@ -68,7 +68,6 @@ const styles = StyleSheet.create({
     gap: space.s,
     paddingVertical: space.m,
   },
-  retryButton: { marginTop: space.l },
   sheetTitle: { marginBottom: space.s },
   sheetBody: { marginBottom: space.xl },
   sheetField: { marginBottom: space.l },
@@ -85,7 +84,7 @@ const styles = StyleSheet.create({
 
 /** Client identity, account details, bookings shortcut, and professional-mode handoff. */
 export default function Profile() {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
   const onBack = useBack('/(tabs)');
   const { data: me, isLoading, isError, error, refetch } = useMe();
   const updateProfile = useUpdateProfile();
@@ -169,12 +168,12 @@ export default function Profile() {
         <ProfileSection label="Personal details">
           <Card bordered style={styles.detailsCard}>
             <ProfileInfoRow
-              icon={<UserRound size={20} color={color.neutral700} />}
+              icon={<UserRound size={20} color={colors.neutral700} />}
               label="Display name"
               value={me.displayName}
             />
             <ProfileInfoRow
-              icon={<Phone size={20} color={color.neutral700} />}
+              icon={<Phone size={20} color={colors.neutral700} />}
               label="WhatsApp number"
               value={me.phone}
               divided
@@ -192,7 +191,7 @@ export default function Profile() {
         <ProfileSection label="Your activity">
           <Card bordered onPress={() => router.push('/(tabs)/bookings')} style={styles.bookingCard}>
             <ProfileIconTile>
-              <CalendarDays size={20} color={color.neutral700} />
+              <CalendarDays size={20} color={colors.neutral700} />
             </ProfileIconTile>
             <View style={styles.bookingCopy}>
               <Text variant="bodyStrong">Bookings and reviews</Text>
@@ -200,14 +199,14 @@ export default function Profile() {
                 Track appointments and review completed services.
               </Text>
             </View>
-            <ChevronRight size={20} color={color.neutral700} />
+            <ChevronRight size={20} color={colors.neutral700} />
           </Card>
         </ProfileSection>
 
         <ProfileSection label="Appearance">
           <Card bordered style={styles.appearanceCard}>
             <ProfileIconTile>
-              <Sun size={20} color={isDark ? color.accent700 : color.neutral700} />
+              <Sun size={20} color={isDark ? colors.accent700 : colors.neutral700} />
             </ProfileIconTile>
             <View style={styles.appearanceCopy}>
               <Text variant="bodyStrong">Use device theme</Text>
@@ -221,13 +220,13 @@ export default function Profile() {
               onValueChange={(enabled) =>
                 setThemeMode(enabled ? 'system' : isDark ? 'dark' : 'light')
               }
-              trackColor={{ false: color.neutral200, true: color.accent700 }}
-              thumbColor={color.bg}
+              trackColor={{ false: colors.neutral200, true: colors.accent700 }}
+              thumbColor={colors.bg}
             />
           </Card>
           <Card bordered style={[styles.appearanceCard, { marginTop: space.m }]}>
             <ProfileIconTile>
-              <Moon size={20} color={isDark ? color.accent700 : color.neutral700} />
+              <Moon size={20} color={isDark ? colors.accent700 : colors.neutral700} />
             </ProfileIconTile>
             <View style={styles.appearanceCopy}>
               <Text variant="bodyStrong">Dark mode</Text>
@@ -240,8 +239,8 @@ export default function Profile() {
               disabled={followsSystemTheme}
               value={isDark}
               onValueChange={(enabled) => setThemeMode(enabled ? 'dark' : 'light')}
-              trackColor={{ false: color.neutral200, true: color.accent700 }}
-              thumbColor={color.bg}
+              trackColor={{ false: colors.neutral200, true: colors.accent700 }}
+              thumbColor={colors.bg}
             />
           </Card>
         </ProfileSection>
@@ -250,7 +249,7 @@ export default function Profile() {
           <Card bordered style={styles.professionalCard}>
             <View style={styles.professionalTop}>
               <ProfileIconTile>
-                <Scissors size={20} color={color.accent700} />
+                <Scissors size={20} color={colors.accent700} />
               </ProfileIconTile>
               <View style={styles.professionalCopy}>
                 <Text variant="bodyStrong">
@@ -269,7 +268,7 @@ export default function Profile() {
               </Text>
             ) : null}
             {roleError ? (
-              <Text variant="meta" color={color.accent700} style={styles.professionalStatus}>
+              <Text variant="meta" color={colors.accent700} style={styles.professionalStatus}>
                 {roleError}
               </Text>
             ) : null}
@@ -295,8 +294,8 @@ export default function Profile() {
           onPress={() => void signOut()}
           style={styles.signOutRow}
         >
-          <LogOut size={18} strokeWidth={1.8} color={color.accent700} />
-          <Text variant="bodyStrong" color={color.accent700}>
+          <LogOut size={18} strokeWidth={1.8} color={colors.accent700} />
+          <Text variant="bodyStrong" color={colors.accent700}>
             Sign out
           </Text>
         </Pressable>
@@ -313,7 +312,7 @@ export default function Profile() {
         {editError ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.sheetError}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"

@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatUsd, type ProductRowDto } from '@sc/shared';
-import { color, space } from '@sc/tokens';
-import { Text, Pressable, SearchField, SectionLabel, ListRow, EmptyPanel } from '@sc/ui';
+import { space } from '@sc/tokens';
+import { Text, Pressable, SearchField, SectionLabel, ListRow, EmptyPanel, useTheme } from '@sc/ui';
 import { DistanceFilter } from './DistanceFilter.js';
 import { useMyOrders, useProducts } from '../api/hooks/useMarket.js';
 import { useDebouncedValue } from '../hooks/useDebouncedValue.js';
@@ -16,7 +16,6 @@ const MIN_SEARCH_QUERY = 2;
 const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', gap: space.s, alignItems: 'center', marginBottom: space.m },
   loadMore: { paddingVertical: space.m, alignItems: 'center' },
-  errorNote: { marginBottom: space.m, gap: space.xs },
 });
 
 /**
@@ -26,6 +25,7 @@ const styles = StyleSheet.create({
  * experience instead of a second, drifting copy of it.
  */
 export function MarketBrowse() {
+  const { colors } = useTheme();
   const maxDistanceKm = useSessionStore((s) => s.maxDistanceKm);
 
   const [query, setQuery] = useState('');
@@ -55,7 +55,7 @@ export function MarketBrowse() {
 
       {openOrders > 0 ? (
         <ListRow
-          avatar={{ initials: String(openOrders), tint: color.accent, size: 44 }}
+          avatar={{ initials: String(openOrders), tint: colors.accent, size: 44 }}
           title={
             openOrders === 1 ? '1 order to collect' : `${String(openOrders)} orders to collect`
           }
@@ -116,7 +116,7 @@ export function MarketBrowse() {
               }}
               style={styles.loadMore}
             >
-              <Text variant="meta" color={color.accent}>
+              <Text variant="meta" color={colors.accent}>
                 {products.isFetchingNextPage ? 'Loading…' : 'Show more'}
               </Text>
             </Pressable>

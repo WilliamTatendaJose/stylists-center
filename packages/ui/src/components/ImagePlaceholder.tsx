@@ -1,7 +1,8 @@
 import { Image, StyleSheet, View, type ViewStyle } from 'react-native';
 import { Image as ImageIcon } from 'lucide-react-native';
-import { color, type RadiusToken, radius } from '@sc/tokens';
+import { type RadiusToken, radius } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
+import { useTheme } from '../theme.js';
 
 export interface ImagePlaceholderProps {
   /** A real photo URL, once one exists — every call site in M1 omits this (see plan §11 R10: no photography supplied). */
@@ -16,7 +17,6 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   placeholder: {
     flex: 1,
-    backgroundColor: color.neutral200,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -35,6 +35,7 @@ function resolveRadius(value: ImagePlaceholderProps['radius']): number {
  * icon and optional caption, matching the handoff's empty state.
  */
 export function ImagePlaceholder({ uri, radius: radiusProp, label, style }: ImagePlaceholderProps) {
+  const { colors } = useTheme();
   const radiusStyle: ViewStyle = { borderRadius: resolveRadius(radiusProp) };
 
   if (uri) {
@@ -47,8 +48,8 @@ export function ImagePlaceholder({ uri, radius: radiusProp, label, style }: Imag
 
   return (
     <View style={[styles.base, radiusStyle, style]}>
-      <View style={styles.placeholder}>
-        <ImageIcon size={26} strokeWidth={1.6} color={color.neutral600} />
+      <View style={[styles.placeholder, { backgroundColor: colors.neutral200 }]}>
+        <ImageIcon size={26} strokeWidth={1.6} color={colors.neutral600} />
         {label ? (
           <Text variant="metaSmall" color="neutral600" align="center">
             {label}

@@ -4,9 +4,18 @@ import { ChevronLeft, CheckCheck, FileText, Paperclip, Search, X } from 'lucide-
 import * as DocumentPicker from 'expo-document-picker';
 import type { DocumentPickerAsset } from 'expo-document-picker';
 import { useLocalSearchParams } from 'expo-router';
-import { color, radius, space } from '@sc/tokens';
+import { radius, space } from '@sc/tokens';
 import { formatInHarare, type ConversationDto, type MessageDto } from '@sc/shared';
-import { Screen, Text, Pressable, Avatar, Composer, SearchField, ImagePlaceholder } from '@sc/ui';
+import {
+  Screen,
+  Text,
+  Pressable,
+  Avatar,
+  Composer,
+  SearchField,
+  ImagePlaceholder,
+  useTheme,
+} from '@sc/ui';
 import {
   useChatRealtime,
   useConversationMessages,
@@ -48,12 +57,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: space.s,
     borderWidth: 1,
-    borderColor: color.divider,
     borderRadius: radius.pill,
     paddingLeft: space.m,
     paddingRight: space.xs,
     paddingVertical: space.xs,
-    backgroundColor: color.surface,
   },
   queuedName: { maxWidth: 220 },
   removeFile: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
@@ -62,13 +69,13 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
   bubbleRow: { marginBottom: space.s },
   bubbleMine: { alignSelf: 'flex-end' },
   bubbleTheirs: { alignSelf: 'flex-start' },
+  bubbleTheirsBorder: { borderWidth: 1 },
   bubble: {
     maxWidth: '82%',
     borderRadius: 20,
@@ -76,8 +83,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     gap: space.s,
   },
-  bubbleFillMine: { backgroundColor: color.accent },
-  bubbleFillTheirs: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.divider },
   attachmentCard: {
     minWidth: 190,
     maxWidth: 250,
@@ -87,8 +92,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.tile,
     padding: space.s,
   },
-  attachmentMine: { backgroundColor: color.onDark.border },
-  attachmentTheirs: { backgroundColor: color.neutral200 },
   attachmentImageCard: {
     minWidth: 0,
     maxWidth: 108,
@@ -103,7 +106,7 @@ const styles = StyleSheet.create({
   timestamp: { marginTop: 3 },
   receipt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
   centreNote: { textAlign: 'center', marginBottom: space.l, marginTop: space.s },
-  imageViewer: { flex: 1, backgroundColor: color.neutral900, padding: space.l, gap: space.m },
+  imageViewer: { flex: 1, padding: space.l, gap: space.m },
   viewerClose: {
     alignSelf: 'flex-end',
     flexDirection: 'row',
@@ -124,6 +127,7 @@ function formatFileSize(bytes: number | undefined): string {
 }
 
 export default function Chat() {
+  const { colors } = useTheme();
   const { threadId, providerId } = useLocalSearchParams<{
     threadId: string;
     providerId?: string;
@@ -231,9 +235,16 @@ export default function Chat() {
 
   const renderMessage = ({ item }: { item: MessageDto }) => (
     <View style={[styles.bubbleRow, item.mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-      <View style={[styles.bubble, item.mine ? styles.bubbleFillMine : styles.bubbleFillTheirs]}>
+      <View
+        style={[
+          styles.bubble,
+          item.mine
+            ? { backgroundColor: colors.accent }
+            : [styles.bubbleTheirsBorder, { backgroundColor: colors.surface, borderColor: colors.divider }],
+        ]}
+      >
         {item.text ? (
-          <Text variant="body" color={item.mine ? color.bg : color.text}>
+          <Text variant="body" color={item.mine ? colors.bg : colors.text}>
             {item.text}
           </Text>
         ) : null}
@@ -254,7 +265,9 @@ export default function Chat() {
               }}
               style={[
                 styles.attachmentCard,
-                item.mine ? styles.attachmentMine : styles.attachmentTheirs,
+                item.mine
+                  ? { backgroundColor: colors.onDark.border }
+                  : { backgroundColor: colors.neutral200 },
                 image ? styles.attachmentImageCard : null,
               ]}
             >
@@ -266,13 +279,13 @@ export default function Chat() {
                   style={styles.attachmentImage}
                 />
               ) : (
-                <FileText size={24} strokeWidth={1.7} color={item.mine ? color.bg : color.text} />
+                <FileText size={24} strokeWidth={1.7} color={item.mine ? colors.bg : colors.text} />
               )}
               <View style={styles.attachmentText}>
-                <Text variant="meta" color={item.mine ? color.bg : color.text} numberOfLines={1}>
+                <Text variant="meta" color={item.mine ? colors.bg : colors.text} numberOfLines={1}>
                   {attachment.name}
                 </Text>
-                <Text variant="metaSmall" color={item.mine ? color.bg : color.neutral600}>
+                <Text variant="metaSmall" color={item.mine ? colors.bg : colors.neutral600}>
                   {formatFileSize(attachment.sizeBytes)} · Tap to open
                 </Text>
               </View>
@@ -285,7 +298,7 @@ export default function Chat() {
           <CheckCheck
             size={13}
             strokeWidth={1.8}
-            color={item.read ? color.accent700 : color.neutral600}
+            color={item.read ? colors.accent700 : colors.neutral600}
           />
           <Text variant="metaSmall" color={item.read ? 'accent700' : 'neutral600'}>
             {formatInHarare(item.createdAt, 'HH:mm')} · {item.read ? 'Read' : 'Sent'}
@@ -305,7 +318,7 @@ export default function Chat() {
       header={
         <View style={styles.header}>
           <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack}>
-            <ChevronLeft size={22} strokeWidth={1.9} color={color.text} />
+            <ChevronLeft size={22} strokeWidth={1.9} color={colors.text} />
           </Pressable>
           <Avatar
             initials={conversation.initials}
@@ -333,9 +346,9 @@ export default function Chat() {
             style={styles.headerAction}
           >
             {searchOpen ? (
-              <X size={21} color={color.text} />
+              <X size={21} color={colors.text} />
             ) : (
-              <Search size={21} color={color.text} />
+              <Search size={21} color={colors.text} />
             )}
           </Pressable>
         </View>
@@ -345,8 +358,11 @@ export default function Chat() {
           {queuedAttachments.length > 0 ? (
             <View style={styles.attachmentQueue}>
               {queuedAttachments.map((attachment) => (
-                <View key={attachment.uri} style={styles.queuedFile}>
-                  <Paperclip size={15} color={color.neutral700} />
+                <View
+                  key={attachment.uri}
+                  style={[styles.queuedFile, { borderColor: colors.divider, backgroundColor: colors.surface }]}
+                >
+                  <Paperclip size={15} color={colors.neutral700} />
                   <Text variant="meta" numberOfLines={1} style={styles.queuedName}>
                     {attachment.name}
                   </Text>
@@ -360,7 +376,7 @@ export default function Chat() {
                     }
                     style={styles.removeFile}
                   >
-                    <X size={16} color={color.neutral700} />
+                    <X size={16} color={colors.neutral700} />
                   </Pressable>
                 </View>
               ))}
@@ -369,7 +385,7 @@ export default function Chat() {
           {sendError ? (
             <Text
               variant="meta"
-              color={color.accent700}
+              color={colors.accent700}
               accessibilityLiveRegion="polite"
               accessibilityRole="alert"
             >
@@ -388,9 +404,9 @@ export default function Chat() {
                 accessibilityLabel="Attach files"
                 disabled={sendMessage.isPending || queuedAttachments.length >= MAX_ATTACHMENTS}
                 onPress={() => void pickAttachments()}
-                style={styles.attachButton}
+                style={[styles.attachButton, { borderColor: colors.divider }]}
               >
-                <Paperclip size={20} strokeWidth={1.8} color={color.text} />
+                <Paperclip size={20} strokeWidth={1.8} color={colors.text} />
               </Pressable>
             }
           />
@@ -434,7 +450,7 @@ export default function Chat() {
         animationType="fade"
         onRequestClose={() => setSelectedImage(null)}
       >
-        <View style={styles.imageViewer}>
+        <View style={[styles.imageViewer, { backgroundColor: colors.neutral900 }]}>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Close image"
@@ -442,8 +458,8 @@ export default function Chat() {
             onDark
             style={styles.viewerClose}
           >
-            <X size={20} color={color.bg} />
-            <Text variant="meta" color={color.bg}>
+            <X size={20} color={colors.bg} />
+            <Text variant="meta" color={colors.bg}>
               Close
             </Text>
           </Pressable>
@@ -458,7 +474,7 @@ export default function Chat() {
           {selectedImage ? (
             <Text
               variant="meta"
-              color={color.onDark.body}
+              color={colors.onDark.body}
               style={styles.viewerCaption}
               numberOfLines={2}
             >

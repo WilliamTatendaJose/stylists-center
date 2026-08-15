@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Star } from 'lucide-react-native';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import {
   BOOKING_STATUS_LABELS,
   FREE_CANCELLATION_WINDOW_HOURS,
@@ -28,6 +28,7 @@ import {
   EmptyPanel,
   SectionLabel,
   TextField,
+  useTheme,
 } from '@sc/ui';
 import {
   useBookingUpdates,
@@ -54,7 +55,6 @@ const styles = StyleSheet.create({
     marginTop: space.m,
     padding: space.l,
     borderRadius: 16,
-    backgroundColor: color.surface,
   },
   reconcileBody: { marginTop: space.xs, marginBottom: space.m },
   footerNote: { marginTop: space.l },
@@ -88,6 +88,7 @@ function BookingCard({
   onOnMyWay,
   onDirections,
 }: BookingCardProps) {
+  const { colors } = useTheme();
   const reconcile = needsCashReconciliation(booking);
   const canCompleteEcocash = canConfirmEcocashCompletion(booking);
   const statusLabel =
@@ -138,7 +139,7 @@ function BookingCard({
       ) : null}
 
       {reconcile ? (
-        <View style={styles.reconcilePanel}>
+        <View style={[styles.reconcilePanel, { backgroundColor: colors.surface }]}>
           <Text variant="bodyStrong">
             Cash booking — confirm it happened so it closes cleanly for both of you.
           </Text>
@@ -161,7 +162,7 @@ function BookingCard({
           confirmed EcoCash booking had no route to "completed" outside the
           travel screens. */}
       {canCompleteEcocash ? (
-        <View style={styles.reconcilePanel}>
+        <View style={[styles.reconcilePanel, { backgroundColor: colors.surface }]}>
           <Text variant="bodyStrong">Had your appointment? Confirm it&apos;s done.</Text>
           <Text variant="meta" color="neutral700" style={styles.reconcileBody}>
             This is what releases payment to {booking.counterpartyName.split(' ')[0]}.
@@ -203,6 +204,7 @@ function BookingCard({
 
 /** Bookings (handoff screen 9): awaiting-stylist, cash-reconciliation, and completed row states. */
 export default function Bookings() {
+  const { colors } = useTheme();
   const { data: bookings = [], isError, isLoading, refetch, isRefetching } = useMyBookings();
   const confirmCompletion = useConfirmCompletion();
   const createReview = useCreateReview();
@@ -336,15 +338,15 @@ export default function Bookings() {
             onRefresh={() => {
               void refetch();
             }}
-            tintColor={color.accent}
-            colors={[color.accent]}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
       >
         {reportOutcome ? (
           <Text
             variant="meta"
-            color={reportOutcome.ok ? 'neutral700' : color.accent700}
+            color={reportOutcome.ok ? 'neutral700' : colors.accent700}
             style={styles.reportedNote}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
@@ -356,7 +358,7 @@ export default function Bookings() {
         {confirmError ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.reportedNote}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
@@ -462,8 +464,8 @@ export default function Bookings() {
               <Star
                 size={30}
                 strokeWidth={1.6}
-                color={color.accent}
-                fill={n <= rating ? color.accent : 'transparent'}
+                color={colors.accent}
+                fill={n <= rating ? colors.accent : 'transparent'}
               />
             </Pressable>
           ))}
@@ -485,7 +487,7 @@ export default function Bookings() {
         {rateError ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.sheetError}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
@@ -521,7 +523,7 @@ export default function Bookings() {
             The same `isLateCancellation` the server uses decides this, so the
             warning can never disagree with what actually gets recorded. */}
         {cancelIsLate ? (
-          <Text variant="meta" color={color.accent700} style={styles.sheetBody}>
+          <Text variant="meta" color={colors.accent700} style={styles.sheetBody}>
             This is within {FREE_CANCELLATION_WINDOW_HOURS} hours of your appointment, so it counts
             against your account — {String(NO_SHOW_COUNT_FOR_AUTO_BAN)} of these and the account is
             removed. It still counts for less than not turning up at all.
@@ -536,7 +538,7 @@ export default function Bookings() {
         {cancelError ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.sheetError}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"

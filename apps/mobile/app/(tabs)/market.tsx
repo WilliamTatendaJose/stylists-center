@@ -1,8 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Package, ShoppingBag } from 'lucide-react-native';
-import { color, space } from '@sc/tokens';
-import { Screen, ScreenHeader, Pressable, Badge } from '@sc/ui';
+import { space } from '@sc/tokens';
+import { Screen, ScreenHeader, Pressable, Badge, useTheme } from '@sc/ui';
 import { MarketBrowse } from '../../src/components/MarketBrowse.js';
 import { cartItemCount, useCartStore } from '../../src/state/index.js';
 
@@ -12,7 +12,6 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: color.neutral900,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -21,7 +20,6 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: color.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -34,6 +32,7 @@ const styles = StyleSheet.create({
  * every row leads with the seller and the distance to them.
  */
 export default function Market() {
+  const { colors } = useTheme();
   const lines = useCartStore((s) => s.lines);
   const itemCount = cartItemCount(lines);
 
@@ -52,9 +51,9 @@ export default function Market() {
                 onPress={() => {
                   router.push('/market/orders');
                 }}
-                style={styles.ordersButton}
+                style={[styles.ordersButton, { borderColor: colors.divider }]}
               >
-                <Package size={18} strokeWidth={1.7} color={color.text} />
+                <Package size={18} strokeWidth={1.7} color={colors.text} />
               </Pressable>
               <Pressable
                 accessibilityRole="button"
@@ -64,9 +63,9 @@ export default function Market() {
                 onPress={() => {
                   router.push('/market/cart');
                 }}
-                style={styles.cartButton}
+                style={[styles.cartButton, { backgroundColor: colors.neutral900 }]}
               >
-                <ShoppingBag size={18} strokeWidth={1.7} color={color.bg} />
+                <ShoppingBag size={18} strokeWidth={1.7} color={colors.bg} />
                 {itemCount > 0 ? (
                   <View style={styles.cartCount}>
                     <Badge label={String(itemCount)} tone="accent" size="sm" />

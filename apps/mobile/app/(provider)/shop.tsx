@@ -3,7 +3,7 @@ import { Alert, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Package, ShoppingBag } from 'lucide-react-native';
 import { formatUsd, ORDER_STATUS_LABELS } from '@sc/shared';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import {
   Badge,
   Button,
@@ -16,6 +16,7 @@ import {
   SegmentedPills,
   Text,
   TextField,
+  useTheme,
 } from '@sc/ui';
 import {
   useCreateProviderProduct,
@@ -54,7 +55,6 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: color.neutral900,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -63,7 +63,6 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 1,
-    borderColor: color.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -72,12 +71,11 @@ const styles = StyleSheet.create({
   photoField: { marginTop: space.m },
   inventoryActions: { flexDirection: 'row', gap: space.s, marginTop: space.m },
   inventoryAction: { flex: 1 },
-  editor: { marginTop: space.m, paddingTop: space.m, borderTopWidth: 1, borderTopColor: color.divider },
+  editor: { marginTop: space.m, paddingTop: space.m, borderTopWidth: 1 },
   lifecycle: {
     marginTop: space.m,
     padding: space.m,
     borderRadius: 12,
-    backgroundColor: color.surface,
   },
   orderActions: { gap: space.s, marginTop: space.m },
 });
@@ -94,6 +92,7 @@ const ORDER_HISTORY_PREVIEW_COUNT = 2;
  * this account's own storefront management, unchanged.
  */
 export default function ProviderShop() {
+  const { colors } = useTheme();
   const [mode, setMode] = useState<ShopMode>('sell');
   const lines = useCartStore((s) => s.lines);
   const itemCount = cartItemCount(lines);
@@ -265,9 +264,9 @@ export default function ProviderShop() {
                   onPress={() => {
                     router.push('/market/orders');
                   }}
-                  style={styles.ordersButton}
+                  style={[styles.ordersButton, { borderColor: colors.divider }]}
                 >
-                  <Package size={18} strokeWidth={1.7} color={color.text} />
+                  <Package size={18} strokeWidth={1.7} color={colors.text} />
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
@@ -277,9 +276,9 @@ export default function ProviderShop() {
                   onPress={() => {
                     router.push('/market/cart');
                   }}
-                  style={styles.cartButton}
+                  style={[styles.cartButton, { backgroundColor: colors.neutral900 }]}
                 >
-                  <ShoppingBag size={18} strokeWidth={1.7} color={color.bg} />
+                  <ShoppingBag size={18} strokeWidth={1.7} color={colors.bg} />
                   {itemCount > 0 ? (
                     <View style={styles.cartCount}>
                       <Badge label={String(itemCount)} tone="accent" size="sm" />
@@ -308,7 +307,7 @@ export default function ProviderShop() {
       ) : (
         <>
           {error ? (
-            <Text variant="meta" color={color.accent700} style={styles.error}>
+            <Text variant="meta" color={colors.accent700} style={styles.error}>
               {error}
             </Text>
           ) : null}
@@ -340,7 +339,7 @@ export default function ProviderShop() {
                 <Text variant="bodyStrong" style={styles.action}>
                   {formatUsd(order.totalUsdCents)}
                 </Text>
-                <View style={styles.lifecycle}>
+                  <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
                   <Text variant="meta" color="neutral700">
                     {order.status === 'reserved'
                       ? 'Pack this order, then tell the buyer when it is ready to collect.'
@@ -482,7 +481,7 @@ export default function ProviderShop() {
                   />
                 </View>
                 {restockingProductId === product.id ? (
-                  <View style={styles.editor}>
+                  <View style={[styles.editor, { borderTopColor: colors.divider }]}>
                     <TextField
                       label="Units received"
                       value={restockQuantity}
@@ -500,7 +499,7 @@ export default function ProviderShop() {
                   </View>
                 ) : null}
                 {editingProductId === product.id ? (
-                  <View style={styles.editor}>
+                  <View style={[styles.editor, { borderTopColor: colors.divider }]}>
                     <View style={styles.field}>
                       <TextField label="Item name" value={editName} onChangeText={setEditName} />
                     </View>

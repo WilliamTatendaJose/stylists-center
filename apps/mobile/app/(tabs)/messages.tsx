@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatBookingWhen } from '@sc/shared';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import {
   Screen,
   ScreenHeader,
@@ -11,6 +11,7 @@ import {
   EmptyPanel,
   SearchField,
   SegmentedPills,
+  useTheme,
 } from '@sc/ui';
 import { useConversations } from '../../src/api/hooks/useChat.js';
 import { apiAssetUrl } from '../../src/api/client.js';
@@ -22,7 +23,6 @@ const styles = StyleSheet.create({
   controls: { gap: space.m, marginBottom: space.s },
   searchRow: { flexDirection: 'row' },
   unreadRow: {
-    backgroundColor: color.accent100,
     marginHorizontal: -space.s,
     paddingHorizontal: space.s,
   },
@@ -30,6 +30,7 @@ const styles = StyleSheet.create({
 
 /** Searchable Messages inbox with an explicit unread queue. */
 export default function Messages() {
+  const { colors } = useTheme();
   const {
     data: conversations = [],
     isError,
@@ -78,8 +79,8 @@ export default function Messages() {
       refreshControl={
         <RefreshControl
           refreshing={isRefetching}
-          tintColor={color.accent}
-          colors={[color.accent]}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
           onRefresh={() => void refetch()}
         />
       }
@@ -110,7 +111,11 @@ export default function Messages() {
         visible.map((conversation) => (
           <View
             key={conversation.id}
-            style={conversation.unreadCount > 0 ? styles.unreadRow : undefined}
+            style={
+              conversation.unreadCount > 0
+                ? [styles.unreadRow, { backgroundColor: colors.accent100 }]
+                : undefined
+            }
           >
             <ListRow
               avatar={{

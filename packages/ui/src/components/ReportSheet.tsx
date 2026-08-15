@@ -1,10 +1,11 @@
 import { StyleSheet, View } from 'react-native';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import { REPORT_REASON_LABELS, type ReportReason } from '@sc/shared';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
 import { Button } from './Button.js';
 import { Sheet } from './Sheet.js';
+import { useTheme } from '../theme.js';
 
 export interface ReportSheetProps {
   open: boolean;
@@ -18,7 +19,7 @@ const styles = StyleSheet.create({
   title: { marginBottom: space.s },
   body: { marginBottom: space.l },
   option: { paddingVertical: space.ml },
-  optionDivider: { borderBottomWidth: 1, borderBottomColor: color.divider },
+  optionDivider: { borderBottomWidth: 1 },
   cancelButton: { marginTop: space.m },
 });
 
@@ -29,6 +30,7 @@ const styles = StyleSheet.create({
  * Tapping a reason submits immediately; CANCEL is the only other way out.
  */
 export function ReportSheet({ open, onClose, onSubmit }: ReportSheetProps) {
+  const { colors } = useTheme();
   const submit = (reason: ReportReason) => {
     onSubmit(reason);
     onClose();
@@ -52,7 +54,12 @@ export function ReportSheet({ open, onClose, onSubmit }: ReportSheetProps) {
             onPress={() => {
               submit(reason);
             }}
-            style={[styles.option, index < REASONS.length - 1 ? styles.optionDivider : null]}
+            style={[
+              styles.option,
+              index < REASONS.length - 1
+                ? [styles.optionDivider, { borderBottomColor: colors.divider }]
+                : null,
+            ]}
           >
             <Text variant="body">{REPORT_REASON_LABELS[reason]}</Text>
           </Pressable>

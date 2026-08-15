@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MapPin, ChevronRight } from 'lucide-react-native';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import { deriveInitials, type ReportReason } from '@sc/shared';
 import {
   Screen,
@@ -15,6 +15,7 @@ import {
   ImagePlaceholder,
   Button,
   ReportSheet,
+  useTheme,
 } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
@@ -45,10 +46,9 @@ const styles = StyleSheet.create({
     paddingVertical: space.ml,
   },
   serviceText: { flex: 1, minWidth: 0 },
-  serviceRowDivider: { borderBottomWidth: 1, borderBottomColor: color.divider },
+  serviceRowDivider: { borderBottomWidth: 1 },
   fromPanel: {
     borderWidth: 1,
-    borderColor: color.divider,
     borderRadius: 20,
     padding: space.l,
   },
@@ -73,6 +73,7 @@ const styles = StyleSheet.create({
  * correct for one of the three.
  */
 export default function ProviderProfile() {
+  const { colors } = useTheme();
   const { id, matchId } = useLocalSearchParams<{ id: string; matchId?: string }>();
   const onBack = useBack('/(tabs)');
   const { data: provider } = useProvider(id);
@@ -161,7 +162,7 @@ export default function ProviderProfile() {
         {reportOutcome ? (
           <Text
             variant="meta"
-            color={reportOutcome.ok ? 'neutral700' : color.accent700}
+            color={reportOutcome.ok ? 'neutral700' : colors.accent700}
             style={styles.reportedNote}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
@@ -240,7 +241,9 @@ export default function ProviderProfile() {
                 key={service.id}
                 style={[
                   styles.serviceRow,
-                  index < provider.services.length - 1 ? styles.serviceRowDivider : null,
+                  index < provider.services.length - 1
+                    ? [styles.serviceRowDivider, { borderBottomColor: colors.divider }]
+                    : null,
                 ]}
               >
                 <Avatar
@@ -258,7 +261,7 @@ export default function ProviderProfile() {
               </View>
             ))
           ) : (
-            <View style={styles.fromPanel}>
+            <View style={[styles.fromPanel, { borderColor: colors.divider }]}>
               <Text variant="h3">
                 ${((provider.fromPriceUsdCents ?? 0) / 100).toFixed(0)} and up
               </Text>
@@ -277,7 +280,7 @@ export default function ProviderProfile() {
             <View key={review.id} style={styles.reviewRow}>
               <View style={styles.reviewHeader}>
                 <Text variant="bodyStrong">{review.authorName}</Text>
-                <Text variant="bodyStrong" color={color.accent700}>
+                <Text variant="bodyStrong" color={colors.accent700}>
                   {review.rating} ★
                 </Text>
               </View>
@@ -294,7 +297,7 @@ export default function ProviderProfile() {
           onPress={goDirections}
           style={styles.directionsRow}
         >
-          <MapPin size={16} strokeWidth={1.8} color={color.accent} />
+          <MapPin size={16} strokeWidth={1.8} color={colors.accent} />
           <View style={styles.directionsMiddle}>
             <Text variant="body">
               {provider.areaName} · {provider.distanceKm.toFixed(1)} km from you
@@ -303,7 +306,7 @@ export default function ProviderProfile() {
               See it on the map and get directions
             </Text>
           </View>
-          <ChevronRight size={18} strokeWidth={1.8} color={color.neutral600} />
+          <ChevronRight size={18} strokeWidth={1.8} color={colors.neutral600} />
         </Pressable>
 
         <Text variant="meta" color="neutral600">

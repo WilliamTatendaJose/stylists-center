@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import { formatUsd, type CreateOrderResponse, type PaymentMethod } from '@sc/shared';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import {
   Screen,
   ScreenHeader,
@@ -15,6 +15,7 @@ import {
   RadioCard,
   RuleList,
   EmptyPanel,
+  useTheme,
 } from '@sc/ui';
 import { useCreateOrder } from '../../src/api/hooks/useMarket.js';
 import {
@@ -39,7 +40,6 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 1,
-    borderColor: color.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -62,6 +62,7 @@ const styles = StyleSheet.create({
  * deleted the first — it was silently replacing the entire cart.
  */
 export default function Cart() {
+  const { colors } = useTheme();
   const onBack = useBack(useMarketHome());
   const lines = useCartStore((s) => s.lines);
   const setQuantity = useCartStore((s) => s.setQuantity);
@@ -194,7 +195,7 @@ export default function Cart() {
           {sellerErrors[group.providerId] ? (
             <Text
               variant="meta"
-              color={color.accent700}
+              color={colors.accent700}
               style={styles.sellerError}
               accessibilityLiveRegion="polite"
               accessibilityRole="alert"
@@ -224,7 +225,7 @@ export default function Cart() {
                   }}
                   style={styles.qtyButton}
                 >
-                  <Minus size={16} strokeWidth={1.9} color={color.text} />
+                  <Minus size={16} strokeWidth={1.9} color={colors.text} />
                 </Pressable>
                 <Text variant="bodyStrong" style={styles.qtyValue}>
                   {line.quantity}
@@ -241,7 +242,7 @@ export default function Cart() {
                   }}
                   style={styles.qtyButton}
                 >
-                  <Plus size={16} strokeWidth={1.9} color={color.text} />
+                  <Plus size={16} strokeWidth={1.9} color={colors.text} />
                 </Pressable>
 
                 <Pressable
@@ -252,7 +253,7 @@ export default function Cart() {
                   }}
                   style={styles.removeButton}
                 >
-                  <Trash2 size={18} strokeWidth={1.7} color={color.neutral700} />
+                  <Trash2 size={18} strokeWidth={1.7} color={colors.neutral700} />
                 </Pressable>
               </View>
             </Card>

@@ -2,8 +2,8 @@ import { Fragment, useState } from 'react';
 import { RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatUsd, ORDER_STATUS_LABELS, type OrderRowDto } from '@sc/shared';
-import { color, space } from '@sc/tokens';
-import { Screen, ScreenHeader, Text, Avatar, Badge, Button, Card, Sheet, EmptyPanel } from '@sc/ui';
+import { space } from '@sc/tokens';
+import { Screen, ScreenHeader, Text, Avatar, Badge, Button, Card, Sheet, EmptyPanel, useTheme } from '@sc/ui';
 import { useCancelOrder, useCollectOrder, useMyOrders } from '../../src/api/hooks/useMarket.js';
 import { useStartOrderConversation } from '../../src/api/hooks/useChat.js';
 import { describeError } from '../../src/api/errorMessage.js';
@@ -20,7 +20,6 @@ const styles = StyleSheet.create({
     marginTop: space.m,
     padding: space.m,
     borderRadius: 12,
-    backgroundColor: color.surface,
   },
   actionsRow: { gap: space.s, marginTop: space.m },
   note: { marginBottom: space.m },
@@ -34,6 +33,7 @@ const ORDER_HISTORY_PREVIEW_COUNT = 2;
 
 /** My orders — where to collect, and the two things a buyer can still do about it. */
 export default function Orders() {
+  const { colors } = useTheme();
   const onBack = useBack(useMarketHome());
   const { data: orders = [], isError, isLoading, refetch, isRefetching } = useMyOrders();
   const collectOrder = useCollectOrder();
@@ -99,15 +99,15 @@ export default function Orders() {
             onRefresh={() => {
               void refetch();
             }}
-            tintColor={color.accent}
-            colors={[color.accent]}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
       >
         {actionError ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.note}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
@@ -181,7 +181,7 @@ export default function Orders() {
               </View>
 
               {order.status === 'reserved' || order.status === 'ready_for_collection' ? (
-                <View style={styles.lifecycle}>
+                <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
                   <Text variant="meta" color="neutral700">
                     {order.status === 'reserved'
                       ? 'The seller is preparing your order. Message them to agree a collection time.'
@@ -271,7 +271,7 @@ export default function Orders() {
         {cancelError ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.sheetBody}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"

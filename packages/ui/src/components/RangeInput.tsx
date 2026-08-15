@@ -1,5 +1,5 @@
 import Slider from '@react-native-community/slider';
-import { color } from '@sc/tokens';
+import { useTheme } from '../theme.js';
 
 export interface RangeInputProps {
   min: number;
@@ -19,6 +19,7 @@ export function RangeInput({
   onChange,
   accessibilityLabel,
 }: RangeInputProps) {
+  const { colors } = useTheme();
   return (
     <Slider
       accessibilityLabel={accessibilityLabel}
@@ -27,9 +28,9 @@ export function RangeInput({
       step={step}
       value={value}
       onValueChange={onChange}
-      minimumTrackTintColor={color.accent}
-      maximumTrackTintColor={color.divider}
-      thumbTintColor={color.accent}
+      minimumTrackTintColor={colors.accent}
+      maximumTrackTintColor={colors.divider}
+      thumbTintColor={colors.accent}
     />
   );
 }

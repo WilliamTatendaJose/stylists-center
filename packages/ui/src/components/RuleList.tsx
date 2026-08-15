@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { color, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
+import { useTheme } from '../theme.js';
 
 export interface RuleListItem {
   label: string;
@@ -37,9 +38,10 @@ const styles = StyleSheet.create({
 
 /** The label/value hairline list on Booked, the payment summary, and the wallet commission table. */
 export function RuleList({ items, onAccent = false }: RuleListProps) {
-  const ruleColor = onAccent ? color.onAccent.rule : color.divider;
-  const labelColor = onAccent ? color.onAccent.labelDim : color.neutral700;
-  const valueColor = onAccent ? color.onAccent.text : color.text;
+  const { colors } = useTheme();
+  const ruleColor = onAccent ? color.onAccent.rule : colors.divider;
+  const labelColor = onAccent ? color.onAccent.labelDim : colors.neutral700;
+  const valueColor = onAccent ? color.onAccent.text : colors.text;
   const listStyle = { borderTopColor: ruleColor };
 
   return (

@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { color, motion } from '@sc/tokens';
+import { motion } from '@sc/tokens';
 import { Pressable } from '../primitives/Pressable.js';
+import { useTheme } from '../theme.js';
 
 export interface ToggleProps {
   value: boolean;
@@ -26,12 +27,12 @@ const styles = StyleSheet.create({
     width: KNOB_SIZE,
     height: KNOB_SIZE,
     borderRadius: KNOB_SIZE / 2,
-    backgroundColor: color.bg,
   },
 });
 
 /** Availability / home-visit switches — 44x26, knob travels 0->18px, 250ms. */
 export function Toggle({ value, onChange, accessibilityLabel }: ToggleProps) {
+  const { colors } = useTheme();
   const progress = useSharedValue(value ? 1 : 0);
 
   useEffect(() => {
@@ -39,7 +40,7 @@ export function Toggle({ value, onChange, accessibilityLabel }: ToggleProps) {
   }, [value, progress]);
 
   const trackStyle = useAnimatedStyle(() => ({
-    backgroundColor: progress.value > 0.5 ? color.accent : color.neutral200,
+    backgroundColor: progress.value > 0.5 ? colors.accent : colors.neutral200,
   }));
   const knobStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: progress.value * motion.toggle.travel }],
@@ -55,7 +56,7 @@ export function Toggle({ value, onChange, accessibilityLabel }: ToggleProps) {
       }}
     >
       <Animated.View style={[styles.track, trackStyle]}>
-        <Animated.View style={[styles.knob, knobStyle]} />
+        <Animated.View style={[styles.knob, { backgroundColor: colors.bg }, knobStyle]} />
       </Animated.View>
     </Pressable>
   );

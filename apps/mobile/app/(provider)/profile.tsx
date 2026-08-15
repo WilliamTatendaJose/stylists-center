@@ -10,7 +10,7 @@ import {
   type PaymentMethod,
   type ServiceDto,
 } from '@sc/shared';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import {
   Badge,
   Button,
@@ -24,6 +24,7 @@ import {
   Sheet,
   Text,
   TextField,
+  useTheme,
 } from '@sc/ui';
 import {
   useAddProviderService,
@@ -87,6 +88,7 @@ const styles = StyleSheet.create({
 });
 
 export default function ProviderProfile() {
+  const { colors } = useTheme();
   const { data, isError, refetch } = useProviderManagementProfile();
   const updateProfile = useUpdateProviderProfile();
   const addService = useAddProviderService();
@@ -263,7 +265,7 @@ export default function ProviderProfile() {
         {error ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.error}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
@@ -298,12 +300,12 @@ export default function ProviderProfile() {
               />
             </View>
             <ProfileInfoRow
-              icon={<MapPin size={20} color={color.neutral700} />}
+              icon={<MapPin size={20} color={colors.neutral700} />}
               label="Service area"
               value={areaName || 'Not set'}
             />
             <ProfileInfoRow
-              icon={<Clock3 size={20} color={color.neutral700} />}
+              icon={<Clock3 size={20} color={colors.neutral700} />}
               label="Working hours"
               value={workingHoursLabel || 'Not set'}
               divided
@@ -426,7 +428,7 @@ export default function ProviderProfile() {
           <Card bordered style={styles.contentCard}>
             <View style={styles.roleTop}>
               <ProfileIconTile>
-                <UserRound size={20} color={color.neutral700} />
+                <UserRound size={20} color={colors.neutral700} />
               </ProfileIconTile>
               <View style={styles.roleCopy}>
                 <Text variant="bodyStrong">Client view</Text>
@@ -449,8 +451,8 @@ export default function ProviderProfile() {
             onPress={() => void signOut()}
             style={styles.signOutRow}
           >
-            <LogOut size={18} strokeWidth={1.8} color={color.accent700} />
-            <Text variant="bodyStrong" color={color.accent700}>
+            <LogOut size={18} strokeWidth={1.8} color={colors.accent700} />
+            <Text variant="bodyStrong" color={colors.accent700}>
               Sign out
             </Text>
           </Pressable>
@@ -465,7 +467,7 @@ export default function ProviderProfile() {
           Keep this clear and current so clients know where and when you work.
         </Text>
         {error ? (
-          <Text variant="meta" color={color.accent700} style={styles.sheetError}>
+          <Text variant="meta" color={colors.accent700} style={styles.sheetError}>
             {error}
           </Text>
         ) : null}
@@ -495,7 +497,7 @@ export default function ProviderProfile() {
           }}
         />
         <View style={styles.locationRow}>
-          <MapPin size={16} color={color.neutral700} />
+          <MapPin size={16} color={colors.neutral700} />
           <Text variant="meta" color="neutral700">
             {lat.toFixed(5)}, {lng.toFixed(5)}
           </Text>
@@ -516,7 +518,7 @@ export default function ProviderProfile() {
           Give clients a clear service name, duration, price, and examples of the result.
         </Text>
         {error ? (
-          <Text variant="meta" color={color.accent700} style={styles.sheetError}>
+          <Text variant="meta" color={colors.accent700} style={styles.sheetError}>
             {error}
           </Text>
         ) : null}
@@ -575,7 +577,7 @@ export default function ProviderProfile() {
         {subError ? (
           <Text
             variant="meta"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.sheetError}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"

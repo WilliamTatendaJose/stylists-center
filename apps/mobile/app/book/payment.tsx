@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import { formatUsd } from '@sc/shared';
-import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button } from '@sc/ui';
+import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button, useTheme } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateBooking } from '../../src/api/hooks/useBookings.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
@@ -21,13 +21,13 @@ const styles = StyleSheet.create({
     marginTop: space.s,
     padding: space.l,
     borderRadius: 20,
-    backgroundColor: color.surface,
     gap: 2,
   },
 });
 
 /** Payment (handoff screen 7, Step 2/2). */
 export default function Payment() {
+  const { colors } = useTheme();
   const onBack = useBack('/book/slot');
   const providerId = useBookingDraftStore((s) => s.providerId);
   const serviceId = useBookingDraftStore((s) => s.serviceId);
@@ -126,7 +126,7 @@ export default function Payment() {
           {bookingError ? (
             <Text
               variant="meta"
-              color={color.accent700}
+              color={colors.accent700}
               accessibilityLiveRegion="polite"
               accessibilityRole="alert"
             >
@@ -184,7 +184,7 @@ export default function Payment() {
         />
 
         {paymentMethod === 'ecocash' ? (
-          <View style={styles.ecocashPanel}>
+          <View style={[styles.ecocashPanel, { backgroundColor: colors.surface }]}>
             <Text variant="meta" color="neutral600">
               +263 77 000 0000 (read-only for now — Phase 3 wires this to your account)
             </Text>
