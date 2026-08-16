@@ -67,6 +67,16 @@ jobs:
 
       - run: pnpm format:check
 
+      # apps/api/src/generated is gitignored (it's a build artifact, and a
+      # large one) and nothing installs it automatically — `prisma migrate
+      # deploy` only touches the database, it does not regenerate the
+      # client. Every contributor's machine already has a copy sitting on
+      # disk from whatever they last ran locally, which is exactly why this
+      # was never missed until a fresh checkout (CI) needed it from
+      # scratch: PrismaService's custom `output` path resolves to nothing,
+      # so typecheck/lint see a client with no models on it at all.
+      - run: pnpm --filter @sc/api prisma:generate
+
       # apps/api's test suite is integration-style against real tables (see
       # apps/api/README notes on migrations) — without this the fresh sc_test
       # database has no schema at all and every test fails with "relation does
