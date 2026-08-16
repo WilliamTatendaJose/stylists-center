@@ -20,7 +20,7 @@ quota — not something you want firing on every commit.
 Both workflows need a GitHub Actions secret that only your own dashboard
 login can create (the CLI is deliberately blocked from minting these):
 
-- **`RAILWAY_TOKEN`** — a *project* token, not an account token. In the
+- **`RAILWAY_TOKEN`** — a _project_ token, not an account token. In the
   Railway dashboard: this project → Settings → Tokens → new token scoped to
   the `production` environment. An account-wide token would also work but
   grants CI far more than it needs (every project in your account, including

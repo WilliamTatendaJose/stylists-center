@@ -240,7 +240,10 @@ export default function Chat() {
           styles.bubble,
           item.mine
             ? { backgroundColor: colors.accent }
-            : [styles.bubbleTheirsBorder, { backgroundColor: colors.surface, borderColor: colors.divider }],
+            : [
+                styles.bubbleTheirsBorder,
+                { backgroundColor: colors.surface, borderColor: colors.divider },
+              ],
         ]}
       >
         {item.text ? (
@@ -360,7 +363,10 @@ export default function Chat() {
               {queuedAttachments.map((attachment) => (
                 <View
                   key={attachment.uri}
-                  style={[styles.queuedFile, { borderColor: colors.divider, backgroundColor: colors.surface }]}
+                  style={[
+                    styles.queuedFile,
+                    { borderColor: colors.divider, backgroundColor: colors.surface },
+                  ]}
                 >
                   <Paperclip size={15} color={colors.neutral700} />
                   <Text variant="meta" numberOfLines={1} style={styles.queuedName}>

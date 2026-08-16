@@ -20,7 +20,9 @@ export function AuditLogPage() {
 
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
       {isError ? (
-        <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load the audit log.</p>
+        <p className="text-sm text-accent-700 dark:text-dark-accent">
+          Couldn&apos;t load the audit log.
+        </p>
       ) : null}
 
       <div className="overflow-hidden rounded-2xl border border-neutral-200 dark:border-dark-border">
@@ -47,7 +49,9 @@ export function AuditLogPage() {
                 <td className="px-5 py-3 font-mono text-xs text-neutral-700 dark:text-dark-muted">
                   {entry.action}
                 </td>
-                <td className="px-5 py-3 text-neutral-600 dark:text-dark-muted">{entry.ip ?? '—'}</td>
+                <td className="px-5 py-3 text-neutral-600 dark:text-dark-muted">
+                  {entry.ip ?? '—'}
+                </td>
                 <td className="px-5 py-3 whitespace-nowrap text-neutral-600 dark:text-dark-muted">
                   {new Date(entry.at).toLocaleString()}
                 </td>

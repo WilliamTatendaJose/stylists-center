@@ -67,7 +67,12 @@ export function TextField({
         multiline={multiline}
         numberOfLines={numberOfLines}
         textAlignVertical={multiline ? 'top' : 'center'}
-        style={[styles.input, { borderColor: colors.divider, color: colors.text }, multiline ? styles.multiline : null, alignStyle]}
+        style={[
+          styles.input,
+          { borderColor: colors.divider, color: colors.text },
+          multiline ? styles.multiline : null,
+          alignStyle,
+        ]}
       />
     </View>
   );

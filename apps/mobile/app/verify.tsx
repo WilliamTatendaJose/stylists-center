@@ -41,7 +41,10 @@ export default function VerifyIdentity() {
     setError(null);
     submitVerification.mutate(
       { idDocumentUrl: idDocument, selfieImageUrl: selfie },
-      { onError: (reason) => setError(describeError(reason, "Couldn't submit verification. Try again.")) },
+      {
+        onError: (reason) =>
+          setError(describeError(reason, "Couldn't submit verification. Try again.")),
+      },
     );
   };
 
@@ -79,7 +82,11 @@ export default function VerifyIdentity() {
       </Text>
 
       {status !== 'unverified' ? (
-        <Text variant="meta" color={status === 'verified' ? 'accent700' : 'neutral700'} style={styles.status}>
+        <Text
+          variant="meta"
+          color={status === 'verified' ? 'accent700' : 'neutral700'}
+          style={styles.status}
+        >
           {status === 'verified'
             ? 'Your identity is verified. Your uploaded documents were deleted after review.'
             : 'Your documents are under review. They will be deleted after the review decision.'}

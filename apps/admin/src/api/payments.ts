@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AdminPaymentsOverviewDto, AdminProviderPayoutRowDto, RecordPayoutInput } from '@sc/shared';
+import type {
+  AdminPaymentsOverviewDto,
+  AdminProviderPayoutRowDto,
+  RecordPayoutInput,
+} from '@sc/shared';
 import { apiFetch } from './client';
 
 const OVERVIEW_KEY = ['admin', 'payments', 'overview'] as const;
@@ -24,7 +28,10 @@ export function useRecordPayout(providerId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: RecordPayoutInput) =>
-      apiFetch(`/v1/admin/payments/providers/${providerId}/payouts`, { method: 'POST', body: input }),
+      apiFetch(`/v1/admin/payments/providers/${providerId}/payouts`, {
+        method: 'POST',
+        body: input,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROVIDERS_KEY });
       void queryClient.invalidateQueries({ queryKey: OVERVIEW_KEY });

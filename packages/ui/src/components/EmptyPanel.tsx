@@ -27,7 +27,7 @@ export function EmptyPanel({ title, body, onDark = false }: EmptyPanelProps) {
   return (
     <View style={[styles.panel, panelStyle]}>
       {title ? (
-          <Text variant="sectionLabel" color={onDark ? color.onDark.text : colors.text}>
+        <Text variant="sectionLabel" color={onDark ? color.onDark.text : colors.text}>
           {title}
         </Text>
       ) : null}

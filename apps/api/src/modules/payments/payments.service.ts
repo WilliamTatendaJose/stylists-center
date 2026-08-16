@@ -28,21 +28,20 @@ export class PaymentsService {
 
     const reference = fields.reference;
     const amountUsdCents = parseAmountCents(fields.amount);
-    if (!reference || amountUsdCents === null) throw new ForbiddenException('Invalid Paynow callback');
+    if (!reference || amountUsdCents === null)
+      throw new ForbiddenException('Invalid Paynow callback');
 
     const [booking, order] = await Promise.all([
       this.prisma.booking.findUnique({ where: { reference } }),
       this.prisma.order.findUnique({ where: { reference } }),
     ]);
-    if ((!booking && !order) || (booking && order)) throw new NotFoundException('Unknown Paynow reference');
+    if ((!booking && !order) || (booking && order))
+      throw new NotFoundException('Unknown Paynow reference');
     const expected = booking?.priceUsdCents ?? order?.totalUsdCents;
     if (expected === undefined) throw new NotFoundException('Unknown Paynow reference');
-    if (expected !== amountUsdCents) throw new ForbiddenException('Paynow callback amount mismatch');
-    const subjectWhere = booking
-      ? { bookingId: booking.id }
-      : order
-        ? { orderId: order.id }
-        : {};
+    if (expected !== amountUsdCents)
+      throw new ForbiddenException('Paynow callback amount mismatch');
+    const subjectWhere = booking ? { bookingId: booking.id } : order ? { orderId: order.id } : {};
 
     const prior = await this.prisma.payment.findFirst({
       where: {

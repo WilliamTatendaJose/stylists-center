@@ -57,7 +57,10 @@ function BanRow({ ban }: { ban: AdminBanRowDto }) {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <Badge label={APPEAL_STATUS_LABELS[ban.appealStatus]} tone={APPEAL_TONE[ban.appealStatus]} />
+          <Badge
+            label={APPEAL_STATUS_LABELS[ban.appealStatus]}
+            tone={APPEAL_TONE[ban.appealStatus]}
+          />
           {isActive ? (
             <button
               type="button"

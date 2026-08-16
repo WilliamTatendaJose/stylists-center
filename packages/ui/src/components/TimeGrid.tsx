@@ -38,7 +38,11 @@ export function TimeGrid({ slots, value, onChange }: TimeGridProps) {
         const selected = slot.time === value;
         const pillStyle: ViewStyle = {
           backgroundColor: slot.available ? (selected ? colors.accent : colors.bg) : colors.surface,
-          borderColor: slot.available ? (selected ? colors.accent : colors.divider) : colors.divider,
+          borderColor: slot.available
+            ? selected
+              ? colors.accent
+              : colors.divider
+            : colors.divider,
         };
         const textColor = !slot.available ? colors.neutral600 : selected ? colors.bg : colors.text;
 

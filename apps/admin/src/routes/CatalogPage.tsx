@@ -110,7 +110,11 @@ function CategoryRow({ category }: { category: AdminCategoryRowDto }) {
     setError(null);
     updateCategory.mutate(
       { name: name.trim() },
-      { onError: (err) => { setError(err instanceof ApiError ? err.message : 'Could not rename.'); } },
+      {
+        onError: (err) => {
+          setError(err instanceof ApiError ? err.message : 'Could not rename.');
+        },
+      },
     );
   };
 
@@ -135,10 +139,14 @@ function CategoryRow({ category }: { category: AdminCategoryRowDto }) {
           className="w-48 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:border-accent focus:outline-none dark:border-dark-border dark:bg-white/5 dark:text-dark-text"
         />
         {category.parentName ? (
-          <span className="text-sm text-neutral-500 dark:text-dark-muted">under {category.parentName}</span>
+          <span className="text-sm text-neutral-500 dark:text-dark-muted">
+            under {category.parentName}
+          </span>
         ) : null}
         <Badge label={`${String(category.providerCount)} providers`} tone="neutral" />
-        {error ? <span className="text-sm text-accent-700 dark:text-dark-accent">{error}</span> : null}
+        {error ? (
+          <span className="text-sm text-accent-700 dark:text-dark-accent">{error}</span>
+        ) : null}
       </div>
       <div className="flex items-center gap-2">
         {changed ? (
@@ -163,7 +171,12 @@ function CategoriesSection() {
       <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4 dark:border-dark-border">
         <h2 className="font-semibold text-neutral-900 dark:text-dark-text">Categories</h2>
         {!creating ? (
-          <Button variant="secondary" onClick={() => { setCreating(true); }}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setCreating(true);
+            }}
+          >
             Add category
           </Button>
         ) : null}
@@ -171,13 +184,22 @@ function CategoriesSection() {
 
       <div className="p-5 pb-0">
         {creating ? (
-          <CreateCategoryForm categories={categories ?? []} onDone={() => { setCreating(false); }} />
+          <CreateCategoryForm
+            categories={categories ?? []}
+            onDone={() => {
+              setCreating(false);
+            }}
+          />
         ) : null}
       </div>
 
-      {isLoading ? <p className="px-5 pb-5 text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
+      {isLoading ? (
+        <p className="px-5 pb-5 text-sm text-neutral-600 dark:text-dark-muted">Loading…</p>
+      ) : null}
       {isError ? (
-        <p className="px-5 pb-5 text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load categories.</p>
+        <p className="px-5 pb-5 text-sm text-accent-700 dark:text-dark-accent">
+          Couldn&apos;t load categories.
+        </p>
       ) : null}
 
       <div className="divide-y divide-neutral-200 dark:divide-dark-border">
@@ -221,14 +243,62 @@ function CityForm({
   return (
     <div className="mb-4 rounded-xl bg-neutral-50 p-4 dark:bg-white/5">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <TextField label="Name" value={form.name} onChange={(e) => { set('name')(e.target.value); }} />
-        <TextField label="Timezone" value={form.timezone} onChange={(e) => { set('timezone')(e.target.value); }} />
-        <TextField label="Centroid lat" value={String(form.centroidLat)} onChange={(e) => { set('centroidLat')(e.target.value); }} />
-        <TextField label="Centroid lng" value={String(form.centroidLng)} onChange={(e) => { set('centroidLng')(e.target.value); }} />
-        <TextField label="Bbox west" value={String(form.bboxWest)} onChange={(e) => { set('bboxWest')(e.target.value); }} />
-        <TextField label="Bbox south" value={String(form.bboxSouth)} onChange={(e) => { set('bboxSouth')(e.target.value); }} />
-        <TextField label="Bbox east" value={String(form.bboxEast)} onChange={(e) => { set('bboxEast')(e.target.value); }} />
-        <TextField label="Bbox north" value={String(form.bboxNorth)} onChange={(e) => { set('bboxNorth')(e.target.value); }} />
+        <TextField
+          label="Name"
+          value={form.name}
+          onChange={(e) => {
+            set('name')(e.target.value);
+          }}
+        />
+        <TextField
+          label="Timezone"
+          value={form.timezone}
+          onChange={(e) => {
+            set('timezone')(e.target.value);
+          }}
+        />
+        <TextField
+          label="Centroid lat"
+          value={String(form.centroidLat)}
+          onChange={(e) => {
+            set('centroidLat')(e.target.value);
+          }}
+        />
+        <TextField
+          label="Centroid lng"
+          value={String(form.centroidLng)}
+          onChange={(e) => {
+            set('centroidLng')(e.target.value);
+          }}
+        />
+        <TextField
+          label="Bbox west"
+          value={String(form.bboxWest)}
+          onChange={(e) => {
+            set('bboxWest')(e.target.value);
+          }}
+        />
+        <TextField
+          label="Bbox south"
+          value={String(form.bboxSouth)}
+          onChange={(e) => {
+            set('bboxSouth')(e.target.value);
+          }}
+        />
+        <TextField
+          label="Bbox east"
+          value={String(form.bboxEast)}
+          onChange={(e) => {
+            set('bboxEast')(e.target.value);
+          }}
+        />
+        <TextField
+          label="Bbox north"
+          value={String(form.bboxNorth)}
+          onChange={(e) => {
+            set('bboxNorth')(e.target.value);
+          }}
+        />
       </div>
       {error ? <p className="mb-3 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
       <div className="flex gap-2">
@@ -265,11 +335,15 @@ function CityRow({ city }: { city: AdminCityRowDto }) {
         <CityForm
           initial={city}
           pending={updateCity.isPending}
-          onCancel={() => { setEditing(false); }}
+          onCancel={() => {
+            setEditing(false);
+          }}
           onSubmit={(input) => {
             setError(null);
             updateCity.mutate(input, {
-              onSuccess: () => { setEditing(false); },
+              onSuccess: () => {
+                setEditing(false);
+              },
               onError: (err) => {
                 setError(err instanceof ApiError ? err.message : 'Could not save.');
               },
@@ -288,10 +362,17 @@ function CityRow({ city }: { city: AdminCityRowDto }) {
         <p className="mt-0.5 text-sm text-neutral-600 dark:text-dark-muted">
           {city.timezone} · {city.userCount} users · {city.providerCount} providers
         </p>
-        {error ? <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
+        {error ? (
+          <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p>
+        ) : null}
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="secondary" onClick={() => { setEditing(true); }}>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setEditing(true);
+          }}
+        >
           Edit
         </Button>
         <Button variant="danger" onClick={remove} disabled={deleteCity.isPending}>
@@ -312,7 +393,12 @@ function CitiesSection() {
       <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4 dark:border-dark-border">
         <h2 className="font-semibold text-neutral-900 dark:text-dark-text">Cities</h2>
         {!creating ? (
-          <Button variant="secondary" onClick={() => { setCreating(true); }}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setCreating(true);
+            }}
+          >
             Add city
           </Button>
         ) : null}
@@ -323,17 +409,27 @@ function CitiesSection() {
           <CityForm
             initial={EMPTY_CITY}
             pending={createCity.isPending}
-            onCancel={() => { setCreating(false); }}
+            onCancel={() => {
+              setCreating(false);
+            }}
             onSubmit={(input) => {
-              createCity.mutate(input, { onSuccess: () => { setCreating(false); } });
+              createCity.mutate(input, {
+                onSuccess: () => {
+                  setCreating(false);
+                },
+              });
             }}
           />
         ) : null}
       </div>
 
-      {isLoading ? <p className="px-5 pb-5 text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
+      {isLoading ? (
+        <p className="px-5 pb-5 text-sm text-neutral-600 dark:text-dark-muted">Loading…</p>
+      ) : null}
       {isError ? (
-        <p className="px-5 pb-5 text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load cities.</p>
+        <p className="px-5 pb-5 text-sm text-accent-700 dark:text-dark-accent">
+          Couldn&apos;t load cities.
+        </p>
       ) : null}
 
       <div className="divide-y divide-neutral-200 dark:divide-dark-border">

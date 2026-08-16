@@ -24,7 +24,10 @@ export function LookupPage() {
 
       <div className="mb-8 flex max-w-lg items-center gap-2">
         <div className="relative flex-1">
-          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+          <Search
+            size={16}
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+          />
           <input
             value={input}
             onChange={(e) => {
@@ -46,7 +49,9 @@ export function LookupPage() {
         </button>
       </div>
 
-      {isFetching ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Searching…</p> : null}
+      {isFetching ? (
+        <p className="text-sm text-neutral-600 dark:text-dark-muted">Searching…</p>
+      ) : null}
 
       {data ? (
         <div className="space-y-8">
@@ -66,7 +71,9 @@ export function LookupPage() {
                       className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-neutral-50 dark:hover:bg-white/5"
                     >
                       <div className="min-w-0">
-                        <p className="font-medium text-neutral-900 dark:text-dark-text">{b.reference}</p>
+                        <p className="font-medium text-neutral-900 dark:text-dark-text">
+                          {b.reference}
+                        </p>
                         <p className="text-sm text-neutral-600 dark:text-dark-muted">
                           {b.client.displayName} → {b.provider.displayName} · {b.serviceName} ·{' '}
                           {formatUsd(b.priceUsdCents)}
@@ -96,9 +103,12 @@ export function LookupPage() {
                       className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 hover:bg-neutral-50 dark:hover:bg-white/5"
                     >
                       <div className="min-w-0">
-                        <p className="font-medium text-neutral-900 dark:text-dark-text">{o.reference}</p>
+                        <p className="font-medium text-neutral-900 dark:text-dark-text">
+                          {o.reference}
+                        </p>
                         <p className="text-sm text-neutral-600 dark:text-dark-muted">
-                          {o.buyer.displayName} → {o.provider.displayName} · {formatUsd(o.totalUsdCents)}
+                          {o.buyer.displayName} → {o.provider.displayName} ·{' '}
+                          {formatUsd(o.totalUsdCents)}
                         </p>
                       </div>
                       <Badge label={o.status} tone="neutral" />

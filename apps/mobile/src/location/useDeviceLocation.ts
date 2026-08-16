@@ -67,10 +67,7 @@ export function useDeviceLocation() {
         maxAge: MAX_LAST_KNOWN_AGE_MS,
       });
       if (lastKnown) {
-        setLocation(
-          { lat: lastKnown.coords.latitude, lng: lastKnown.coords.longitude },
-          'device',
-        );
+        setLocation({ lat: lastKnown.coords.latitude, lng: lastKnown.coords.longitude }, 'device');
       }
 
       const current = await Location.getCurrentPositionAsync({ accuracy: ACCURACY });

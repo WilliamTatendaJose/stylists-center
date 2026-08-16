@@ -95,12 +95,17 @@ export class AdminPaymentsService {
       if (payment.status !== 'released' || !payment.providerId) continue;
       releasedByProvider.set(
         payment.providerId,
-        (releasedByProvider.get(payment.providerId) ?? 0) + payment.amountUsdCents - payment.feeUsdCents,
+        (releasedByProvider.get(payment.providerId) ?? 0) +
+          payment.amountUsdCents -
+          payment.feeUsdCents,
       );
     }
 
     const payoutByProvider = new Map(
-      payouts.map((p) => [p.providerId, { sum: p._sum.amountUsdCents ?? 0, lastAt: p._max.createdAt }]),
+      payouts.map((p) => [
+        p.providerId,
+        { sum: p._sum.amountUsdCents ?? 0, lastAt: p._max.createdAt },
+      ]),
     );
 
     return providers
@@ -151,7 +156,9 @@ export class AdminPaymentsService {
     const seen = new Set<string>();
     const current: CurrentEscrowEntry[] = [];
     for (const payment of payments) {
-      const subject = payment.bookingId ? `booking:${payment.bookingId}` : `order:${String(payment.orderId)}`;
+      const subject = payment.bookingId
+        ? `booking:${payment.bookingId}`
+        : `order:${String(payment.orderId)}`;
       if (seen.has(subject)) continue;
       seen.add(subject);
       current.push({

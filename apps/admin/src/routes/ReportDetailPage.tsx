@@ -29,7 +29,9 @@ export function ReportDetailPage() {
   if (isLoading) return <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p>;
   if (isError || !report)
     return (
-      <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load this report.</p>
+      <p className="text-sm text-accent-700 dark:text-dark-accent">
+        Couldn&apos;t load this report.
+      </p>
     );
 
   const setStatus = (status: ReportStatus) => {
@@ -105,7 +107,9 @@ export function ReportDetailPage() {
           {report.bookingId ? (
             <div>
               <dt className="text-neutral-600 dark:text-dark-muted">Booking</dt>
-              <dd className="font-medium text-neutral-900 dark:text-dark-text">{report.bookingId}</dd>
+              <dd className="font-medium text-neutral-900 dark:text-dark-text">
+                {report.bookingId}
+              </dd>
             </div>
           ) : null}
         </dl>

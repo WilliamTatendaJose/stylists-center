@@ -18,7 +18,10 @@ export class WalletService {
   async getWallet(userId: string): Promise<WalletDto> {
     const [agent, user] = await Promise.all([
       this.prisma.agent.findUnique({ where: { userId } }),
-      this.prisma.user.findUniqueOrThrow({ where: { id: userId }, select: { verificationStatus: true } }),
+      this.prisma.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { verificationStatus: true },
+      }),
     ]);
     const balance = await this.balance(userId);
 
@@ -50,9 +53,12 @@ export class WalletService {
       if (existing) return;
 
       const referrer = referralCode
-        ? await tx.agent.findUnique({ where: { referralCode }, select: { id: true, userId: true, status: true } })
+        ? await tx.agent.findUnique({
+            where: { referralCode },
+            select: { id: true, userId: true, status: true },
+          })
         : null;
-      if (referralCode && (!referrer || referrer.status !== 'active')) {
+      if (referralCode && referrer?.status !== 'active') {
         throw new BadRequestException('That referral code is not active');
       }
 

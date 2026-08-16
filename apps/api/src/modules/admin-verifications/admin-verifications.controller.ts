@@ -1,9 +1,6 @@
 import { Body, Controller, Get, Param, Patch, Query, UseGuards } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
-import {
-  AdminVerificationsService,
-  parseVerificationStatus,
-} from './admin-verifications.service';
+import { AdminVerificationsService, parseVerificationStatus } from './admin-verifications.service';
 import { ReviewVerificationDto } from './dto';
 
 @Controller('admin/verifications')

@@ -13,17 +13,33 @@ const styles = StyleSheet.create({
   button: { marginTop: space.l },
 });
 
-interface ServerConnectionPanelProps { error?: unknown; onRetry: () => void; compact?: boolean; }
+interface ServerConnectionPanelProps {
+  error?: unknown;
+  onRetry: () => void;
+  compact?: boolean;
+}
 
 /** A consistent, actionable state for a lost API connection â€” never raw fetch text. */
-export function ServerConnectionPanel({ error, onRetry, compact = false }: ServerConnectionPanelProps) {
+export function ServerConnectionPanel({
+  error,
+  onRetry,
+  compact = false,
+}: ServerConnectionPanelProps) {
   const { colors } = useTheme();
   const unavailable = error instanceof NetworkError;
   const serverProblem = error instanceof ApiError && error.status >= 500;
-  const title = unavailable ? "Can't reach Stylists Center" : serverProblem ? 'Our service is taking a moment' : 'This information could not be loaded';
+  const title = unavailable
+    ? "Can't reach Stylists Center"
+    : serverProblem
+      ? 'Our service is taking a moment'
+      : 'This information could not be loaded';
   const body = unavailable
-    ? compact ? 'Showing your last update. Check your connection and try again.' : 'Check your Wi-Fi or mobile data, then try again. Your saved information is still safe.'
-    : serverProblem ? 'Nothing needs fixing on your phone. Please try again in a moment.' : 'Please try again. If it keeps happening, return to the previous screen and reopen this one.';
+    ? compact
+      ? 'Showing your last update. Check your connection and try again.'
+      : 'Check your Wi-Fi or mobile data, then try again. Your saved information is still safe.'
+    : serverProblem
+      ? 'Nothing needs fixing on your phone. Please try again in a moment.'
+      : 'Please try again. If it keeps happening, return to the previous screen and reopen this one.';
 
   return (
     <View
@@ -37,7 +53,9 @@ export function ServerConnectionPanel({ error, onRetry, compact = false }: Serve
         </View>
         <View style={styles.copy}>
           <Text variant="bodyStrong">{title}</Text>
-          <Text variant="meta" color="neutral700" style={styles.body}>{body}</Text>
+          <Text variant="meta" color="neutral700" style={styles.body}>
+            {body}
+          </Text>
         </View>
       </View>
       <Button label="Try again" variant="secondary" block style={styles.button} onPress={onRetry} />

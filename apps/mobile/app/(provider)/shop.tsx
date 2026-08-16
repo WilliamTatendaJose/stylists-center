@@ -261,31 +261,31 @@ export default function ProviderShop() {
               {mode === 'buy' ? (
                 <>
                   <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="My orders"
-                  onPress={() => {
-                    router.push('/market/orders');
-                  }}
-                  style={[styles.ordersButton, { borderColor: colors.divider }]}
-                >
-                  <Package size={18} strokeWidth={1.7} color={colors.text} />
+                    accessibilityRole="button"
+                    accessibilityLabel="My orders"
+                    onPress={() => {
+                      router.push('/market/orders');
+                    }}
+                    style={[styles.ordersButton, { borderColor: colors.divider }]}
+                  >
+                    <Package size={18} strokeWidth={1.7} color={colors.text} />
                   </Pressable>
                   <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    itemCount > 0 ? `Cart, ${String(itemCount)} items` : 'Cart, empty'
-                  }
-                  onPress={() => {
-                    router.push('/market/cart');
-                  }}
-                  style={[styles.cartButton, { backgroundColor: colors.neutral900 }]}
-                >
-                  <ShoppingBag size={18} strokeWidth={1.7} color={colors.bg} />
-                  {itemCount > 0 ? (
-                    <View style={styles.cartCount}>
-                      <Badge label={String(itemCount)} tone="accent" size="sm" />
-                    </View>
-                  ) : null}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      itemCount > 0 ? `Cart, ${String(itemCount)} items` : 'Cart, empty'
+                    }
+                    onPress={() => {
+                      router.push('/market/cart');
+                    }}
+                    style={[styles.cartButton, { backgroundColor: colors.neutral900 }]}
+                  >
+                    <ShoppingBag size={18} strokeWidth={1.7} color={colors.bg} />
+                    {itemCount > 0 ? (
+                      <View style={styles.cartCount}>
+                        <Badge label={String(itemCount)} tone="accent" size="sm" />
+                      </View>
+                    ) : null}
                   </Pressable>
                 </>
               ) : null}
@@ -343,7 +343,7 @@ export default function ProviderShop() {
                 <Text variant="bodyStrong" style={styles.action}>
                   {formatUsd(order.totalUsdCents)}
                 </Text>
-                  <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
+                <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
                   <Text variant="meta" color="neutral700">
                     {order.status === 'reserved'
                       ? 'Pack this order, then tell the buyer when it is ready to collect.'

@@ -139,7 +139,10 @@ export default function ProviderProfile() {
 
   if (isError && !data) {
     return (
-      <Screen hasTabBar header={<ScreenHeader title="My page" showBack={false} right={<RoleSwitcher />} />}>
+      <Screen
+        hasTabBar
+        header={<ScreenHeader title="My page" showBack={false} right={<RoleSwitcher />} />}
+      >
         <EmptyPanel title="Couldn't load your page" body="Check your connection and try again." />
         <Button label="Try again" onPress={() => void refetch()} />
       </Screen>
@@ -268,7 +271,10 @@ export default function ProviderProfile() {
 
   return (
     <>
-      <Screen hasTabBar header={<ScreenHeader title="My page" showBack={false} right={<RoleSwitcher />} />}>
+      <Screen
+        hasTabBar
+        header={<ScreenHeader title="My page" showBack={false} right={<RoleSwitcher />} />}
+      >
         {error ? (
           <Text
             variant="meta"
@@ -309,7 +315,9 @@ export default function ProviderProfile() {
             </Text>
             {me?.verificationStatus !== 'verified' ? (
               <Button
-                label={me?.verificationStatus === 'pending' ? 'Review submission' : 'Verify identity'}
+                label={
+                  me?.verificationStatus === 'pending' ? 'Review submission' : 'Verify identity'
+                }
                 variant="secondary"
                 block
                 style={styles.cardAction}

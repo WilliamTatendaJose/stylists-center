@@ -1,10 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import type {
-  AdminBanRowDto,
-  AdminReportRowDto,
-  AppealStatus,
-  ReportStatus,
-} from '@sc/shared';
+import type { AdminBanRowDto, AdminReportRowDto, AppealStatus, ReportStatus } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrustService } from '../trust/trust.service';

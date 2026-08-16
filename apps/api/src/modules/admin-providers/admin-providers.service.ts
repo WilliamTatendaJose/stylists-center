@@ -58,10 +58,7 @@ export class AdminProvidersService {
     return toRow(provider);
   }
 
-  async update(
-    id: string,
-    input: UpdateProviderAdminInput,
-  ): Promise<AdminProviderRowDto> {
+  async update(id: string, input: UpdateProviderAdminInput): Promise<AdminProviderRowDto> {
     const provider = await this.prisma.providerProfile.findUniqueOrThrow({
       where: { id },
       select: {

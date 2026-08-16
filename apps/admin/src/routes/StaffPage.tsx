@@ -105,7 +105,9 @@ function ResetPasswordForm({ staffId, onDone }: { staffId: string; onDone: () =>
       <Button variant="ghost" onClick={onDone}>
         Cancel
       </Button>
-      {error ? <p className="w-full text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
+      {error ? (
+        <p className="w-full text-sm text-accent-700 dark:text-dark-accent">{error}</p>
+      ) : null}
     </div>
   );
 }
@@ -134,14 +136,20 @@ function StaffRow({ staff }: { staff: AdminStaffRowDto }) {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="font-medium text-neutral-900 dark:text-dark-text">
-            {staff.displayName} {isSelf ? <span className="text-neutral-500 dark:text-dark-muted">(you)</span> : null}
+            {staff.displayName}{' '}
+            {isSelf ? <span className="text-neutral-500 dark:text-dark-muted">(you)</span> : null}
           </p>
           <p className="mt-0.5 text-sm text-neutral-600 dark:text-dark-muted">{staff.email}</p>
-          {error ? <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
+          {error ? (
+            <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3">
-          <Badge label={staff.disabled ? 'Disabled' : 'Active'} tone={staff.disabled ? 'accent' : 'neutral'} />
+          <Badge
+            label={staff.disabled ? 'Disabled' : 'Active'}
+            tone={staff.disabled ? 'accent' : 'neutral'}
+          />
           <Button
             variant="secondary"
             onClick={() => {
@@ -201,7 +209,9 @@ export function StaffPage() {
       ) : null}
 
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
-      {isError ? <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load staff.</p> : null}
+      {isError ? (
+        <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load staff.</p>
+      ) : null}
 
       <div className="divide-y divide-neutral-200 rounded-2xl border border-neutral-200 dark:divide-dark-border dark:border-dark-border">
         {staff?.map((s) => (

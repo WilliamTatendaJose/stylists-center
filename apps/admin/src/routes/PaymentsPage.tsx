@@ -83,7 +83,8 @@ function ProviderPayoutRow({ provider }: { provider: AdminProviderPayoutRowDto }
             {provider.displayName} · {provider.phone}
           </p>
           <p className="mt-0.5 text-sm text-neutral-600 dark:text-dark-muted">
-            {formatUsd(provider.releasedUsdCents)} released · {formatUsd(provider.paidOutUsdCents)} paid out
+            {formatUsd(provider.releasedUsdCents)} released · {formatUsd(provider.paidOutUsdCents)}{' '}
+            paid out
             {provider.lastPayoutAt
               ? ` · last payout ${new Date(provider.lastPayoutAt).toLocaleDateString()}`
               : ''}
@@ -92,7 +93,9 @@ function ProviderPayoutRow({ provider }: { provider: AdminProviderPayoutRowDto }
 
         <div className="flex items-center gap-3">
           <Badge
-            label={provider.owedUsdCents > 0 ? `Owes ${formatUsd(provider.owedUsdCents)}` : 'Settled'}
+            label={
+              provider.owedUsdCents > 0 ? `Owes ${formatUsd(provider.owedUsdCents)}` : 'Settled'
+            }
             tone={provider.owedUsdCents > 0 ? 'accent' : 'neutral'}
           />
           <Button
@@ -126,12 +129,15 @@ export function PaymentsPage() {
     <div>
       <h1 className="mb-1 text-lg font-bold text-neutral-900 dark:text-dark-text">Payments</h1>
       <p className="mb-6 text-sm text-neutral-600 dark:text-dark-muted">
-        Client bookings and orders are held in escrow, then released to a provider&apos;s balance here — that
-        only marks the ledger settled, it does not send money. Use &quot;Record payout&quot; once a provider has
-        actually been paid (bank transfer, EcoCash, cash) to track what&apos;s still outstanding.
+        Client bookings and orders are held in escrow, then released to a provider&apos;s balance
+        here — that only marks the ledger settled, it does not send money. Use &quot;Record
+        payout&quot; once a provider has actually been paid (bank transfer, EcoCash, cash) to track
+        what&apos;s still outstanding.
       </p>
 
-      {overviewLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
+      {overviewLoading ? (
+        <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p>
+      ) : null}
 
       {overview ? (
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -163,17 +169,21 @@ export function PaymentsPage() {
         <Card className="mb-8 flex items-center gap-3 border-accent-200 bg-accent-50 dark:border-transparent dark:bg-accent/10">
           <AlertTriangle size={18} className="shrink-0 text-accent-700 dark:text-dark-accent" />
           <p className="text-sm text-accent-800 dark:text-dark-accent">
-            {formatUsd(overview.refundedUsdCents)} refunded and {formatUsd(overview.failedUsdCents)} failed
-            across all bookings and orders.
+            {formatUsd(overview.refundedUsdCents)} refunded and {formatUsd(overview.failedUsdCents)}{' '}
+            failed across all bookings and orders.
           </p>
         </Card>
       ) : null}
 
       <h2 className="mb-3 font-semibold text-neutral-900 dark:text-dark-text">Provider balances</h2>
 
-      {providersLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
+      {providersLoading ? (
+        <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p>
+      ) : null}
       {isError ? (
-        <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load provider balances.</p>
+        <p className="text-sm text-accent-700 dark:text-dark-accent">
+          Couldn&apos;t load provider balances.
+        </p>
       ) : null}
       {!providersLoading && providers?.length === 0 ? (
         <p className="text-sm text-neutral-600 dark:text-dark-muted">

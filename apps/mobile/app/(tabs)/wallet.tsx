@@ -2,7 +2,17 @@
 import { Share, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatUsd } from '@sc/shared';
-import { Screen, ScreenHeader, Text, Badge, Card, Button, EmptyPanel, TextField, useTheme } from '@sc/ui';
+import {
+  Screen,
+  ScreenHeader,
+  Text,
+  Badge,
+  Card,
+  Button,
+  EmptyPanel,
+  TextField,
+  useTheme,
+} from '@sc/ui';
 import { space } from '@sc/tokens';
 import {
   useCashOut,
@@ -61,7 +71,10 @@ export default function WalletScreen() {
   if (!wallet) {
     if (!isError) return null; // still loading â€” Screen renders nothing rather than flash empty content
     return (
-      <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}>
+      <Screen
+        hasTabBar
+        header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}
+      >
         <EmptyPanel title="Couldn't load your wallet" body="Check your connection and try again." />
       </Screen>
     );
@@ -69,7 +82,10 @@ export default function WalletScreen() {
 
   if (!wallet.isVerifiedAgent) {
     return (
-      <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}>
+      <Screen
+        hasTabBar
+        header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}
+      >
         <Text variant="h3">Become an agent</Text>
         <Text variant="body" color="neutral700" style={styles.emptyBody}>
           Submit identity verification to become an agent and start earning SC Coins — 6 coins for

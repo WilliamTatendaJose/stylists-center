@@ -59,12 +59,7 @@ export function RoleSwitcher() {
           One account, two sides. Your bookings, messages, and profile stay connected.
         </Text>
         {error ? (
-          <Text
-            variant="meta"
-            color="accent700"
-            style={styles.error}
-            accessibilityRole="alert"
-          >
+          <Text variant="meta" color="accent700" style={styles.error} accessibilityRole="alert">
             {error}
           </Text>
         ) : null}

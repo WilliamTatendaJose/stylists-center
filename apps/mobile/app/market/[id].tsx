@@ -105,12 +105,7 @@ export default function ProductDetail() {
           style={styles.gallery}
         >
           {product.imageUrls.map((url) => (
-            <ImagePlaceholder
-              key={url}
-              uri={apiAssetUrl(url)}
-              radius={18}
-              style={styles.image}
-            />
+            <ImagePlaceholder key={url} uri={apiAssetUrl(url)} radius={18} style={styles.image} />
           ))}
         </ScrollView>
       ) : (

@@ -70,8 +70,8 @@ export default function CompleteProfile() {
     >
       <Text variant="body" color="neutral700" style={styles.intro}>
         One last thing before you get started — what should{' '}
-        {me?.activeRole === 'provider' ? 'clients' : 'stylists'} call you? This is the name shown
-        on bookings and chats.
+        {me?.activeRole === 'provider' ? 'clients' : 'stylists'} call you? This is the name shown on
+        bookings and chats.
       </Text>
 
       <View style={styles.field}>

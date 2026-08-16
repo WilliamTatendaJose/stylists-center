@@ -1,9 +1,23 @@
-import { Body, Controller, Get, Ip, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Ip,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
-import { ImageStorageService, MAX_IMAGE_BYTES, type UploadedImageFile } from '../provider/image-storage.service';
+import {
+  ImageStorageService,
+  MAX_IMAGE_BYTES,
+  type UploadedImageFile,
+} from '../provider/image-storage.service';
 import {
   RequestOtpDto,
   VerifyOtpDto,
@@ -80,10 +94,7 @@ export class MeController {
 
   @UseGuards(JwtAuthGuard)
   @Post('verification')
-  submitVerification(
-    @CurrentUser() user: { id: string },
-    @Body() dto: VerificationSubmissionDto,
-  ) {
+  submitVerification(@CurrentUser() user: { id: string }, @Body() dto: VerificationSubmissionDto) {
     return this.auth.submitVerification(user.id, dto);
   }
 }

@@ -84,7 +84,11 @@ export function Sheet({ open, onClose, children }: SheetProps) {
         duration: ANIMATION_MS,
         useNativeDriver: true,
       }),
-      Animated.timing(backdropOpacity, { toValue: 0, duration: ANIMATION_MS, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, {
+        toValue: 0,
+        duration: ANIMATION_MS,
+        useNativeDriver: true,
+      }),
     ]).start(({ finished }) => {
       if (finished) setVisible(false);
     });
@@ -105,7 +109,9 @@ export function Sheet({ open, onClose, children }: SheetProps) {
             sheet, which is what stops them from bubbling to the backdrop
             Pressable behind it and closing the sheet on every interaction. */}
         <Pressable onPress={() => undefined}>
-          <Animated.View style={[styles.sheet, { backgroundColor: colors.bg }, { transform: [{ translateY }] }]}>
+          <Animated.View
+            style={[styles.sheet, { backgroundColor: colors.bg }, { transform: [{ translateY }] }]}
+          >
             <View style={[styles.handle, { backgroundColor: colors.divider }]} />
             {children}
           </Animated.View>

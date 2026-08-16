@@ -289,7 +289,9 @@ export default function Profile() {
             ) : null}
             {me.verificationStatus !== 'verified' ? (
               <Button
-                label={me.verificationStatus === 'pending' ? 'Review verification' : 'Verify identity'}
+                label={
+                  me.verificationStatus === 'pending' ? 'Review verification' : 'Verify identity'
+                }
                 variant="secondary"
                 block
                 style={styles.professionalAction}

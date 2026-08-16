@@ -106,11 +106,16 @@ function ProviderRow({ provider }: { provider: AdminProviderRowDto }) {
             </a>
           ) : null}
         </div>
-        {error ? <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
+        {error ? (
+          <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-3">
-        <Badge label={provider.verified ? 'Verified' : 'Not verified'} tone={provider.verified ? 'neutral' : 'accent'} />
+        <Badge
+          label={provider.verified ? 'Verified' : 'Not verified'}
+          tone={provider.verified ? 'neutral' : 'accent'}
+        />
         <Button
           variant={provider.verified ? 'ghost' : 'primary'}
           onClick={toggleVerified}
@@ -153,7 +158,9 @@ export function ProvidersPage() {
 
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
       {isError ? (
-        <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load providers.</p>
+        <p className="text-sm text-accent-700 dark:text-dark-accent">
+          Couldn&apos;t load providers.
+        </p>
       ) : null}
       {!isLoading && providers?.length === 0 ? (
         <p className="text-sm text-neutral-600 dark:text-dark-muted">Nothing here.</p>

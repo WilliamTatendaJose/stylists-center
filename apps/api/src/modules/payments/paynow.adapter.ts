@@ -2,7 +2,11 @@ import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Env } from '../../config/env';
-import type { PaymentCheckoutInput, PaymentGatewayPort, PaymentIntentResult } from './payment-gateway.port';
+import type {
+  PaymentCheckoutInput,
+  PaymentGatewayPort,
+  PaymentIntentResult,
+} from './payment-gateway.port';
 
 const INITIATE_URL = 'https://www.paynow.co.zw/interface/initiatetransaction';
 
@@ -29,7 +33,13 @@ export class PaynowAdapter implements PaymentGatewayPort {
       ['status', 'Message'],
     ];
     const body = new URLSearchParams(fields);
-    body.set('hash', this.hash(fields.map(([, value]) => value), integrationKey));
+    body.set(
+      'hash',
+      this.hash(
+        fields.map(([, value]) => value),
+        integrationKey,
+      ),
+    );
 
     let response: Response;
     try {
@@ -44,7 +54,9 @@ export class PaynowAdapter implements PaymentGatewayPort {
     const payload = await response.text();
     if (!response.ok) throw new ServiceUnavailableException('Paynow rejected the checkout request');
 
-    const reply = Object.fromEntries([...new URLSearchParams(payload)].map(([key, value]) => [key.toLowerCase(), value]));
+    const reply = Object.fromEntries(
+      [...new URLSearchParams(payload)].map(([key, value]) => [key.toLowerCase(), value]),
+    );
     if (reply.status?.toLowerCase() !== 'ok' || !reply.browserurl || !reply.pollurl) {
       throw new ServiceUnavailableException(reply.error ?? 'Paynow did not create a checkout');
     }
@@ -70,11 +82,17 @@ export class PaynowAdapter implements PaymentGatewayPort {
     const expected = this.hash(values, key);
     const expectedBuffer = Buffer.from(expected, 'utf8');
     const suppliedBuffer = Buffer.from(supplied.toUpperCase(), 'utf8');
-    return expectedBuffer.length === suppliedBuffer.length && timingSafeEqual(expectedBuffer, suppliedBuffer);
+    return (
+      expectedBuffer.length === suppliedBuffer.length &&
+      timingSafeEqual(expectedBuffer, suppliedBuffer)
+    );
   }
 
   private hash(values: string[], key: string): string {
-    return createHash('sha512').update(values.join('') + key, 'utf8').digest('hex').toUpperCase();
+    return createHash('sha512')
+      .update(values.join('') + key, 'utf8')
+      .digest('hex')
+      .toUpperCase();
   }
 }
 

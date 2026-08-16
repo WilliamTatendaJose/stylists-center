@@ -109,7 +109,8 @@ export function Screen({
     paddingTop: resolveHeaderTopPadding(insets.top),
     paddingHorizontal: layout.screenX,
     paddingBottom: space.s,
-    borderBottomColor: effectiveTheme === 'dark' ? colors.divider : HEADER_BORDER_COLOR[effectiveTheme],
+    borderBottomColor:
+      effectiveTheme === 'dark' ? colors.divider : HEADER_BORDER_COLOR[effectiveTheme],
   };
 
   // Content padding: top clears the safe area only when there is no fixed

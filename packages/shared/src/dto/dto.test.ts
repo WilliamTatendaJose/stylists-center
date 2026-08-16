@@ -129,9 +129,9 @@ describe('admin schemas', () => {
     expect(adminLoginSchema.safeParse({ email: 'staff@example.com', password: '' }).success).toBe(
       false,
     );
-    expect(
-      adminLoginSchema.safeParse({ email: 'staff@example.com', password: 'x' }).success,
-    ).toBe(true);
+    expect(adminLoginSchema.safeParse({ email: 'staff@example.com', password: 'x' }).success).toBe(
+      true,
+    );
   });
 
   it('rejects a manual ban with no reason', () => {
@@ -160,8 +160,8 @@ describe('admin schemas', () => {
   it('rejects a provider update with neither field set', () => {
     expect(updateProviderAdminSchema.safeParse({}).success).toBe(false);
     expect(updateProviderAdminSchema.safeParse({ verified: true }).success).toBe(true);
-    expect(
-      updateProviderAdminSchema.safeParse({ subscriptionPriceUsdCents: 500 }).success,
-    ).toBe(true);
+    expect(updateProviderAdminSchema.safeParse({ subscriptionPriceUsdCents: 500 }).success).toBe(
+      true,
+    );
   });
 });

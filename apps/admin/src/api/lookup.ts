@@ -6,7 +6,8 @@ export function useLookupSearch(q: string) {
   const trimmed = q.trim();
   return useQuery({
     queryKey: ['admin', 'lookup', 'search', trimmed],
-    queryFn: () => apiFetch<AdminLookupResultDto>(`/v1/admin/lookup?q=${encodeURIComponent(trimmed)}`),
+    queryFn: () =>
+      apiFetch<AdminLookupResultDto>(`/v1/admin/lookup?q=${encodeURIComponent(trimmed)}`),
     enabled: trimmed.length > 0,
   });
 }

@@ -1,5 +1,11 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import type { AdminCategoryRowDto, AdminCityRowDto, CityInput, CreateCategoryInput, UpdateCategoryInput } from '@sc/shared';
+import type {
+  AdminCategoryRowDto,
+  AdminCityRowDto,
+  CityInput,
+  CreateCategoryInput,
+  UpdateCategoryInput,
+} from '@sc/shared';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -59,7 +65,10 @@ export class AdminCatalogService {
   }
 
   async listCities(): Promise<AdminCityRowDto[]> {
-    const cities = await this.prisma.city.findMany({ include: CITY_INCLUDE, orderBy: { name: 'asc' } });
+    const cities = await this.prisma.city.findMany({
+      include: CITY_INCLUDE,
+      orderBy: { name: 'asc' },
+    });
     return cities.map(toCityRow);
   }
 
@@ -69,7 +78,11 @@ export class AdminCatalogService {
   }
 
   async updateCity(id: string, input: CityInput): Promise<AdminCityRowDto> {
-    const city = await this.prisma.city.update({ where: { id }, data: input, include: CITY_INCLUDE });
+    const city = await this.prisma.city.update({
+      where: { id },
+      data: input,
+      include: CITY_INCLUDE,
+    });
     return toCityRow(city);
   }
 
@@ -83,7 +96,10 @@ export class AdminCatalogService {
 }
 
 function toDeleteError(err: unknown, message: string): unknown {
-  if (err instanceof Prisma.PrismaClientKnownRequestError && (err.code === 'P2003' || err.code === 'P2014')) {
+  if (
+    err instanceof Prisma.PrismaClientKnownRequestError &&
+    (err.code === 'P2003' || err.code === 'P2014')
+  ) {
     return new ConflictException(message);
   }
   return err;

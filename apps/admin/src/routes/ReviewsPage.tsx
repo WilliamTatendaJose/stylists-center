@@ -32,7 +32,9 @@ function ReviewRow({ review }: { review: AdminReviewRowDto }) {
             {review.text}
           </p>
         ) : null}
-        {error ? <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
+        {error ? (
+          <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p>
+        ) : null}
       </div>
       <Button variant="danger" onClick={remove} disabled={deleteReview.isPending}>
         Delete
@@ -48,11 +50,14 @@ export function ReviewsPage() {
     <div>
       <h1 className="mb-1 text-lg font-bold text-neutral-900 dark:text-dark-text">Reviews</h1>
       <p className="mb-6 text-sm text-neutral-600 dark:text-dark-muted">
-        Most recent reviews across the platform. Deleting one recomputes the provider&apos;s average rating.
+        Most recent reviews across the platform. Deleting one recomputes the provider&apos;s average
+        rating.
       </p>
 
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
-      {isError ? <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load reviews.</p> : null}
+      {isError ? (
+        <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load reviews.</p>
+      ) : null}
       {!isLoading && reviews?.length === 0 ? (
         <p className="text-sm text-neutral-600 dark:text-dark-muted">No reviews yet.</p>
       ) : null}

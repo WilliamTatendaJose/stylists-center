@@ -63,15 +63,13 @@ describe('EcoCash completion confirmation', () => {
   });
 
   it('never applies to a cash booking — that goes through reconciliation instead', () => {
-    expect(canConfirmEcocashCompletion({ ...ecocashConfirmed, paymentMethod: 'cash' })).toBe(
-      false,
-    );
+    expect(canConfirmEcocashCompletion({ ...ecocashConfirmed, paymentMethod: 'cash' })).toBe(false);
   });
 
   it('is not available before the booking is confirmed or after it completes', () => {
-    expect(
-      canConfirmEcocashCompletion({ ...ecocashConfirmed, status: 'awaiting_provider' }),
-    ).toBe(false);
+    expect(canConfirmEcocashCompletion({ ...ecocashConfirmed, status: 'awaiting_provider' })).toBe(
+      false,
+    );
     expect(canConfirmEcocashCompletion({ ...ecocashConfirmed, status: 'completed' })).toBe(false);
   });
 });

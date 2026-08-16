@@ -154,7 +154,9 @@ export function VerificationsPage() {
 
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
       {isError ? (
-        <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load verifications.</p>
+        <p className="text-sm text-accent-700 dark:text-dark-accent">
+          Couldn&apos;t load verifications.
+        </p>
       ) : null}
       {!isLoading && rows?.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-neutral-300 p-10 text-center text-sm text-neutral-600 dark:border-dark-border dark:text-dark-muted">
@@ -162,7 +164,9 @@ export function VerificationsPage() {
         </div>
       ) : null}
       <div className="space-y-5">
-        {rows?.map((row) => <VerificationCard key={row.id} row={row} />)}
+        {rows?.map((row) => (
+          <VerificationCard key={row.id} row={row} />
+        ))}
       </div>
     </div>
   );

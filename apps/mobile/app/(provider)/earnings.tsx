@@ -36,14 +36,23 @@ export default function Earnings() {
   if (!data) {
     if (!isError) return null;
     return (
-      <Screen hasTabBar header={<ScreenHeader title="Earnings" showBack={false} right={<RoleSwitcher />} />}>
-        <EmptyPanel title="Couldn't load your earnings" body="Check your connection and try again." />
+      <Screen
+        hasTabBar
+        header={<ScreenHeader title="Earnings" showBack={false} right={<RoleSwitcher />} />}
+      >
+        <EmptyPanel
+          title="Couldn't load your earnings"
+          body="Check your connection and try again."
+        />
       </Screen>
     );
   }
 
   return (
-    <Screen hasTabBar header={<ScreenHeader title="Earnings" showBack={false} right={<RoleSwitcher />} />}>
+    <Screen
+      hasTabBar
+      header={<ScreenHeader title="Earnings" showBack={false} right={<RoleSwitcher />} />}
+    >
       <View style={styles.statRow}>
         <StatTile value={formatUsd(data.releasedUsdCents)} caption="Paid out" />
         <StatTile value={formatUsd(data.pendingUsdCents)} caption="In progress" />
@@ -66,7 +75,9 @@ export default function Earnings() {
                   {formatInHarare(entry.createdAt, 'd MMM, HH:mm')}
                 </Text>
               </View>
-              <Text variant="bodyStrong">{formatUsd(entry.amountUsdCents - entry.feeUsdCents)}</Text>
+              <Text variant="bodyStrong">
+                {formatUsd(entry.amountUsdCents - entry.feeUsdCents)}
+              </Text>
             </View>
             <Badge
               label={STATUS_LABEL[entry.status]}

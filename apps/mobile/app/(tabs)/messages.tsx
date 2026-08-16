@@ -75,7 +75,9 @@ export default function Messages() {
           showBack={false}
           right={
             <View style={styles.headerRight}>
-              {unreadTotal > 0 ? <Badge label={`${String(unreadTotal)} unread`} tone="accent" /> : null}
+              {unreadTotal > 0 ? (
+                <Badge label={`${String(unreadTotal)} unread`} tone="accent" />
+              ) : null}
               <RoleSwitcher />
             </View>
           }

@@ -56,21 +56,29 @@ export function OverviewPage() {
 
       {overview ? (
         <div className="mb-8 grid grid-cols-1 lg:grid-cols-4">
-          <StatTile label="Total providers" value={overview.totalProviders} icon={<Users size={20} />} />
+          <StatTile
+            label="Total providers"
+            value={overview.totalProviders}
+            icon={<Users size={20} />}
+          />
         </div>
       ) : null}
 
       {trends ? (
         <div className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
-            <h2 className="mb-4 font-semibold text-neutral-900 dark:text-dark-text">Bookings, last 14 days</h2>
+            <h2 className="mb-4 font-semibold text-neutral-900 dark:text-dark-text">
+              Bookings, last 14 days
+            </h2>
             <TrendChart
               points={trends.map((t) => ({ date: t.date, value: t.bookingsCount }))}
               valueFormatter={(v) => `${String(v)} booking${v === 1 ? '' : 's'}`}
             />
           </Card>
           <Card>
-            <h2 className="mb-4 font-semibold text-neutral-900 dark:text-dark-text">Revenue released, last 14 days</h2>
+            <h2 className="mb-4 font-semibold text-neutral-900 dark:text-dark-text">
+              Revenue released, last 14 days
+            </h2>
             <TrendChart
               points={trends.map((t) => ({ date: t.date, value: t.releasedUsdCents }))}
               valueFormatter={(v) => formatUsd(v)}

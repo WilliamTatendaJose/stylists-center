@@ -10,19 +10,28 @@ export function BookingDetailPage() {
 
   if (isLoading) return <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p>;
   if (isError || !booking) {
-    return <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load this booking.</p>;
+    return (
+      <p className="text-sm text-accent-700 dark:text-dark-accent">
+        Couldn&apos;t load this booking.
+      </p>
+    );
   }
 
   return (
     <div className="max-w-2xl">
-      <Link to="/lookup" className="mb-4 inline-block text-sm text-neutral-600 hover:underline dark:text-dark-muted">
+      <Link
+        to="/lookup"
+        className="mb-4 inline-block text-sm text-neutral-600 hover:underline dark:text-dark-muted"
+      >
         ← Lookup
       </Link>
 
       <Card className="mb-6">
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h1 className="text-lg font-bold text-neutral-900 dark:text-dark-text">{booking.reference}</h1>
+            <h1 className="text-lg font-bold text-neutral-900 dark:text-dark-text">
+              {booking.reference}
+            </h1>
             <p className="mt-1 text-sm text-neutral-600 dark:text-dark-muted">
               {booking.serviceName} · {formatUsd(booking.priceUsdCents)} · {booking.paymentMethod}
             </p>
@@ -52,7 +61,8 @@ export function BookingDetailPage() {
           <div>
             <dt className="text-neutral-600 dark:text-dark-muted">Cash confirmation</dt>
             <dd className="font-medium text-neutral-900 dark:text-dark-text">
-              client {booking.confirmedByClient ? '✓' : '—'} · provider {booking.confirmedByProvider ? '✓' : '—'}
+              client {booking.confirmedByClient ? '✓' : '—'} · provider{' '}
+              {booking.confirmedByProvider ? '✓' : '—'}
             </dd>
           </div>
         </dl>
@@ -86,10 +96,14 @@ export function BookingDetailPage() {
             <div className="divide-y divide-neutral-200 dark:divide-dark-border">
               {booking.trips.map((t, i) => (
                 <div key={i} className="px-5 py-3 text-sm">
-                  <span className="font-medium text-neutral-900 dark:text-dark-text">{t.mode} side</span>
+                  <span className="font-medium text-neutral-900 dark:text-dark-text">
+                    {t.mode} side
+                  </span>
                   <span className="ml-2 text-neutral-600 dark:text-dark-muted">
                     {t.arrived ? 'arrived' : 'en route'}
-                    {t.checkedInAt ? ` · checked in ${new Date(t.checkedInAt).toLocaleTimeString()}` : ''}
+                    {t.checkedInAt
+                      ? ` · checked in ${new Date(t.checkedInAt).toLocaleTimeString()}`
+                      : ''}
                   </span>
                 </div>
               ))}
@@ -105,7 +119,9 @@ export function BookingDetailPage() {
             <div className="divide-y divide-neutral-200 dark:divide-dark-border">
               {booking.reviews.map((r) => (
                 <div key={r.id} className="px-5 py-3 text-sm">
-                  <span className="font-medium text-neutral-900 dark:text-dark-text">{r.rating}★</span>
+                  <span className="font-medium text-neutral-900 dark:text-dark-text">
+                    {r.rating}★
+                  </span>
                   <span className="ml-2 text-neutral-600 dark:text-dark-muted">
                     {r.rater.displayName}
                     {r.text ? ` — "${r.text}"` : ''}

@@ -46,7 +46,10 @@ export function Composer({
         onChangeText={onChange}
         placeholder="Message…"
         placeholderTextColor={colors.neutral600}
-        style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.divider, color: colors.text }]}
+        style={[
+          styles.input,
+          { backgroundColor: colors.surface, borderColor: colors.divider, color: colors.text },
+        ]}
       />
       <Button
         label="Send"

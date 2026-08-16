@@ -58,7 +58,9 @@ function SubscriptionRow({ provider }: { provider: AdminProviderRowDto }) {
               ).toLocaleDateString()}`
             : 'Never paid'}
         </p>
-        {error ? <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
+        {error ? (
+          <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p>
+        ) : null}
       </div>
 
       <div className="flex items-center gap-3">
@@ -112,7 +114,11 @@ export function SubscriptionsPage() {
       <h1 className="mb-6 text-lg font-bold text-neutral-900 dark:text-dark-text">Subscriptions</h1>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatTile label="Monthly recurring revenue" value={formatUsd(mrrUsdCents)} icon={<DollarSign size={20} />} />
+        <StatTile
+          label="Monthly recurring revenue"
+          value={formatUsd(mrrUsdCents)}
+          icon={<DollarSign size={20} />}
+        />
         <StatTile label="Active subscriptions" value={activeCount} icon={<Wallet size={20} />} />
         <StatTile
           label="Lapsed"
@@ -145,7 +151,9 @@ export function SubscriptionsPage() {
 
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
       {isError ? (
-        <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load subscriptions.</p>
+        <p className="text-sm text-accent-700 dark:text-dark-accent">
+          Couldn&apos;t load subscriptions.
+        </p>
       ) : null}
       {!isLoading && filtered?.length === 0 ? (
         <p className="text-sm text-neutral-600 dark:text-dark-muted">Nothing here.</p>

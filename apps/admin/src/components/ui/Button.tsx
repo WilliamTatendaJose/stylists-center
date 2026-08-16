@@ -8,7 +8,8 @@ const VARIANT_CLASSES: Record<Variant, string> = {
     'bg-neutral-100 text-neutral-900 hover:bg-neutral-200 dark:bg-white/10 dark:text-dark-text dark:hover:bg-white/15',
   ghost:
     'bg-transparent text-neutral-700 hover:bg-neutral-100 dark:text-dark-muted dark:hover:bg-white/5',
-  danger: 'bg-transparent text-accent-700 hover:bg-accent-100 dark:text-dark-accent dark:hover:bg-white/5',
+  danger:
+    'bg-transparent text-accent-700 hover:bg-accent-100 dark:text-dark-accent dark:hover:bg-white/5',
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

@@ -10,19 +10,28 @@ export function OrderDetailPage() {
 
   if (isLoading) return <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p>;
   if (isError || !order) {
-    return <p className="text-sm text-accent-700 dark:text-dark-accent">Couldn&apos;t load this order.</p>;
+    return (
+      <p className="text-sm text-accent-700 dark:text-dark-accent">
+        Couldn&apos;t load this order.
+      </p>
+    );
   }
 
   return (
     <div className="max-w-2xl">
-      <Link to="/lookup" className="mb-4 inline-block text-sm text-neutral-600 hover:underline dark:text-dark-muted">
+      <Link
+        to="/lookup"
+        className="mb-4 inline-block text-sm text-neutral-600 hover:underline dark:text-dark-muted"
+      >
         ← Lookup
       </Link>
 
       <Card className="mb-6">
         <div className="mb-4 flex items-start justify-between">
           <div>
-            <h1 className="text-lg font-bold text-neutral-900 dark:text-dark-text">{order.reference}</h1>
+            <h1 className="text-lg font-bold text-neutral-900 dark:text-dark-text">
+              {order.reference}
+            </h1>
             <p className="mt-1 text-sm text-neutral-600 dark:text-dark-muted">
               {formatUsd(order.totalUsdCents)} · {order.paymentMethod} ·{' '}
               {new Date(order.createdAt).toLocaleString()}
@@ -55,7 +64,9 @@ export function OrderDetailPage() {
               <span className="text-neutral-900 dark:text-dark-text">
                 {item.quantity} × {item.nameSnapshot}
               </span>
-              <span className="text-neutral-600 dark:text-dark-muted">{formatUsd(item.priceUsdCents)}</span>
+              <span className="text-neutral-600 dark:text-dark-muted">
+                {formatUsd(item.priceUsdCents)}
+              </span>
             </div>
           ))}
         </div>

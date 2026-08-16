@@ -21,7 +21,10 @@ export interface TextProps extends Omit<RNTextProps, 'style'> {
   style?: StyleProp<TextStyle>;
 }
 
-function resolveColor(value: TextProps['color'], themeColor: { text: string; [key: string]: unknown }): string {
+function resolveColor(
+  value: TextProps['color'],
+  themeColor: { text: string; [key: string]: unknown },
+): string {
   if (!value) return themeColor.text;
   if (value in themeColor) {
     const v = themeColor[value as keyof typeof themeColor];

@@ -136,7 +136,10 @@ export class AdminAuthService {
     return { id: admin.id };
   }
 
-  private async issueRefreshToken(adminUserId: string, familyId: string): Promise<IssuedRefreshToken> {
+  private async issueRefreshToken(
+    adminUserId: string,
+    familyId: string,
+  ): Promise<IssuedRefreshToken> {
     const raw = generateRefreshTokenRaw();
     const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_MS);
     await this.prisma.adminRefreshToken.create({

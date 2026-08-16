@@ -1,12 +1,12 @@
-import { defineRailway, github, project, service } from "railway/iac";
+import { defineRailway, github, project, service } from 'railway/iac';
 
 export default defineRailway(() => {
-  const web = service("web", {
-    source: github("WilliamTatendaJose/stylists-center"),
-    build: "pnpm run build",
+  const web = service('web', {
+    source: github('WilliamTatendaJose/stylists-center'),
+    build: 'pnpm run build',
   });
 
-  return project("stylists-center", {
+  return project('stylists-center', {
     resources: [web],
   });
 });

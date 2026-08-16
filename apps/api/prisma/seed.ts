@@ -333,7 +333,10 @@ async function main() {
       serviceId: kudzaisGelOverlay.id,
       startsAt: new Date(Date.now() - 24 * 60 * 60_000 + 13 * 60 * 60_000),
       endsAt: new Date(
-        Date.now() - 24 * 60 * 60_000 + 13 * 60 * 60_000 + kudzaisGelOverlay.durationMinutes * 60_000,
+        Date.now() -
+          24 * 60 * 60_000 +
+          13 * 60 * 60_000 +
+          kudzaisGelOverlay.durationMinutes * 60_000,
       ),
       paymentMethod: 'cash',
       status: 'confirmed',

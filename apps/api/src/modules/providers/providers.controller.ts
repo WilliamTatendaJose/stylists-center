@@ -2,7 +2,12 @@ import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/co
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ProvidersService } from './providers.service';
-import { CreateProviderProfileDto, LatLngQueryDto, ProviderSearchQueryDto, SlotsQueryDto } from './dto';
+import {
+  CreateProviderProfileDto,
+  LatLngQueryDto,
+  ProviderSearchQueryDto,
+  SlotsQueryDto,
+} from './dto';
 
 /**
  * Signed-in only. These endpoints return every stylist's name, area, rating

@@ -52,8 +52,7 @@ export type OrderWithRelations = Prisma.OrderGetPayload<{
 }>;
 
 export function toOrderRow(order: OrderWithRelations): OrderRowDto {
-  const providerImageUrl =
-    order.provider.profileImageUrl ?? order.provider.portfolioImageUrls[0];
+  const providerImageUrl = order.provider.profileImageUrl ?? order.provider.portfolioImageUrls[0];
   return {
     id: order.id,
     reference: order.reference,

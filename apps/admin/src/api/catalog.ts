@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AdminCategoryRowDto, AdminCityRowDto, CityInput, CreateCategoryInput, UpdateCategoryInput } from '@sc/shared';
+import type {
+  AdminCategoryRowDto,
+  AdminCityRowDto,
+  CityInput,
+  CreateCategoryInput,
+  UpdateCategoryInput,
+} from '@sc/shared';
 import { apiFetch } from './client';
 
 const CATEGORIES_KEY = ['admin', 'catalog', 'categories'] as const;
@@ -16,7 +22,10 @@ export function useCreateCategory() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateCategoryInput) =>
-      apiFetch<AdminCategoryRowDto>('/v1/admin/catalog/categories', { method: 'POST', body: input }),
+      apiFetch<AdminCategoryRowDto>('/v1/admin/catalog/categories', {
+        method: 'POST',
+        body: input,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: CATEGORIES_KEY });
     },
@@ -27,7 +36,10 @@ export function useUpdateCategory(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: UpdateCategoryInput) =>
-      apiFetch<AdminCategoryRowDto>(`/v1/admin/catalog/categories/${id}`, { method: 'PATCH', body: input }),
+      apiFetch<AdminCategoryRowDto>(`/v1/admin/catalog/categories/${id}`, {
+        method: 'PATCH',
+        body: input,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: CATEGORIES_KEY });
     },
@@ -37,7 +49,8 @@ export function useUpdateCategory(id: string) {
 export function useDeleteCategory() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => apiFetch(`/v1/admin/catalog/categories/${id}`, { method: 'DELETE' }),
+    mutationFn: (id: string) =>
+      apiFetch(`/v1/admin/catalog/categories/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: CATEGORIES_KEY });
     },
@@ -54,7 +67,8 @@ export function useCities() {
 export function useCreateCity() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CityInput) => apiFetch<AdminCityRowDto>('/v1/admin/catalog/cities', { method: 'POST', body: input }),
+    mutationFn: (input: CityInput) =>
+      apiFetch<AdminCityRowDto>('/v1/admin/catalog/cities', { method: 'POST', body: input }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: CITIES_KEY });
     },

@@ -17,9 +17,7 @@ export function useReports(status?: ReportStatus) {
   return useQuery({
     queryKey: [...REPORTS_KEY, status ?? 'all'],
     queryFn: () =>
-      apiFetch<AdminReportRowDto[]>(
-        `/v1/admin/reports${status ? `?status=${status}` : ''}`,
-      ),
+      apiFetch<AdminReportRowDto[]>(`/v1/admin/reports${status ? `?status=${status}` : ''}`),
   });
 }
 

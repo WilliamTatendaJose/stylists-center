@@ -138,7 +138,7 @@ export const updateProviderAdminSchema = z
       input.verificationNote !== undefined ||
       input.subscriptionPriceUsdCents !== undefined,
     {
-    message: 'Provide at least one field to update',
+      message: 'Provide at least one field to update',
     },
   );
 export type UpdateProviderAdminInput = z.infer<typeof updateProviderAdminSchema>;
@@ -278,7 +278,10 @@ export const updateStaffSchema = z
     password: z.string().min(8).max(200).optional(),
   })
   .refine(
-    (input) => input.displayName !== undefined || input.disabled !== undefined || input.password !== undefined,
+    (input) =>
+      input.displayName !== undefined ||
+      input.disabled !== undefined ||
+      input.password !== undefined,
     { message: 'Provide at least one field to update' },
   );
 export type UpdateStaffInput = z.infer<typeof updateStaffSchema>;

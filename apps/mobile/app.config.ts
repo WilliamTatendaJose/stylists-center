@@ -98,9 +98,7 @@ const config: ExpoConfig = {
   extra: {
     router: {},
     eas: {
-      projectId:
-        process.env.EXPO_PUBLIC_EAS_PROJECT_ID ??
-        '563fa89a-e790-487f-8d78-0815ed9588c1',
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? '563fa89a-e790-487f-8d78-0815ed9588c1',
     },
   },
   experiments: {

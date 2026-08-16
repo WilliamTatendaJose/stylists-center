@@ -20,7 +20,11 @@ export class AdminStaffController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: UpdateStaffDto, @CurrentAdmin() admin: { id: string }) {
+  update(
+    @Param('id') id: string,
+    @Body() dto: UpdateStaffDto,
+    @CurrentAdmin() admin: { id: string },
+  ) {
     return this.adminStaff.update(id, dto, admin.id);
   }
 }

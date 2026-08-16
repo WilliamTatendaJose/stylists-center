@@ -69,7 +69,11 @@ export function MarketBrowse() {
       {products.isError && !items?.length ? (
         <ServerConnectionPanel error={products.error} onRetry={() => void products.refetch()} />
       ) : products.isError ? (
-        <ServerConnectionPanel error={products.error} compact onRetry={() => void products.refetch()} />
+        <ServerConnectionPanel
+          error={products.error}
+          compact
+          onRetry={() => void products.refetch()}
+        />
       ) : null}
 
       <SectionLabel

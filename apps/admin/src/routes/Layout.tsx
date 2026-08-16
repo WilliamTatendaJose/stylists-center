@@ -41,7 +41,9 @@ export function Layout() {
     <div className="flex min-h-screen bg-neutral-50 dark:bg-dark-bg">
       <aside className="flex w-64 shrink-0 flex-col border-r border-neutral-200 bg-white dark:border-dark-border dark:bg-dark-surface">
         <div className="px-6 py-6">
-          <p className="text-sm font-semibold text-neutral-500 dark:text-dark-muted">Stylists Center</p>
+          <p className="text-sm font-semibold text-neutral-500 dark:text-dark-muted">
+            Stylists Center
+          </p>
           <p className="text-lg font-bold text-neutral-900 dark:text-dark-text">Admin</p>
         </div>
 
@@ -70,7 +72,9 @@ export function Layout() {
               <p className="truncate text-sm font-medium text-neutral-900 dark:text-dark-text">
                 {admin?.displayName}
               </p>
-              <p className="truncate text-xs text-neutral-500 dark:text-dark-muted">{admin?.email}</p>
+              <p className="truncate text-xs text-neutral-500 dark:text-dark-muted">
+                {admin?.email}
+              </p>
             </div>
           </div>
           <button

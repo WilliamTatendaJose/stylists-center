@@ -94,10 +94,26 @@ export function Button({
   const { colors } = useTheme();
   const v: VariantStyle = {
     primary: { container: { backgroundColor: colors.accent }, textColor: colors.bg, onDark: true },
-    secondary: { container: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider }, textColor: colors.text, onDark: false },
-    ghost: { container: { backgroundColor: 'transparent' }, textColor: colors.neutral700, onDark: false },
-    outlineOnAccent: { container: { backgroundColor: 'transparent', borderWidth: 2, borderColor: colors.bg }, textColor: colors.bg, onDark: true },
-    whiteOnAccent: { container: { backgroundColor: colors.bg }, textColor: colors.accent700, onDark: false },
+    secondary: {
+      container: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider },
+      textColor: colors.text,
+      onDark: false,
+    },
+    ghost: {
+      container: { backgroundColor: 'transparent' },
+      textColor: colors.neutral700,
+      onDark: false,
+    },
+    outlineOnAccent: {
+      container: { backgroundColor: 'transparent', borderWidth: 2, borderColor: colors.bg },
+      textColor: colors.bg,
+      onDark: true,
+    },
+    whiteOnAccent: {
+      container: { backgroundColor: colors.bg },
+      textColor: colors.accent700,
+      onDark: false,
+    },
   }[variant];
   const sizeStyle = SIZE_PADDING[size];
   // With an arrow, the design pushes it to the far edge (`margin-left:auto`

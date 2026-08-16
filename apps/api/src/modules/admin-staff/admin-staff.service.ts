@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+} from '@nestjs/common';
 import type { AdminStaffRowDto, CreateStaffInput, UpdateStaffInput } from '@sc/shared';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
@@ -35,7 +40,11 @@ export class AdminStaffService {
     }
   }
 
-  async update(id: string, input: UpdateStaffInput, actingAdminId: string): Promise<AdminStaffRowDto> {
+  async update(
+    id: string,
+    input: UpdateStaffInput,
+    actingAdminId: string,
+  ): Promise<AdminStaffRowDto> {
     if (input.disabled === true) {
       if (id === actingAdminId) {
         throw new ForbiddenException('You cannot disable your own account');
