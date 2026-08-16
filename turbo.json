@@ -13,7 +13,23 @@
       "dependsOn": ["^build"]
     },
     "test": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      // Turbo's default strict env mode only forwards vars declared here (or
+      // in globalEnv) into the task's process — everything else from the
+      // shell/CI job env is invisible to it. Without this, apps/api's specs
+      // silently lost DATABASE_URL/REDIS_URL/the JWT secrets and fell back to
+      // their hardcoded local-dev defaults, which happen to match docker-
+      // compose's port remap locally but point at a port nothing listens on
+      // in CI — surfacing as ECONNREFUSED instead of an obviously-missing-env
+      // error.
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL",
+        "JWT_ACCESS_SECRET",
+        "JWT_REFRESH_PEPPER",
+        "ADMIN_JWT_ACCESS_SECRET",
+        "ADMIN_JWT_REFRESH_PEPPER"
+      ]
     },
     "dev": {
       "cache": false,
