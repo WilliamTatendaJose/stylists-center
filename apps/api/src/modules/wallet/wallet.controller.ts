@@ -2,7 +2,7 @@ import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { WalletService } from './wallet.service';
-import { EnrollAgentDto } from './dto';
+import { ClaimReferralDto, EnrollAgentDto } from './dto';
 
 @Controller('wallet')
 @UseGuards(JwtAuthGuard)
@@ -17,6 +17,16 @@ export class WalletController {
   @Get('referrals')
   referrals(@CurrentUser() user: { id: string }) {
     return this.wallet.listReferrals(user.id);
+  }
+
+  @Get('transactions')
+  transactions(@CurrentUser() user: { id: string }) {
+    return this.wallet.listTransactions(user.id);
+  }
+
+  @Post('referrals/claim')
+  claimReferral(@CurrentUser() user: { id: string }, @Body() dto: ClaimReferralDto) {
+    return this.wallet.claimReferral(user.id, dto.referralCode);
   }
 
   @Post('enroll')

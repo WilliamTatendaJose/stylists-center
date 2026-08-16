@@ -29,8 +29,9 @@ export function useAuthGate(): boolean {
   useEffect(() => {
     if (!isHydrated) return;
     const inAuthGroup = segments[0] === '(auth)';
+    const inInviteRoute = String(segments[0]) === 'invite';
 
-    if (!accessToken && !inAuthGroup) {
+    if (!accessToken && !inAuthGroup && !inInviteRoute) {
       router.replace('/(auth)/phone');
       return;
     }

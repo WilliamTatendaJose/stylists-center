@@ -266,16 +266,21 @@ export class BookingsService {
           include: { agent: { select: { userId: true } } },
         });
         if (referral) {
-          await tx.referral.update({ where: { id: referral.id }, data: { status: 'paid' } });
-          await tx.walletTransaction.create({
-            data: {
-              userId: referral.agent.userId,
-              type: 'referral_coin',
-              coins: REFERRAL_REWARD_COINS,
-              usdCents: REFERRAL_REWARD_COINS * 50,
-              reference: `First completed booking ${current.reference}`,
-            },
+          const claimed = await tx.referral.updateMany({
+            where: { id: referral.id, status: 'pending' },
+            data: { status: 'paid' },
           });
+          if (claimed.count === 1) {
+            await tx.walletTransaction.create({
+              data: {
+                userId: referral.agent.userId,
+                type: 'referral_coin',
+                coins: REFERRAL_REWARD_COINS,
+                usdCents: REFERRAL_REWARD_COINS * 50,
+                reference: `First completed booking ${current.reference}`,
+              },
+            });
+          }
         }
       }
       return result;

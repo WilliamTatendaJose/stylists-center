@@ -11,12 +11,14 @@ import {
   Archivo_800ExtraBold,
 } from '@expo-google-fonts/archivo';
 import { PERSIST_OPTIONS, queryClient } from '../src/api/queryClient.js';
-import { useSessionStore } from '../src/state/index.js';
+import { useAuthStore, useInviteStore, useSessionStore } from '../src/state/index.js';
 import { downloadAvondaleAreaPack } from '../src/offline/downloadAreaPack.js';
 import { useAuthGate } from '../src/auth/useAuthGate.js';
 import { AppErrorBoundary } from '../src/errors/AppErrorBoundary.js';
 import { registerPushToken } from '../src/notifications/registerPushToken.js';
 import { ThemeProvider } from '@sc/ui';
+import { useClaimReferral } from '../src/api/hooks/useWallet.js';
+import { ApiError } from '../src/api/errors.js';
 
 // expo-router renders a route's exported `ErrorBoundary` when that segment
 // throws. Exported from the root layout so it covers every screen.
@@ -89,6 +91,33 @@ export default function RootLayout() {
 /** Rendered inside every provider above, so useAuthGate's useMe() call can actually find a QueryClient. */
 function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
   const isAuthHydrated = useAuthGate();
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const pendingReferralCode = useInviteStore((s) => s.pendingReferralCode);
+  const clearPendingReferralCode = useInviteStore((s) => s.clearPendingReferralCode);
+  const { mutate: claimReferral, isPending: isClaimingReferral } = useClaimReferral();
+
+  useEffect(() => {
+    if (!accessToken || !pendingReferralCode || isClaimingReferral) return;
+    claimReferral(
+      { referralCode: pendingReferralCode },
+      {
+        onSuccess: clearPendingReferralCode,
+        onError: (error) => {
+          // Keep a pending invite through network failures so it can retry on
+          // the next launch, but discard invalid/expired links.
+          if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+            clearPendingReferralCode();
+          }
+        },
+      },
+    );
+  }, [
+    accessToken,
+    claimReferral,
+    clearPendingReferralCode,
+    isClaimingReferral,
+    pendingReferralCode,
+  ]);
 
   useEffect(() => {
     if (!isAuthHydrated) return;

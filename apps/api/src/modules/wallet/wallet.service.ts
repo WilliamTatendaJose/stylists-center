@@ -5,6 +5,7 @@ import {
   canCashOut,
   COIN_USD_CENTS,
   type CashOutRequestResponse,
+  type WalletTransactionDto,
   type ReferralRowDto,
   type WalletDto,
   REFERRAL_REWARD_COINS,
@@ -20,7 +21,15 @@ export class WalletService {
       this.prisma.agent.findUnique({ where: { userId } }),
       this.prisma.user.findUniqueOrThrow({
         where: { id: userId },
-        select: { verificationStatus: true },
+        select: {
+          verificationStatus: true,
+          referralRecord: {
+            select: {
+              status: true,
+              agent: { select: { user: { select: { displayName: true } } } },
+            },
+          },
+        },
       }),
     ]);
     const balance = await this.balance(userId);
@@ -30,6 +39,8 @@ export class WalletService {
       usdCents: balance.usdCents,
       coinUsdCents: COIN_USD_CENTS,
       referralCode: agent?.referralCode ?? '',
+      referredByName: user.referralRecord?.agent.user.displayName ?? null,
+      referralStatus: user.referralRecord?.status ?? 'none',
       canCashOut: canCashOut(balance.usdCents),
       cashOutMinUsdCents: CASH_OUT_MIN_USD_CENTS,
       isVerifiedAgent: agent
@@ -52,14 +63,28 @@ export class WalletService {
       const existing = await tx.agent.findUnique({ where: { userId } });
       if (existing) return;
 
-      const referrer = referralCode
-        ? await tx.agent.findUnique({
-            where: { referralCode },
-            select: { id: true, userId: true, status: true },
+      const normalizedReferralCode = referralCode?.trim().toUpperCase();
+      const existingReferral = await tx.referral.findUnique({
+        where: { referredUserId: userId },
+        select: { agentId: true },
+      });
+      const referrer = normalizedReferralCode
+          ? await tx.agent.findUnique({
+            where: {
+              referralCode: normalizedReferralCode,
+              status: 'active',
+              verificationStatus: 'verified',
+            },
+            select: { id: true, userId: true },
           })
         : null;
-      if (referralCode && referrer?.status !== 'active') {
-        throw new BadRequestException('That referral code is not active');
+      if (normalizedReferralCode) {
+        if (!referrer) {
+          throw new BadRequestException('That referral code is not active');
+        }
+      }
+      if (existingReferral && referrer && existingReferral.agentId !== referrer.id) {
+        throw new BadRequestException('This account already has an invite linked');
       }
 
       const referralCodeForNewAgent = `SC-${randomBytes(4).toString('hex').toUpperCase()}`;
@@ -71,7 +96,7 @@ export class WalletService {
           status: 'active',
         },
       });
-      if (referrer && referrer.userId !== userId) {
+      if (referrer && referrer.userId !== userId && !existingReferral) {
         await tx.referral.create({
           data: {
             agentId: referrer.id,
@@ -81,6 +106,52 @@ export class WalletService {
           },
         });
       }
+    });
+    return this.getWallet(userId);
+  }
+
+  /** Links an invite as soon as a user signs in; verification is not required. */
+  async claimReferral(userId: string, referralCode: string): Promise<WalletDto> {
+    const normalizedReferralCode = referralCode.trim().toUpperCase();
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: userId },
+        select: { displayName: true },
+      });
+      const existingReferral = await tx.referral.findUnique({
+        where: { referredUserId: userId },
+        include: { agent: { select: { referralCode: true } } },
+      });
+      if (existingReferral) {
+        if (existingReferral.agent.referralCode !== normalizedReferralCode) {
+          throw new BadRequestException('This account already has an invite linked');
+        }
+        return;
+      }
+
+      const referrer = await tx.agent.findUnique({
+        where: {
+          referralCode: normalizedReferralCode,
+          status: 'active',
+          verificationStatus: 'verified',
+        },
+        select: { id: true, userId: true },
+      });
+      if (!referrer) {
+        throw new BadRequestException('That referral code is not active');
+      }
+      if (referrer.userId === userId) {
+        throw new BadRequestException('You cannot use your own referral code');
+      }
+
+      await tx.referral.create({
+        data: {
+          agentId: referrer.id,
+          referredUserId: userId,
+          referredName: user.displayName,
+          coinsAwarded: REFERRAL_REWARD_COINS,
+        },
+      });
     });
     return this.getWallet(userId);
   }
@@ -98,6 +169,23 @@ export class WalletService {
       referredName: r.referredName,
       coins: r.coinsAwarded,
       status: r.status,
+      createdAt: r.createdAt.toISOString(),
+    }));
+  }
+
+  async listTransactions(userId: string): Promise<WalletTransactionDto[]> {
+    const transactions = await this.prisma.walletTransaction.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return transactions.map((transaction) => ({
+      id: transaction.id,
+      type: transaction.type,
+      coins: transaction.coins,
+      usdCents: transaction.usdCents,
+      reference: transaction.reference,
+      createdAt: transaction.createdAt.toISOString(),
     }));
   }
 

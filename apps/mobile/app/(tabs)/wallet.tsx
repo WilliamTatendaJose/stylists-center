@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react';
 import { Share, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { formatUsd } from '@sc/shared';
+import { formatInHarare, formatUsd } from '@sc/shared';
 import {
   Screen,
   ScreenHeader,
@@ -16,10 +16,12 @@ import {
 import { space } from '@sc/tokens';
 import {
   useCashOut,
+  useClaimReferral,
   useEnrollAgent,
   useReferrals,
   useVerification,
   useWallet,
+  useWalletTransactions,
 } from '../../src/api/hooks/index.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
@@ -55,6 +57,19 @@ const styles = StyleSheet.create({
   emptyBody: { marginTop: space.s, marginBottom: space.xl },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   referralField: { marginBottom: space.m },
+  inviteCard: { padding: space.l, marginBottom: space.xxl },
+  inviteTitle: { marginBottom: space.s },
+  inviteBody: { marginBottom: space.l },
+  transactionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: space.m,
+    paddingVertical: space.ml,
+    borderBottomWidth: 1,
+  },
+  transactionCopy: { flex: 1, minWidth: 0 },
+  transactionMeta: { marginTop: 2 },
 });
 
 /** Agent wallet (handoff screen 11). Non-agents get an explicit "become an agent" CTA â€” unspecified in the handoff, but this tab needs some state for a client who hasn't verified yet. */
@@ -62,11 +77,71 @@ export default function WalletScreen() {
   const { colors } = useTheme();
   const { data: wallet, isError } = useWallet();
   const { data: referrals } = useReferrals();
+  const { data: transactions } = useWalletTransactions();
   const cashOut = useCashOut();
+  const claimReferral = useClaimReferral();
   const enrollAgent = useEnrollAgent();
   const { data: verification } = useVerification();
   const [cashOutError, setCashOutError] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteError, setInviteError] = useState<string | null>(null);
+
+  const submitInvite = () => {
+    const code = inviteCode.trim();
+    if (!code) return;
+    setInviteError(null);
+    claimReferral.mutate(
+      { referralCode: code },
+      {
+        onSuccess: () => setInviteCode(''),
+        onError: (error) => setInviteError(describeError(error, "Couldn't apply that invite.")),
+      },
+    );
+  };
+
+  const inviteCard =
+    wallet && wallet.referralStatus === 'none' ? (
+      <Card bordered style={styles.inviteCard}>
+        <Text variant="cardTitle" style={styles.inviteTitle}>
+          Have an invite code?
+        </Text>
+        <Text variant="body" color="neutral700" style={styles.inviteBody}>
+          Link it now. Your friend earns 6 SC Coins after your first completed booking.
+        </Text>
+        <TextField
+          label="Invite code"
+          value={inviteCode}
+          onChangeText={(value) => {
+            setInviteCode(value.toUpperCase());
+            setInviteError(null);
+          }}
+          placeholder="SC-ABC123"
+        />
+        <Button
+          label={claimReferral.isPending ? 'Applying…' : 'Apply invite'}
+          block
+          disabled={!inviteCode.trim() || claimReferral.isPending}
+          onPress={submitInvite}
+        />
+        {inviteError ? (
+          <Text variant="meta" color="accent700" style={styles.cashOutNote}>
+            {inviteError}
+          </Text>
+        ) : null}
+      </Card>
+    ) : wallet && wallet.referredByName ? (
+      <Card bordered style={styles.inviteCard}>
+        <Text variant="cardTitle" style={styles.inviteTitle}>
+          Invite linked
+        </Text>
+        <Text variant="body" color="neutral700">
+          {wallet.referralStatus === 'paid'
+            ? `Your first booking unlocked ${wallet.referredByName}'s reward.`
+            : `${wallet.referredByName} earns 6 SC Coins after your first completed booking.`}
+        </Text>
+      </Card>
+    ) : null;
 
   if (!wallet) {
     if (!isError) return null; // still loading â€” Screen renders nothing rather than flash empty content
@@ -86,6 +161,7 @@ export default function WalletScreen() {
         hasTabBar
         header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}
       >
+        {inviteCard}
         <Text variant="h3">Become an agent</Text>
         <Text variant="body" color="neutral700" style={styles.emptyBody}>
           Submit identity verification to become an agent and start earning SC Coins — 6 coins for
@@ -94,14 +170,16 @@ export default function WalletScreen() {
         </Text>
         {verification?.status === 'verified' || wallet.canBecomeAgent ? (
           <>
-            <View style={styles.referralField}>
-              <TextField
-                label="Referral code (optional)"
-                value={referralCode}
-                onChangeText={setReferralCode}
-                placeholder="e.g. SC-TARI7"
-              />
-            </View>
+            {!wallet.referredByName ? (
+              <View style={styles.referralField}>
+                <TextField
+                  label="Referral code (optional)"
+                  value={referralCode}
+                  onChangeText={setReferralCode}
+                  placeholder="e.g. SC-TARI7"
+                />
+              </View>
+            ) : null}
             <Button
               label={enrollAgent.isPending ? 'Joining rewardsâ€¦' : 'Join the rewards programme'}
               block
@@ -132,7 +210,7 @@ export default function WalletScreen() {
 
   const shareCode = () => {
     void Share.share({
-      message: `Join Stylists Center with my code ${wallet.referralCode}. I earn SC Coins when you complete your first booking.`,
+      message: `Join Stylists Center with my invite link: stylistscenter://invite/${wallet.referralCode}\nI earn SC Coins when you complete your first booking.`,
     });
   };
 
@@ -244,6 +322,40 @@ export default function WalletScreen() {
             />
           </View>
         ))}
+      </View>
+
+      <View style={styles.section}>
+        <Text variant="sectionLabel" style={styles.sectionLabel}>
+          Wallet activity
+        </Text>
+        {transactions?.length ? (
+          transactions.map((transaction) => (
+            <View
+              key={transaction.id}
+              style={[styles.transactionRow, { borderBottomColor: colors.divider }]}
+            >
+              <View style={styles.transactionCopy}>
+                <Text variant="bodyStrong">
+                  {transaction.type === 'referral_coin'
+                    ? 'Referral reward'
+                    : transaction.type === 'cash_out'
+                      ? 'Cash out'
+                      : 'Wallet adjustment'}
+                </Text>
+                <Text variant="metaSmall" color="neutral600" style={styles.transactionMeta}>
+                  {transaction.reference ?? 'Wallet activity'} ·{' '}
+                  {formatInHarare(transaction.createdAt, 'd MMM, HH:mm')}
+                </Text>
+              </View>
+              <Text variant="bodyStrong" color={transaction.coins >= 0 ? colors.accent : undefined}>
+                {transaction.coins > 0 ? '+' : ''}
+                {transaction.coins} coins
+              </Text>
+            </View>
+          ))
+        ) : (
+          <EmptyPanel body="Referral rewards and cash-outs will appear here." />
+        )}
       </View>
     </Screen>
   );

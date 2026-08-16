@@ -377,6 +377,10 @@ export class AuthService {
             }),
           ]
         : []),
+      this.prisma.referral.updateMany({
+        where: { referredUserId: userId },
+        data: { referredName: input.displayName },
+      }),
     ]);
     return this.me(userId);
   }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Switch, View } from 'react-native';
 import { router } from 'expo-router';
-import { Clock3, LogOut, MapPin, Moon, Sun, UserRound } from 'lucide-react-native';
+import { Clock3, Gift, LogOut, MapPin, Moon, Sun, UserRound } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import {
   deriveInitials,
@@ -78,6 +78,16 @@ const styles = StyleSheet.create({
   sheetField: { marginBottom: space.m },
   sheetError: { marginBottom: space.m },
   appearanceCard: { flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l },
+  rewardsShortcut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.m,
+    padding: space.l,
+    marginTop: space.l,
+    borderWidth: 1,
+  },
+  rewardsShortcutCopy: { flex: 1, minWidth: 0 },
+  rewardsShortcutHint: { marginTop: 2 },
   appearanceCopy: { flex: 1, minWidth: 0 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: space.m },
   locationRow: {
@@ -324,13 +334,24 @@ export default function ProviderProfile() {
                 onPress={() => router.push('/verify')}
               />
             ) : null}
-            <Button
-              label="Open rewards wallet"
-              variant="ghost"
-              block
-              style={styles.cardAction}
+            <Card
+              bordered
               onPress={() => router.push('./rewards')}
-            />
+              style={[
+                styles.rewardsShortcut,
+                { backgroundColor: colors.accent100, borderColor: colors.accent700 },
+              ]}
+            >
+              <Gift size={22} color={colors.accent700} strokeWidth={1.9} />
+              <View style={styles.rewardsShortcutCopy}>
+                <Text variant="bodyStrong" color={colors.accent700}>
+                  Rewards wallet
+                </Text>
+                <Text variant="metaSmall" color={colors.accent700} style={styles.rewardsShortcutHint}>
+                  View invites, SC Coins, and cash-out activity
+                </Text>
+              </View>
+            </Card>
           </Card>
         </ProfileSection>
 
