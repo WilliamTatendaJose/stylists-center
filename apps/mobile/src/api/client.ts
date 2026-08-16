@@ -57,13 +57,37 @@ interface RefreshResponse {
 // De-dupes concurrent 401s into a single refresh call instead of a stampede.
 let refreshPromise: Promise<string | null> | null = null;
 
+// RN's fetch never times out on its own — a dead tunnel or a request that
+// left the wifi mid-handshake just hangs forever, which reads identically to
+// "still loading" with no way for the caller to retry. This was the actual
+// cause of the role switcher getting stuck on "Switching…" indefinitely: the
+// request had gone through on the server, but the response never made it
+// back over a base URL that had gone stale, and nothing ever gave up on it.
+const REQUEST_TIMEOUT_MS = 20_000;
+
+async function fetchWithTimeout(
+  request: (input: string, init: RequestInit) => Promise<Response>,
+  input: string,
+  init: RequestInit,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, REQUEST_TIMEOUT_MS);
+  try {
+    return await request(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function refreshAccessToken(baseUrl = activeBaseUrl): Promise<string | null> {
   const stored = await getStoredTokens();
   if (!stored) return null;
 
   let res: Response;
   try {
-    res = await fetch(`${baseUrl}/v1/auth/refresh`, {
+    res = await fetchWithTimeout(fetch, `${baseUrl}/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: stored.refreshToken }),
@@ -115,7 +139,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       // React Native's global fetch rejects those parts before the request is
       // sent, which made image uploads surface as a generic network failure.
       const request = isFormData ? expoFetch : fetch;
-      return await request(`${activeBaseUrl}${path}`, {
+      return await fetchWithTimeout(request, `${activeBaseUrl}${path}`, {
         method,
         headers,
         body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),

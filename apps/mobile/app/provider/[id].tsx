@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MapPin, ChevronRight } from 'lucide-react-native';
 import { space } from '@sc/tokens';
@@ -23,6 +23,7 @@ import { describeError } from '../../src/api/errorMessage.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
+import { FullScreenImageViewer } from '../../src/components/FullScreenImageViewer.js';
 
 const styles = StyleSheet.create({
   reportedNote: { marginBottom: space.m },
@@ -39,6 +40,7 @@ const styles = StyleSheet.create({
   photoRightBottom: { height: 90 },
   photoExtras: { flexDirection: 'row', gap: 8, marginTop: 8 },
   photoExtra: { flex: 1, height: 110 },
+  photoFill: { flex: 1 },
   serviceRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -55,6 +57,7 @@ const styles = StyleSheet.create({
   fromPanelBody: { marginTop: space.xs },
   reviewRow: { marginBottom: space.l },
   reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  loadErrorNote: { marginBottom: space.m },
   directionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -76,11 +79,12 @@ export default function ProviderProfile() {
   const { colors } = useTheme();
   const { id, matchId } = useLocalSearchParams<{ id: string; matchId?: string }>();
   const onBack = useBack('/(tabs)');
-  const { data: provider } = useProvider(id);
+  const { data: provider, isError: providerError, refetch: refetchProvider } = useProvider(id);
   const setProvider = useBookingDraftStore((s) => s.setProvider);
 
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [reportOutcome, setReportOutcome] = useState<{ ok: boolean; message: string } | null>(null);
+  const [selectedWorkIndex, setSelectedWorkIndex] = useState<number | null>(null);
   const createReport = useCreateReport();
 
   // Same false-confirmation the Bookings screen had: the thank-you was shown
@@ -121,14 +125,52 @@ export default function ProviderProfile() {
   };
 
   if (!provider) {
+    // Same failure this screen used to share with directions.tsx: a request
+    // that never resolves reads identically to "still loading" with no way
+    // out short of leaving the screen. A real failure now gets its own
+    // message and a button that actually retries.
     return (
       <Screen header={<ScreenHeader title="Provider" onBack={onBack} />}>
-        <Text variant="body" color="neutral700">
-          Loading…
-        </Text>
+        {providerError ? (
+          <>
+            <Text variant="body" color="neutral700" style={styles.loadErrorNote}>
+              Couldn&apos;t load this stylist. Check your connection and try again.
+            </Text>
+            <Button label="Try again" onPress={() => void refetchProvider()} />
+          </>
+        ) : (
+          <Text variant="body" color="neutral700">
+            Loading…
+          </Text>
+        )}
       </Screen>
     );
   }
+
+  const workImageUrls = provider.portfolioImageUrls
+    .map((url) => apiAssetUrl(url))
+    .filter((url): url is string => Boolean(url));
+  const renderWorkPhoto = (
+    url: string | undefined,
+    index: number,
+    style: ViewStyle,
+    label?: string,
+  ) => {
+    const uri = apiAssetUrl(url);
+    if (!uri) {
+      return <ImagePlaceholder uri={undefined} radius={18} style={style} label={label} />;
+    }
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`View work photo ${String(index + 1)} full screen`}
+        onPress={() => setSelectedWorkIndex(index)}
+        style={style}
+      >
+        <ImagePlaceholder uri={uri} radius={18} style={styles.photoFill} />
+      </Pressable>
+    );
+  };
 
   return (
     <>
@@ -198,35 +240,22 @@ export default function ProviderProfile() {
             Work
           </Text>
           <View style={styles.photoRow}>
-            <ImagePlaceholder
-              uri={apiAssetUrl(provider.portfolioImageUrls[0])}
-              radius={18}
-              style={styles.photoLeft}
-              label={provider.portfolioImageUrls.length ? undefined : 'No work photos yet'}
-            />
+            {renderWorkPhoto(
+              provider.portfolioImageUrls[0],
+              0,
+              styles.photoLeft,
+              provider.portfolioImageUrls.length ? undefined : 'No work photos yet',
+            )}
             <View style={styles.photoRight}>
-              <ImagePlaceholder
-                uri={apiAssetUrl(provider.portfolioImageUrls[1])}
-                radius={18}
-                style={styles.photoRightTop}
-              />
-              <ImagePlaceholder
-                uri={apiAssetUrl(provider.portfolioImageUrls[2])}
-                radius={18}
-                style={styles.photoRightBottom}
-              />
+              {renderWorkPhoto(provider.portfolioImageUrls[1], 1, styles.photoRightTop)}
+              {renderWorkPhoto(provider.portfolioImageUrls[2], 2, styles.photoRightBottom)}
             </View>
           </View>
           {provider.portfolioImageUrls.length > 3 ? (
             <View style={styles.photoExtras}>
-              {provider.portfolioImageUrls.slice(3).map((url) => (
-                <ImagePlaceholder
-                  key={url}
-                  uri={apiAssetUrl(url)}
-                  radius={18}
-                  style={styles.photoExtra}
-                />
-              ))}
+              {provider.portfolioImageUrls
+                .slice(3)
+                .map((url, index) => renderWorkPhoto(url, index + 3, styles.photoExtra))}
             </View>
           ) : null}
         </View>
@@ -313,6 +342,22 @@ export default function ProviderProfile() {
           {provider.workingHoursLabel}
         </Text>
       </Screen>
+
+      <FullScreenImageViewer
+        urls={workImageUrls}
+        initialIndex={selectedWorkIndex}
+        onClose={() => setSelectedWorkIndex(null)}
+        onPrevious={() =>
+          setSelectedWorkIndex((current) =>
+            current === null ? null : Math.max(0, current - 1),
+          )
+        }
+        onNext={() =>
+          setSelectedWorkIndex((current) =>
+            current === null ? null : Math.min(workImageUrls.length - 1, current + 1),
+          )
+        }
+      />
 
       <ReportSheet
         open={reportSheetOpen}
