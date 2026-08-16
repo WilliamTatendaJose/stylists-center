@@ -4,9 +4,9 @@ import { StatusBar } from 'expo-status-bar';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, LocateFixed } from 'lucide-react-native';
-import { color, radius, space } from '@sc/tokens';
+import { radius, space } from '@sc/tokens';
 import { isBrowseRadiusKm } from '@sc/shared';
-import { ScMap, Text, Pressable, ListRow, Button } from '@sc/ui';
+import { ScMap, Text, Pressable, ListRow, Button, useTheme } from '@sc/ui';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
 import { useGeoSearch } from '../../src/api/hooks/useGeo.js';
 import { useSessionStore } from '../../src/state/index.js';
@@ -28,7 +28,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: color.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -37,7 +36,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
-    backgroundColor: color.bg,
     borderRadius: radius.pill,
     paddingVertical: 10,
     paddingHorizontal: space.l,
@@ -48,7 +46,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: color.bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingTop: space.s,
@@ -60,7 +57,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: color.divider,
     marginBottom: space.m,
   },
   sheetHeader: {
@@ -84,6 +80,7 @@ export default function MapSearch() {
     radiusKm?: string;
   }>();
   const onBack = useBack('/(tabs)');
+  const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const location = useSessionStore((s) => s.location);
   const areaLabel = useSessionStore((s) => s.areaLabel);
@@ -121,7 +118,7 @@ export default function MapSearch() {
 
   return (
     <View style={styles.root}>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <ScMap
         center={[location.lng, location.lat]}
         zoom={14}
@@ -135,18 +132,18 @@ export default function MapSearch() {
           accessibilityRole="button"
           accessibilityLabel="Back"
           onPress={onBack}
-          style={styles.circleButton}
+          style={[styles.circleButton, { backgroundColor: colors.bg }]}
         >
-          <ChevronLeft size={20} strokeWidth={1.9} color={color.text} />
+          <ChevronLeft size={20} strokeWidth={1.9} color={colors.text} />
         </Pressable>
-        <View style={styles.pill}>
+        <View style={[styles.pill, { backgroundColor: colors.bg }]}>
           {/* Was a literal "near Avondale" regardless of where the device
               actually was — areaLabel is the same real, reverse-geocoded
               place name the Find header shows. */}
           <Text variant="bodyStrong" numberOfLines={1}>
             {categoryName} near {areaLabel ?? 'you'}
           </Text>
-          <Text variant="metaSmall" color={color.accent}>
+          <Text variant="metaSmall" color={colors.accent}>
             {radiusKm} km
           </Text>
         </View>
@@ -160,13 +157,23 @@ export default function MapSearch() {
              recentre needs the map to report its live camera position, which
              this M1 wrapper doesn't expose yet. */
         }}
-        style={[styles.circleButton, styles.locateButton, { top: insets.top + 64 }]}
+        style={[
+          styles.circleButton,
+          styles.locateButton,
+          { top: insets.top + 64, backgroundColor: colors.bg },
+        ]}
       >
-        <LocateFixed size={18} strokeWidth={1.9} color={color.accent} />
+        <LocateFixed size={18} strokeWidth={1.9} color={colors.accent} />
       </Pressable>
 
-      <View style={[styles.sheet, expanded ? styles.sheetExpanded : styles.sheetPeek]}>
-        <View style={styles.dragHandle} />
+      <View
+        style={[
+          styles.sheet,
+          expanded ? styles.sheetExpanded : styles.sheetPeek,
+          { backgroundColor: colors.bg },
+        ]}
+      >
+        <View style={[styles.dragHandle, { backgroundColor: colors.divider }]} />
         <View style={styles.sheetHeader}>
           <Text variant="sectionLabel">{list.length} stylists on the map</Text>
           <Pressable
@@ -176,7 +183,7 @@ export default function MapSearch() {
               setExpanded((e) => !e);
             }}
           >
-            <Text variant="metaSmall" color={color.accent700}>
+            <Text variant="metaSmall" color={colors.accent700}>
               {expanded ? 'Map view' : 'List view'}
             </Text>
           </Pressable>

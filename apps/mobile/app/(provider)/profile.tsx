@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Switch, View } from 'react-native';
 import { router } from 'expo-router';
-import { Clock3, LogOut, MapPin, UserRound } from 'lucide-react-native';
+import { Clock3, LogOut, MapPin, Moon, Sun, UserRound } from 'lucide-react-native';
 import * as WebBrowser from 'expo-web-browser';
 import {
   deriveInitials,
@@ -40,6 +40,7 @@ import { useAuthStore } from '../../src/state/useAuthStore.js';
 import { useSessionStore } from '../../src/state/index.js';
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
+import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 import {
   ProfileHero,
   ProfileIconTile,
@@ -76,6 +77,8 @@ const styles = StyleSheet.create({
   sheetBody: { marginBottom: space.xl },
   sheetField: { marginBottom: space.m },
   sheetError: { marginBottom: space.m },
+  appearanceCard: { flexDirection: 'row', alignItems: 'center', gap: space.m, padding: space.l },
+  appearanceCopy: { flex: 1, minWidth: 0 },
   row: { flexDirection: 'row', justifyContent: 'space-between', gap: space.m },
   locationRow: {
     flexDirection: 'row',
@@ -88,7 +91,7 @@ const styles = StyleSheet.create({
 });
 
 export default function ProviderProfile() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const { data, isError, refetch } = useProviderManagementProfile();
   const { data: me } = useMe();
   const updateProfile = useUpdateProviderProfile();
@@ -99,6 +102,9 @@ export default function ProviderProfile() {
   const setActiveRole = useSetActiveRole();
   const deviceLocation = useSessionStore((state) => state.location);
   const locationSource = useSessionStore((state) => state.locationSource);
+  const themeMode = useSessionStore((state) => state.themeMode);
+  const setThemeMode = useSessionStore((state) => state.setThemeMode);
+  const followsSystemTheme = themeMode === 'system';
   const signOut = useAuthStore((state) => state.signOut);
 
   const [displayName, setDisplayName] = useState('');
@@ -133,7 +139,7 @@ export default function ProviderProfile() {
 
   if (isError && !data) {
     return (
-      <Screen hasTabBar header={<ScreenHeader title="My page" showBack={false} />}>
+      <Screen hasTabBar header={<ScreenHeader title="My page" showBack={false} right={<RoleSwitcher />} />}>
         <EmptyPanel title="Couldn't load your page" body="Check your connection and try again." />
         <Button label="Try again" onPress={() => void refetch()} />
       </Screen>
@@ -262,7 +268,7 @@ export default function ProviderProfile() {
 
   return (
     <>
-      <Screen hasTabBar header={<ScreenHeader title="My page" showBack={false} />}>
+      <Screen hasTabBar header={<ScreenHeader title="My page" showBack={false} right={<RoleSwitcher />} />}>
         {error ? (
           <Text
             variant="meta"
@@ -310,6 +316,13 @@ export default function ProviderProfile() {
                 onPress={() => router.push('/verify')}
               />
             ) : null}
+            <Button
+              label="Open rewards wallet"
+              variant="ghost"
+              block
+              style={styles.cardAction}
+              onPress={() => router.push('./rewards')}
+            />
           </Card>
         </ProfileSection>
 
@@ -450,6 +463,48 @@ export default function ProviderProfile() {
             </Card>
           </ProfileSection>
         ) : null}
+
+        <ProfileSection label="Appearance">
+          <Card bordered style={styles.appearanceCard}>
+            <ProfileIconTile>
+              <Sun size={20} color={isDark ? colors.accent700 : colors.neutral700} />
+            </ProfileIconTile>
+            <View style={styles.appearanceCopy}>
+              <Text variant="bodyStrong">Use device theme</Text>
+              <Text variant="meta" color="neutral700">
+                Follow your phone's light and dark setting automatically.
+              </Text>
+            </View>
+            <Switch
+              accessibilityLabel="Use device theme"
+              value={followsSystemTheme}
+              onValueChange={(enabled) =>
+                setThemeMode(enabled ? 'system' : isDark ? 'dark' : 'light')
+              }
+              trackColor={{ false: colors.neutral200, true: colors.accent700 }}
+              thumbColor={colors.bg}
+            />
+          </Card>
+          <Card bordered style={[styles.appearanceCard, { marginTop: space.m }]}>
+            <ProfileIconTile>
+              <Moon size={20} color={isDark ? colors.accent700 : colors.neutral700} />
+            </ProfileIconTile>
+            <View style={styles.appearanceCopy}>
+              <Text variant="bodyStrong">Dark mode</Text>
+              <Text variant="meta" color="neutral700">
+                Override the device setting with a fixed dark appearance.
+              </Text>
+            </View>
+            <Switch
+              accessibilityLabel="Dark mode"
+              disabled={followsSystemTheme}
+              value={isDark}
+              onValueChange={(enabled) => setThemeMode(enabled ? 'dark' : 'light')}
+              trackColor={{ false: colors.neutral200, true: colors.accent700 }}
+              thumbColor={colors.bg}
+            />
+          </Card>
+        </ProfileSection>
 
         <ProfileSection label="Account">
           <Card bordered style={styles.contentCard}>

@@ -14,7 +14,12 @@ export class AdminOverviewService {
         this.prisma.report.count({ where: { status: 'open' } }),
         this.prisma.report.count({ where: { status: 'reviewing' } }),
         this.prisma.ban.count({ where: { appealStatus: { not: 'overturned' } } }),
-        this.prisma.providerProfile.count({ where: { verified: false } }),
+        this.prisma.user.count({
+          where: {
+            verificationStatus: 'pending',
+            verificationSubmittedAt: { not: null },
+          },
+        }),
         this.prisma.providerProfile.count(),
       ]);
 

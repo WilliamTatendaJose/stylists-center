@@ -34,6 +34,7 @@ import {
 import { describeError } from '../../src/api/errorMessage.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { ServerConnectionPanel } from '../../src/components/ServerConnectionPanel.js';
+import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 const styles = StyleSheet.create({
   availabilityCard: {
@@ -258,7 +259,7 @@ export default function Jobs() {
   return (
     <Screen
       hasTabBar
-      header={<ScreenHeader title="Jobs" showBack={false} />}
+      header={<ScreenHeader title="Jobs" showBack={false} right={<RoleSwitcher />} />}
       refreshControl={
         <RefreshControl
           refreshing={isRefetching}

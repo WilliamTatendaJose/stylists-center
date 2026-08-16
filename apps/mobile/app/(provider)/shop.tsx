@@ -33,6 +33,7 @@ import { MarketBrowse } from '../../src/components/MarketBrowse.js';
 import { cartItemCount, useCartStore } from '../../src/state/index.js';
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
+import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 const styles = StyleSheet.create({
   toggle: { marginBottom: space.xxl },
@@ -256,9 +257,10 @@ export default function ProviderShop() {
           title="Shop"
           showBack={false}
           right={
-            mode === 'buy' ? (
-              <View style={styles.headerActions}>
-                <Pressable
+            <View style={styles.headerActions}>
+              {mode === 'buy' ? (
+                <>
+                  <Pressable
                   accessibilityRole="button"
                   accessibilityLabel="My orders"
                   onPress={() => {
@@ -267,8 +269,8 @@ export default function ProviderShop() {
                   style={[styles.ordersButton, { borderColor: colors.divider }]}
                 >
                   <Package size={18} strokeWidth={1.7} color={colors.text} />
-                </Pressable>
-                <Pressable
+                  </Pressable>
+                  <Pressable
                   accessibilityRole="button"
                   accessibilityLabel={
                     itemCount > 0 ? `Cart, ${String(itemCount)} items` : 'Cart, empty'
@@ -284,9 +286,11 @@ export default function ProviderShop() {
                       <Badge label={String(itemCount)} tone="accent" size="sm" />
                     </View>
                   ) : null}
-                </Pressable>
-              </View>
-            ) : undefined
+                  </Pressable>
+                </>
+              ) : null}
+              <RoleSwitcher />
+            </View>
           }
         />
       }

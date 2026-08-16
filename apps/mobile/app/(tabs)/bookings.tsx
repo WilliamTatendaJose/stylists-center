@@ -40,6 +40,7 @@ import {
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { apiAssetUrl } from '../../src/api/client.js';
+import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 const STARS = [1, 2, 3, 4, 5];
 
@@ -331,7 +332,7 @@ export default function Bookings() {
     <>
       <Screen
         hasTabBar
-        header={<ScreenHeader title="Bookings" showBack={false} />}
+        header={<ScreenHeader title="Bookings" showBack={false} right={<RoleSwitcher />} />}
         refreshControl={
           <RefreshControl
             refreshing={isRefetching}

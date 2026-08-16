@@ -147,7 +147,7 @@ function LoadMore({
 }
 
 export default function Find() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const maxDistanceKm = useSessionStore((s) => s.maxDistanceKm);
 
   const {
@@ -178,10 +178,10 @@ export default function Find() {
   const { data: me } = useMe();
   const setActiveRole = useSetActiveRole();
   // Fall back to the persisted local role only until /v1/me resolves, so the
-  // pill never renders empty on a cold start.
+  // role pill never renders empty on a cold start.
   const storedRole = useSessionStore((s) => s.activeRole);
   const activeRole = me?.activeRole ?? storedRole;
-  const hasProviderProfile = me?.hasProviderProfile ?? false;
+  const hasProviderProfile = me?.hasProviderProfile ?? activeRole === 'provider';
   const locationSource = useSessionStore((s) => s.locationSource);
   const areaLabel = useSessionStore((s) => s.areaLabel);
   const setCategory = useRequestStore((s) => s.setCategory);
@@ -198,6 +198,7 @@ export default function Find() {
     try {
       await setActiveRole.mutateAsync(isProvider ? 'client' : 'provider');
       setRoleSheetOpen(false);
+      router.replace(isProvider ? '/(tabs)' : '/(provider)/jobs');
     } catch (err) {
       setRoleError(describeError(err, "Couldn't switch roles. Try again."));
     }
@@ -227,9 +228,10 @@ export default function Find() {
           STYLISTS CENTER
         </Text>
         <Pill
-          label={activeRole}
+          label={isProvider ? 'Stylist' : 'Client'}
           showChevron
           onPress={() => {
+            setRoleError(null);
             setRoleSheetOpen(true);
           }}
         />
@@ -315,9 +317,12 @@ export default function Find() {
             accessibilityRole="button"
             accessibilityLabel="Search on the map"
             onPress={goMap}
-            style={[styles.mapButton, { backgroundColor: colors.neutral900 }]}
+            style={[
+              styles.mapButton,
+              { backgroundColor: isDark ? colors.surface : colors.neutral900 },
+            ]}
           >
-            <Compass size={18} strokeWidth={1.7} color={colors.bg} />
+            <Compass size={18} strokeWidth={1.7} color={isDark ? colors.onDark.text : colors.bg} />
           </Pressable>
         </View>
 
@@ -465,7 +470,7 @@ export default function Find() {
         }}
       >
         <Text variant="cardTitle" style={styles.sheetTitle}>
-          {isProvider ? 'Switch to client' : 'Switch to provider'}
+          {isProvider ? 'Switch to client' : 'Switch to stylist'}
         </Text>
         <Text variant="body" color="neutral700" style={styles.sheetBody}>
           One account, two sides.{' '}
@@ -497,7 +502,7 @@ export default function Find() {
                   ? 'Switching…'
                   : isProvider
                     ? 'Switch to client'
-                    : 'Switch to provider'
+                    : 'Switch to stylist'
               }
               block
               disabled={setActiveRole.isPending}

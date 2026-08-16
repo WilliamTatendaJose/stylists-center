@@ -16,6 +16,7 @@ import {
 import { useConversations } from '../../src/api/hooks/useChat.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { ServerConnectionPanel } from '../../src/components/ServerConnectionPanel.js';
+import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 type InboxFilter = 'all' | 'unread';
 
@@ -26,6 +27,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -space.s,
     paddingHorizontal: space.s,
   },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.s },
 });
 
 /** Searchable Messages inbox with an explicit unread queue. */
@@ -72,7 +74,10 @@ export default function Messages() {
           title="Messages"
           showBack={false}
           right={
-            unreadTotal > 0 ? <Badge label={`${String(unreadTotal)} unread`} tone="accent" /> : null
+            <View style={styles.headerRight}>
+              {unreadTotal > 0 ? <Badge label={`${String(unreadTotal)} unread`} tone="accent" /> : null}
+              <RoleSwitcher />
+            </View>
           }
         />
       }

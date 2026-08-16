@@ -2,8 +2,8 @@
 import { Share, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatUsd } from '@sc/shared';
-import { Screen, ScreenHeader, Text, Badge, Card, Button, EmptyPanel, TextField } from '@sc/ui';
-import { color, space } from '@sc/tokens';
+import { Screen, ScreenHeader, Text, Badge, Card, Button, EmptyPanel, TextField, useTheme } from '@sc/ui';
+import { space } from '@sc/tokens';
 import {
   useCashOut,
   useEnrollAgent,
@@ -12,6 +12,7 @@ import {
   useWallet,
 } from '../../src/api/hooks/index.js';
 import { describeError } from '../../src/api/errorMessage.js';
+import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 const styles = StyleSheet.create({
   balanceBlock: { alignItems: 'flex-start', marginBottom: space.xxl },
@@ -32,22 +33,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: space.s,
     borderBottomWidth: 1,
-    borderBottomColor: color.divider,
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: space.ml,
     borderBottomWidth: 1,
-    borderBottomColor: color.divider,
   },
   colReferral: { flex: 2 },
   colCoins: { flex: 1 },
   emptyBody: { marginTop: space.s, marginBottom: space.xl },
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  referralField: { marginBottom: space.m },
 });
 
 /** Agent wallet (handoff screen 11). Non-agents get an explicit "become an agent" CTA â€” unspecified in the handoff, but this tab needs some state for a client who hasn't verified yet. */
 export default function WalletScreen() {
+  const { colors } = useTheme();
   const { data: wallet, isError } = useWallet();
   const { data: referrals } = useReferrals();
   const cashOut = useCashOut();
@@ -59,7 +61,7 @@ export default function WalletScreen() {
   if (!wallet) {
     if (!isError) return null; // still loading â€” Screen renders nothing rather than flash empty content
     return (
-      <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} />}>
+      <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}>
         <EmptyPanel title="Couldn't load your wallet" body="Check your connection and try again." />
       </Screen>
     );
@@ -67,7 +69,7 @@ export default function WalletScreen() {
 
   if (!wallet.isVerifiedAgent) {
     return (
-      <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} />}>
+      <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}>
         <Text variant="h3">Become an agent</Text>
         <Text variant="body" color="neutral700" style={styles.emptyBody}>
           Verify to become an agent and start earning SC Coins â€” 6 coins for every stylist and
@@ -75,12 +77,14 @@ export default function WalletScreen() {
         </Text>
         {verification?.status === 'verified' || wallet.canBecomeAgent ? (
           <>
-            <TextField
-              label="Referral code (optional)"
-              value={referralCode}
-              onChangeText={setReferralCode}
-              placeholder="e.g. SC-TARI7"
-            />
+            <View style={styles.referralField}>
+              <TextField
+                label="Referral code (optional)"
+                value={referralCode}
+                onChangeText={setReferralCode}
+                placeholder="e.g. SC-TARI7"
+              />
+            </View>
             <Button
               label={enrollAgent.isPending ? 'Joining rewardsâ€¦' : 'Join the rewards programme'}
               block
@@ -122,15 +126,20 @@ export default function WalletScreen() {
         <ScreenHeader
           title="Agent wallet"
           showBack={false}
-          right={<Badge label="Verified agent" tone="accent100" />}
+          right={
+            <View style={styles.headerRight}>
+              <Badge label="Verified agent" tone="accent100" />
+              <RoleSwitcher />
+            </View>
+          }
         />
       }
     >
       <View style={styles.balanceBlock}>
-        <Text variant="balance" color={color.accent}>
+        <Text variant="balance" color={colors.accent}>
           {wallet.coins}
         </Text>
-        <Text variant="kicker" color={color.accent} style={styles.coinsLabel}>
+        <Text variant="kicker" color={colors.accent} style={styles.coinsLabel}>
           SC Coins
         </Text>
         <Text variant="meta" color="neutral700" style={styles.conversion}>
@@ -156,7 +165,7 @@ export default function WalletScreen() {
         {cashOutError ? (
           <Text
             variant="metaSmall"
-            color={color.accent700}
+            color={colors.accent700}
             style={styles.cashOutNote}
             accessibilityLiveRegion="polite"
             accessibilityRole="alert"
@@ -193,7 +202,7 @@ export default function WalletScreen() {
         <Text variant="sectionLabel" style={styles.sectionLabel}>
           Commission
         </Text>
-        <View style={styles.tableHeader}>
+        <View style={[styles.tableHeader, { borderBottomColor: colors.divider }]}>
           <Text variant="metaSmall" color="neutral600" style={styles.colReferral}>
             Referral
           </Text>
@@ -205,7 +214,7 @@ export default function WalletScreen() {
           </Text>
         </View>
         {referrals?.map((referral) => (
-          <View key={referral.id} style={styles.tableRow}>
+          <View key={referral.id} style={[styles.tableRow, { borderBottomColor: colors.divider }]}>
             <Text variant="body" style={styles.colReferral}>
               {referral.referredName}
             </Text>

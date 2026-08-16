@@ -4,8 +4,7 @@ import { useProviders, useUpdateProvider } from '../api/providers';
 import { ApiError } from '../api/client';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
-
-const API_ORIGIN = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000';
+import { adminAssetUrl } from '../api/media';
 
 const FILTERS: { label: string; value: boolean | undefined }[] = [
   { label: 'All', value: undefined },
@@ -47,7 +46,7 @@ function ProviderRow({ provider }: { provider: AdminProviderRowDto }) {
           {provider.verificationIdDocumentUrl ? (
             <a
               className="underline hover:text-neutral-900 dark:hover:text-dark-text"
-              href={`${API_ORIGIN}${provider.verificationIdDocumentUrl}`}
+              href={adminAssetUrl(provider.verificationIdDocumentUrl)}
               target="_blank"
               rel="noreferrer"
             >
@@ -57,7 +56,7 @@ function ProviderRow({ provider }: { provider: AdminProviderRowDto }) {
           {provider.verificationSelfieImageUrl ? (
             <a
               className="underline hover:text-neutral-900 dark:hover:text-dark-text"
-              href={`${API_ORIGIN}${provider.verificationSelfieImageUrl}`}
+              href={adminAssetUrl(provider.verificationSelfieImageUrl)}
               target="_blank"
               rel="noreferrer"
             >
@@ -70,6 +69,43 @@ function ProviderRow({ provider }: { provider: AdminProviderRowDto }) {
             Review note: {provider.verificationNote}
           </p>
         ) : null}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {[
+            ...provider.portfolioImageUrls,
+            ...provider.serviceImageUrls,
+            ...provider.productImageUrls,
+          ].map((url, index) => (
+            <a
+              key={`${url}-${String(index)}`}
+              href={adminAssetUrl(url)}
+              target="_blank"
+              rel="noreferrer"
+              title="Open uploaded image"
+            >
+              <img
+                src={adminAssetUrl(url)}
+                alt=""
+                className="h-12 w-12 rounded-lg border border-neutral-200 object-cover dark:border-dark-border"
+                loading="lazy"
+              />
+            </a>
+          ))}
+          {provider.profileImageUrl || provider.avatarImageUrl ? (
+            <a
+              href={adminAssetUrl(provider.profileImageUrl ?? provider.avatarImageUrl ?? '')}
+              target="_blank"
+              rel="noreferrer"
+              title="Open public profile image"
+            >
+              <img
+                src={adminAssetUrl(provider.profileImageUrl ?? provider.avatarImageUrl ?? '')}
+                alt=""
+                className="h-12 w-12 rounded-full border border-neutral-200 object-cover dark:border-dark-border"
+                loading="lazy"
+              />
+            </a>
+          ) : null}
+        </div>
         {error ? <p className="mt-1 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
       </div>
 

@@ -30,6 +30,7 @@ import { AdminStaffModule } from './modules/admin-staff/admin-staff.module';
 import { AdminCatalogModule } from './modules/admin-catalog/admin-catalog.module';
 import { AdminLookupModule } from './modules/admin-lookup/admin-lookup.module';
 import { AdminReviewsModule } from './modules/admin-reviews/admin-reviews.module';
+import { AdminVerificationsModule } from './modules/admin-verifications/admin-verifications.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { AdminReviewsModule } from './modules/admin-reviews/admin-reviews.module
     AdminCatalogModule,
     AdminLookupModule,
     AdminReviewsModule,
+    AdminVerificationsModule,
   ],
   providers: [
     /**

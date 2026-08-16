@@ -14,7 +14,7 @@ import { ApiError, NetworkError, extractMessage } from './errors.js';
  */
 function resolveBaseUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (envUrl) return envUrl;
+  if (envUrl?.trim()) return envUrl.trim().replace(/\/+$/, '');
 
   const hostUri = Constants.expoConfig?.hostUri;
   const host = hostUri?.split(':')[0];
@@ -23,7 +23,27 @@ function resolveBaseUrl(): string {
   return Platform.OS === 'android' ? 'http://10.0.2.2:4000' : 'http://localhost:4000';
 }
 
-export const BASE_URL = resolveBaseUrl();
+// Keep concatenated API and media URLs valid even when a deployment variable
+// is entered as `https://api.example.com/`.
+export const BASE_URL = resolveBaseUrl().replace(/\/+$/, '');
+
+// A checked-in dev .env often uses localhost for USB `adb reverse`. When the
+// reverse tunnel is missing on a physical device, the first request fails
+// before it reaches the API; Metro already tells us the computer's LAN host,
+// so retry once there and keep that origin for uploaded media too.
+let activeBaseUrl = BASE_URL;
+const metroFallbackUrl = (() => {
+  const configured = (() => {
+    try {
+      return new URL(BASE_URL).hostname;
+    } catch {
+      return '';
+    }
+  })();
+  if (!['localhost', '127.0.0.1', '10.0.2.2'].includes(configured)) return null;
+  const host = Constants.expoConfig?.hostUri?.split(':')[0];
+  return host ? `http://${host}:4000` : null;
+})();
 
 // Re-exported so callers keep importing their errors from the client they
 // already use, while the definitions stay in a testable, RN-free module.
@@ -37,13 +57,13 @@ interface RefreshResponse {
 // De-dupes concurrent 401s into a single refresh call instead of a stampede.
 let refreshPromise: Promise<string | null> | null = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+async function refreshAccessToken(baseUrl = activeBaseUrl): Promise<string | null> {
   const stored = await getStoredTokens();
   if (!stored) return null;
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}/v1/auth/refresh`, {
+    res = await fetch(`${baseUrl}/v1/auth/refresh`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: stored.refreshToken }),
@@ -95,7 +115,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       // React Native's global fetch rejects those parts before the request is
       // sent, which made image uploads surface as a generic network failure.
       const request = isFormData ? expoFetch : fetch;
-      return await request(`${BASE_URL}${path}`, {
+      return await request(`${activeBaseUrl}${path}`, {
         method,
         headers,
         body: body === undefined ? undefined : isFormData ? body : JSON.stringify(body),
@@ -107,7 +127,14 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
     }
   };
 
-  let res = await doFetch();
+  let res: Response;
+  try {
+    res = await doFetch();
+  } catch (error) {
+    if (!metroFallbackUrl || metroFallbackUrl === activeBaseUrl) throw error;
+    activeBaseUrl = metroFallbackUrl;
+    res = await doFetch();
+  }
 
   if (res.status === 401 && auth) {
     refreshPromise ??= refreshAccessToken().finally(() => {
@@ -139,5 +166,5 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 /** Resolves API-owned origin-relative media without baking a dev-machine host into the database. */
 export function apiAssetUrl(url: string | undefined): string | undefined {
   if (!url) return undefined;
-  return url.startsWith('/') ? `${BASE_URL}${url}` : url;
+  return url.startsWith('/') ? `${activeBaseUrl}${url}` : url;
 }

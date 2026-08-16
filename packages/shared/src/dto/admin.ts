@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { activeRoleSchema } from './auth.js';
 import { imageUrlSchema } from './uploads.js';
 import { verificationStatusSchema } from './verification.js';
 
@@ -109,6 +110,11 @@ export const adminProviderRowSchema = z.object({
   verificationSelfieImageUrl: imageUrlSchema.nullable(),
   verificationNote: z.string().nullable(),
   verificationSubmittedAt: z.iso.datetime().nullable(),
+  avatarImageUrl: imageUrlSchema.nullable(),
+  profileImageUrl: imageUrlSchema.nullable(),
+  portfolioImageUrls: z.array(imageUrlSchema).max(5),
+  serviceImageUrls: z.array(imageUrlSchema).max(100),
+  productImageUrls: z.array(imageUrlSchema).max(100),
   ratingAvg: z.number(),
   completedCount: z.number().int(),
   subscriptionPriceUsdCents: z.number().int(),
@@ -136,6 +142,28 @@ export const updateProviderAdminSchema = z
     },
   );
 export type UpdateProviderAdminInput = z.infer<typeof updateProviderAdminSchema>;
+
+// --- Identity verification queue --------------------------------------
+
+export const adminVerificationRowSchema = z.object({
+  id: z.uuid(),
+  displayName: z.string(),
+  phone: z.string(),
+  activeRole: activeRoleSchema,
+  hasProviderProfile: z.boolean(),
+  verificationStatus: verificationStatusSchema,
+  idDocumentUrl: imageUrlSchema.nullable(),
+  selfieImageUrl: imageUrlSchema.nullable(),
+  note: z.string().nullable(),
+  submittedAt: z.iso.datetime().nullable(),
+});
+export type AdminVerificationRowDto = z.infer<typeof adminVerificationRowSchema>;
+
+export const reviewVerificationSchema = z.object({
+  verificationStatus: verificationStatusSchema,
+  verificationNote: z.string().trim().max(2000).nullable().optional(),
+});
+export type ReviewVerificationInput = z.infer<typeof reviewVerificationSchema>;
 
 // --- Overview / dashboard stats -----------------------------------------
 

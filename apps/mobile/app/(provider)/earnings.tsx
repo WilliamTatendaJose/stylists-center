@@ -3,6 +3,7 @@ import { formatUsd, formatInHarare, type ProviderEarningsEntryDto } from '@sc/sh
 import { space } from '@sc/tokens';
 import { Screen, ScreenHeader, Text, StatTile, Card, Badge, EmptyPanel } from '@sc/ui';
 import { useProviderEarnings } from '../../src/api/hooks/useProviderJobs.js';
+import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 const STATUS_LABEL: Record<ProviderEarningsEntryDto['status'], string> = {
   pending: 'Payment pending',
@@ -35,14 +36,14 @@ export default function Earnings() {
   if (!data) {
     if (!isError) return null;
     return (
-      <Screen hasTabBar header={<ScreenHeader title="Earnings" showBack={false} />}>
+      <Screen hasTabBar header={<ScreenHeader title="Earnings" showBack={false} right={<RoleSwitcher />} />}>
         <EmptyPanel title="Couldn't load your earnings" body="Check your connection and try again." />
       </Screen>
     );
   }
 
   return (
-    <Screen hasTabBar header={<ScreenHeader title="Earnings" showBack={false} />}>
+    <Screen hasTabBar header={<ScreenHeader title="Earnings" showBack={false} right={<RoleSwitcher />} />}>
       <View style={styles.statRow}>
         <StatTile value={formatUsd(data.releasedUsdCents)} caption="Paid out" />
         <StatTile value={formatUsd(data.pendingUsdCents)} caption="In progress" />

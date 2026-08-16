@@ -37,6 +37,7 @@ import { useSessionStore } from '../src/state/useSessionStore.js';
 import { useBack } from '../src/navigation/useBack.js';
 import { PhotoPicker } from '../src/components/PhotoPicker.js';
 import { ServerConnectionPanel } from '../src/components/ServerConnectionPanel.js';
+import { RoleSwitcher } from '../src/components/RoleSwitcher.js';
 
 const VERIFICATION_LABEL: Record<'unverified' | 'pending' | 'verified', string> = {
   verified: 'Verified professional',
@@ -105,7 +106,14 @@ export default function Profile() {
     return (
       <Screen
         hasTabBar={!isPushed}
-        header={<ScreenHeader title="My profile" showBack={isPushed} onBack={onBack} />}
+        header={
+          <ScreenHeader
+            title="My profile"
+            showBack={isPushed}
+            onBack={onBack}
+            right={<RoleSwitcher />}
+          />
+        }
       >
         {isError ? (
           <ServerConnectionPanel error={error} onRetry={() => void refetch()} />
@@ -156,7 +164,14 @@ export default function Profile() {
     <>
       <Screen
         hasTabBar={!isPushed}
-        header={<ScreenHeader title="My profile" showBack={isPushed} onBack={onBack} />}
+        header={
+          <ScreenHeader
+            title="My profile"
+            showBack={isPushed}
+            onBack={onBack}
+            right={<RoleSwitcher />}
+          />
+        }
       >
         <ProfileHero
           name={me.displayName}

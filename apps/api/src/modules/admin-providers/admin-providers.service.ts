@@ -12,6 +12,7 @@ const PROVIDER_INCLUDE = {
   user: {
     select: {
       phone: true,
+      avatarImageUrl: true,
       verificationStatus: true,
       verificationIdDocumentUrl: true,
       verificationSelfieImageUrl: true,
@@ -20,6 +21,8 @@ const PROVIDER_INCLUDE = {
     },
   },
   category: { select: { name: true } },
+  services: { select: { imageUrls: true } },
+  products: { select: { imageUrls: true } },
 } satisfies Prisma.ProviderProfileInclude;
 
 type ProviderWithRelations = Prisma.ProviderProfileGetPayload<{ include: typeof PROVIDER_INCLUDE }>;
@@ -148,6 +151,11 @@ function toRow(provider: ProviderWithRelations): AdminProviderRowDto {
     verificationSelfieImageUrl: provider.user.verificationSelfieImageUrl,
     verificationNote: provider.user.verificationNote,
     verificationSubmittedAt: provider.user.verificationSubmittedAt?.toISOString() ?? null,
+    avatarImageUrl: provider.user.avatarImageUrl,
+    profileImageUrl: provider.profileImageUrl,
+    portfolioImageUrls: provider.portfolioImageUrls,
+    serviceImageUrls: provider.services.flatMap((service) => service.imageUrls),
+    productImageUrls: provider.products.flatMap((product) => product.imageUrls),
     ratingAvg: provider.ratingAvg,
     completedCount: provider.completedCount,
     subscriptionPriceUsdCents: provider.subscriptionPriceUsdCents,

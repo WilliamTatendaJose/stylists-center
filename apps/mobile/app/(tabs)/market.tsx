@@ -5,6 +5,7 @@ import { space } from '@sc/tokens';
 import { Screen, ScreenHeader, Pressable, Badge, useTheme } from '@sc/ui';
 import { MarketBrowse } from '../../src/components/MarketBrowse.js';
 import { cartItemCount, useCartStore } from '../../src/state/index.js';
+import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 const styles = StyleSheet.create({
   headerActions: { flexDirection: 'row', gap: space.s },
@@ -72,6 +73,7 @@ export default function Market() {
                   </View>
                 ) : null}
               </Pressable>
+              <RoleSwitcher />
             </View>
           }
         />
