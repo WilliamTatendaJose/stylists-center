@@ -348,9 +348,7 @@ export default function ProviderProfile() {
         initialIndex={selectedWorkIndex}
         onClose={() => setSelectedWorkIndex(null)}
         onPrevious={() =>
-          setSelectedWorkIndex((current) =>
-            current === null ? null : Math.max(0, current - 1),
-          )
+          setSelectedWorkIndex((current) => (current === null ? null : Math.max(0, current - 1)))
         }
         onNext={() =>
           setSelectedWorkIndex((current) =>
