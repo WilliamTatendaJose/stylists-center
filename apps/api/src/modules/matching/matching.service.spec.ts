@@ -15,7 +15,7 @@ import type { Env } from '../../config/env';
  * what's under test is the state machine and DB writes, not BullMQ's own
  * scheduling — that's proven live in plan §10's manual verification).
  */
-const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
+const TEST_DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://sc:sc@localhost:5433/sc_test';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,

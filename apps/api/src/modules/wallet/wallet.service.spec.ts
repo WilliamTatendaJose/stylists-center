@@ -6,7 +6,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
 
 /** Against real Postgres (sc_test) — no Testcontainers daemon in this sandbox. */
-const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
+const TEST_DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://sc:sc@localhost:5433/sc_test';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,

@@ -16,7 +16,7 @@ import type { Env } from '../../config/env';
  * migrate deploy against DATABASE_URL=.../sc_test), never seeded, so a test
  * run never touches demo data.
  */
-const TEST_DATABASE_URL = 'postgresql://sc:sc@localhost:5433/sc_test';
+const TEST_DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://sc:sc@localhost:5433/sc_test';
 const TEST_PHONE = '+263779999001';
 
 const BASE_ENV: Env = {

@@ -11,7 +11,7 @@ import { ProviderService } from './provider.service';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
-  DATABASE_URL: 'postgresql://sc:sc@localhost:5433/sc_test',
+  DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://sc:sc@localhost:5433/sc_test',
   REDIS_URL: 'redis://localhost:6380',
   UPLOAD_DIR: 'uploads',
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
