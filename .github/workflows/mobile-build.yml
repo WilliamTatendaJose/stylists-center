@@ -1,0 +1,50 @@
+name: Mobile Build
+
+# Manual only — an EAS build takes ~10-15 minutes and spends build-minute
+# quota, so it's triggered deliberately (Actions tab → Run workflow), not on
+# every push the way ci.yml is.
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'EAS build profile (see apps/mobile/eas.json)'
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - development
+          - production
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @sc/shared run build
+      - run: pnpm --filter @sc/mobile run typecheck
+      - run: pnpm --filter @sc/mobile run lint
+      - run: pnpm --filter @sc/mobile run test
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm install -g eas-cli
+      # EXPO_TOKEN is an Expo access token (expo.dev → account settings →
+      # Access Tokens) — eas-cli picks it up automatically in non-interactive
+      # mode, no `eas login` needed. The actual build runs on Expo's own
+      # infrastructure; this job just uploads the project and waits, the same
+      # as running `eas build` from a laptop.
+      - name: Build Android
+        working-directory: apps/mobile
+        run: eas build --platform android --profile ${{ inputs.profile }} --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}

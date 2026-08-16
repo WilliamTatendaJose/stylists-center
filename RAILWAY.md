@@ -3,6 +3,42 @@
 Four services in one Railway project: `db`, `redis`, `api`, `admin`. The
 mobile app is not part of this — it ships through EAS, separately.
 
+## Continuous deployment
+
+Once the four services below exist, `api` and `admin` redeploy automatically
+on every push to `main` (`.github/workflows/ci.yml`'s `deploy-web` job) —
+gated behind the existing `verify` job, so a failing typecheck/lint/test run
+blocks the deploy. `db`/`redis` are static infra and are never touched by
+CI — they only change if you edit their Dockerfiles under `infra/docker/`
+and redeploy manually.
+
+The mobile app is separate and manual: `.github/workflows/mobile-build.yml`
+is a `workflow_dispatch` you trigger from the Actions tab (pick a build
+profile), since an EAS build takes 10-15 minutes and spends build-minute
+quota — not something you want firing on every commit.
+
+Both workflows need a GitHub Actions secret that only your own dashboard
+login can create (the CLI is deliberately blocked from minting these):
+
+- **`RAILWAY_TOKEN`** — a *project* token, not an account token. In the
+  Railway dashboard: this project → Settings → Tokens → new token scoped to
+  the `production` environment. An account-wide token would also work but
+  grants CI far more than it needs (every project in your account, including
+  the two unrelated ones already in there).
+- **`EXPO_TOKEN`** — expo.dev → account settings → Access Tokens → new
+  token.
+
+Set both without ever putting the value in a commit, a chat log, or
+anywhere else — run these yourself, replacing the placeholder:
+
+```bash
+gh secret set RAILWAY_TOKEN --repo WilliamTatendaJose/stylists-center
+gh secret set EXPO_TOKEN --repo WilliamTatendaJose/stylists-center
+```
+
+(`gh secret set NAME` with no `--body` prompts for the value on stdin and
+never echoes it back or stores it in shell history.)
+
 ## 1. `db` — Postgres + PostGIS
 
 Railway's one-click Postgres plugin does **not** include PostGIS, which the

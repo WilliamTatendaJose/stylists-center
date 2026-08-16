@@ -75,3 +75,35 @@ jobs:
       - run: pnpm --filter @sc/api prisma:migrate
 
       - run: pnpm turbo run typecheck lint test --cache-dir=.turbo
+
+  # Deploys api + admin to Railway. Only after `verify` passes, and only on a
+  # real push to main (not PRs — a fork or an unreviewed branch must never be
+  # able to trigger a production deploy). db/redis aren't here: they're
+  # static infra (Docker images), not app code that changes with a commit —
+  # see RAILWAY.md.
+  deploy-web:
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      # A second push landing mid-deploy should wait its turn, not race the
+      # first — Railway serialises builds per service anyway, but queueing
+      # here keeps the Actions log honest about what shipped when.
+      group: deploy-web
+    steps:
+      - uses: actions/checkout@v5
+      - run: npm install -g @railway/cli
+      # RAILWAY_TOKEN here is a *project* token (Project Settings → Tokens,
+      # scoped to this project's production environment only) — not an
+      # account token. `railway up` reads it with no `railway login`/`link`
+      # step needed. `--ci` streams build logs and exits with the build's
+      # real status, so a broken build fails this job instead of silently
+      # returning success.
+      - name: Deploy api
+        run: railway up --service api --ci
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Deploy admin
+        run: railway up --service admin --ci
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
