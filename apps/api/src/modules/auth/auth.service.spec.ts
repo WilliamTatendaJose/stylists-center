@@ -61,20 +61,28 @@ describe('AuthService', () => {
     plainAuth = new AuthService(prisma, new JwtService(), plainConfig, trust, redis);
     auth = new AuthService(prisma, new JwtService(), devConfig, trust, redis);
 
-    const city =
-      (await prisma.city.findFirst()) ??
-      (await prisma.city.create({
-        data: {
-          name: 'Harare',
-          timezone: 'Africa/Harare',
-          centroidLat: -17.8252,
-          centroidLng: 31.0335,
-          bboxWest: 30.9,
-          bboxSouth: -18.0,
-          bboxEast: 31.2,
-          bboxNorth: -17.6,
-        },
-      }));
+    // `findOrCreateUser` picks a city via an unscoped `findFirstOrThrow()` —
+    // correct for this single-market app, but it means this spec's own city
+    // must never be one shared with (or adoptable from) another spec file.
+    // This used to opportunistically reuse *any* existing city, which under
+    // vitest's parallel file execution meant it could adopt a city that
+    // belonged to a different spec file — one whose own `afterAll` deletes it
+    // by id with no idea this file's OTP verification now depends on it too,
+    // so a well-timed cleanup elsewhere made `findOrCreateUser` throw
+    // (P2025) here. Every other *.spec.ts already creates its own uniquely-
+    // named city instead of adopting one; this one now does the same.
+    const city = await prisma.city.create({
+      data: {
+        name: `auth-spec-${String(Date.now())}`,
+        timezone: 'Africa/Harare',
+        centroidLat: -17.8252,
+        centroidLng: 31.0335,
+        bboxWest: 30.9,
+        bboxSouth: -18.0,
+        bboxEast: 31.2,
+        bboxNorth: -17.6,
+      },
+    });
     cityId = city.id;
 
     const category = await prisma.category.create({ data: { name: 'auth-spec-category' } });
@@ -84,6 +92,7 @@ describe('AuthService', () => {
   afterAll(async () => {
     await cleanup();
     await prisma.category.delete({ where: { id: categoryId } });
+    await prisma.city.delete({ where: { id: cityId } });
     await prisma.onModuleDestroy();
     redis.disconnect();
   });
