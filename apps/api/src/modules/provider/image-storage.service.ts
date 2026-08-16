@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, type OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { UploadedImageDto } from '@sc/shared';
@@ -65,5 +65,17 @@ export class ImageStorageService implements OnModuleInit {
     const filename = `${randomUUID()}.${extension}`;
     await writeFile(resolve(this.directory, filename), file.buffer, { flag: 'wx' });
     return { url: `/uploads/${filename}` };
+  }
+
+  /** Permanently removes an API-owned upload after a verification decision. */
+  async remove(url: string | null | undefined): Promise<void> {
+    if (!url?.startsWith('/uploads/')) return;
+    const filename = url.slice('/uploads/'.length);
+    if (!/^[a-f0-9-]{36}\.(?:jpe?g|png|webp)$/i.test(filename)) return;
+    try {
+      await unlink(resolve(this.directory, filename));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
 }

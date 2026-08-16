@@ -72,8 +72,9 @@ export default function WalletScreen() {
       <Screen hasTabBar header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}>
         <Text variant="h3">Become an agent</Text>
         <Text variant="body" color="neutral700" style={styles.emptyBody}>
-          Verify to become an agent and start earning SC Coins â€” 6 coins for every stylist and
-          client you refer who completes a booking. The first completed booking releases the reward.
+          Submit identity verification to become an agent and start earning SC Coins — 6 coins for
+          every stylist and client you refer who completes a booking. We delete the uploaded
+          documents after review; the first completed booking releases the reward.
         </Text>
         {verification?.status === 'verified' || wallet.canBecomeAgent ? (
           <>

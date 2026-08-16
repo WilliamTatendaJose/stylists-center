@@ -33,7 +33,13 @@ export function useSetActiveRole() {
       queryClient.setQueryData(ME_QUERY_KEY, me);
       // Role decides which side of the marketplace the rest of the app is
       // showing, so anything already fetched under the old role is suspect.
-      void queryClient.invalidateQueries();
+      // `refetchType: 'none'` still marks every query invalidated (so the
+      // next mount/access refetches instead of serving stale role data) —
+      // but skips forcing an immediate refetch of every currently-active
+      // query at once. That immediate burst was competing on the network
+      // with the destination screen's own queries right as it mounted,
+      // which is what made switching roles feel like it hung.
+      void queryClient.invalidateQueries({ refetchType: 'none' });
     },
   });
 }

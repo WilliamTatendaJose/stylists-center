@@ -7,6 +7,7 @@ import {
 } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import { ImageStorageService } from '../provider/image-storage.service';
 
 const PROVIDER_INCLUDE = {
   user: {
@@ -35,7 +36,10 @@ type ProviderWithRelations = Prisma.ProviderProfileGetPayload<{ include: typeof 
  */
 @Injectable()
 export class AdminProvidersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly images: ImageStorageService,
+  ) {}
 
   async list(verified?: boolean): Promise<AdminProviderRowDto[]> {
     const providers = await this.prisma.providerProfile.findMany({
@@ -60,11 +64,19 @@ export class AdminProvidersService {
   ): Promise<AdminProviderRowDto> {
     const provider = await this.prisma.providerProfile.findUniqueOrThrow({
       where: { id },
-      select: { userId: true },
+      select: {
+        userId: true,
+        user: { select: { verificationIdDocumentUrl: true, verificationSelfieImageUrl: true } },
+      },
     });
     const status =
       input.verificationStatus ??
       (input.verified !== undefined ? (input.verified ? 'verified' : 'unverified') : undefined);
+    const decisionMade = status !== undefined && status !== 'pending';
+    const documentUrls = [
+      provider.user.verificationIdDocumentUrl,
+      provider.user.verificationSelfieImageUrl,
+    ];
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.providerProfile.update({
         where: { id },
@@ -80,7 +92,15 @@ export class AdminProvidersService {
           where: { id: provider.userId },
           data: {
             ...(status ? { verificationStatus: status } : {}),
-            ...(input.verificationNote !== undefined
+            ...(decisionMade
+              ? {
+                  verificationIdDocumentUrl: null,
+                  verificationSelfieImageUrl: null,
+                  verificationSubmittedAt: null,
+                  verificationNote: null,
+                }
+              : {}),
+            ...(input.verificationNote !== undefined && !decisionMade
               ? { verificationNote: input.verificationNote }
               : {}),
           },
@@ -95,6 +115,9 @@ export class AdminProvidersService {
         include: PROVIDER_INCLUDE,
       });
     });
+    if (decisionMade) {
+      await Promise.all(documentUrls.map((url) => this.images.remove(url)));
+    }
     return toRow(updated);
   }
 

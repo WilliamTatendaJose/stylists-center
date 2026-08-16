@@ -304,8 +304,8 @@ export default function ProviderProfile() {
             </Text>
             <Text variant="meta" color="neutral700" style={styles.roleBody}>
               {me?.verificationStatus === 'verified'
-                ? 'Your identity badge and agent rewards are unlocked.'
-                : 'Submit an ID and selfie once. The review team keeps them private.'}
+                ? 'Your identity badge and agent rewards are unlocked. The uploaded documents were deleted after review.'
+                : 'Submit an ID and selfie for review. We delete the uploads after a decision and do not store your identity documents.'}
             </Text>
             {me?.verificationStatus !== 'verified' ? (
               <Button

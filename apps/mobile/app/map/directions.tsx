@@ -26,6 +26,7 @@ const styles = StyleSheet.create({
   note: { marginTop: space.s },
   footerRow: { flexDirection: 'row', gap: space.s },
   footerButton: { flex: 1 },
+  loadErrorNote: { marginBottom: space.m },
 });
 
 /** Directions (handoff screen 13). */
@@ -35,15 +36,39 @@ export default function Directions() {
   const { height: windowHeight } = useWindowDimensions();
   const location = useSessionStore((s) => s.location);
 
-  const { data: provider } = useProvider(providerId);
-  const { data: route } = useRoute(providerId);
+  const {
+    data: provider,
+    isError: providerError,
+    refetch: refetchProvider,
+  } = useProvider(providerId);
+  const { data: route, isError: routeError, refetch: refetchRoute } = useRoute(providerId);
 
   if (!provider || !route) {
+    // A failed fetch (bad connection, a stale location the route lookup
+    // rejected, …) used to render identically to "still loading" — with no
+    // retry in sight, the only way out was reloading the whole app. Now a
+    // real failure gets its own message and a button that actually retries.
+    const hasError = providerError || routeError;
     return (
       <Screen header={<ScreenHeader title="Getting there" onBack={onBack} />}>
-        <Text variant="body" color="neutral700">
-          Loading…
-        </Text>
+        {hasError ? (
+          <>
+            <Text variant="body" color="neutral700" style={styles.loadErrorNote}>
+              Couldn&apos;t load directions. Check your connection and try again.
+            </Text>
+            <Button
+              label="Try again"
+              onPress={() => {
+                void refetchProvider();
+                void refetchRoute();
+              }}
+            />
+          </>
+        ) : (
+          <Text variant="body" color="neutral700">
+            Loading…
+          </Text>
+        )}
       </Screen>
     );
   }

@@ -7,6 +7,7 @@ import {
 } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import { ImageStorageService } from '../provider/image-storage.service';
 
 const VERIFICATION_USER_INCLUDE = {
   providerProfile: { select: { id: true } },
@@ -18,7 +19,10 @@ type UserWithVerification = Prisma.UserGetPayload<{
 
 @Injectable()
 export class AdminVerificationsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly images: ImageStorageService,
+  ) {}
 
   async list(status?: VerificationStatus): Promise<AdminVerificationRowDto[]> {
     const users = await this.prisma.user.findMany({
@@ -40,15 +44,26 @@ export class AdminVerificationsService {
     if (!user.verificationSubmittedAt) {
       throw new BadRequestException('This user has not submitted verification documents');
     }
+    const documentUrls = [user.verificationIdDocumentUrl, user.verificationSelfieImageUrl];
+    const decisionMade = input.verificationStatus !== 'pending';
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id },
         data: {
           verificationStatus: input.verificationStatus,
-          ...(input.verificationNote !== undefined
-            ? { verificationNote: input.verificationNote }
-            : {}),
+          // Uploaded identity documents are review-only data. Once a final
+          // decision is made, remove their references and submission marker.
+          ...(decisionMade
+            ? {
+                verificationIdDocumentUrl: null,
+                verificationSelfieImageUrl: null,
+                verificationSubmittedAt: null,
+                verificationNote: null,
+              }
+            : input.verificationNote !== undefined
+              ? { verificationNote: input.verificationNote }
+              : {}),
         },
       });
       await tx.agent.updateMany({
@@ -66,6 +81,9 @@ export class AdminVerificationsService {
         include: VERIFICATION_USER_INCLUDE,
       });
     });
+    if (decisionMade) {
+      await Promise.all(documentUrls.map((url) => this.images.remove(url)));
+    }
     return toRow(updated);
   }
 }

@@ -73,15 +73,16 @@ export default function VerifyIdentity() {
       }
     >
       <Text variant="body" color="neutral700" style={styles.intro}>
-        A clear ID photo and a matching selfie help clients trust the person behind a stylist page
-        or agent reward account. We review these documents manually and keep them private.
+        A clear ID photo and matching selfie help us verify the person behind a stylist page or
+        agent reward account. We use these uploads only for verification, then delete them after a
+        decision—we do not store your identity documents.
       </Text>
 
       {status !== 'unverified' ? (
         <Text variant="meta" color={status === 'verified' ? 'accent700' : 'neutral700'} style={styles.status}>
           {status === 'verified'
-            ? 'Your identity is verified. No further action is needed.'
-            : 'Your documents are with the review team. You can replace them while they are pending.'}
+            ? 'Your identity is verified. Your uploaded documents were deleted after review.'
+            : 'Your documents are under review. They will be deleted after the review decision.'}
         </Text>
       ) : null}
 
