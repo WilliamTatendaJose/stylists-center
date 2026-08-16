@@ -37,6 +37,14 @@ export function useBack(fallback: Href) {
     if (back && isInAppPath(back)) {
       // Cast is unavoidable: this is a runtime string, so typed routes cannot
       // narrow it statically. The guard above is what makes it safe.
+      // Whether this cast reads as "necessary" depends on whether Expo
+      // Router's generated typed-route union (.expo/types/router.d.ts,
+      // gitignored) exists in the environment linting this file — present
+      // locally after `expo start`, absent on a fresh CI checkout, where
+      // plain `string` is already assignable to the ungenerated, broader
+      // `Href`. The disable is a no-op (and harmless) wherever the assertion
+      // genuinely is necessary.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
       router.replace(back as Href);
       return;
     }
