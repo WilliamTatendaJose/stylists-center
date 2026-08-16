@@ -4,3 +4,9 @@ dist
 .turbo
 pnpm-lock.yaml
 apps/api/src/generated
+# Package-manager cache — binary/content-addressed, not source. Shouldn't be
+# tracked in git at all, but excluding it here is the safe, minimal fix
+# rather than untracking 900+ files as a side effect of an unrelated change.
+.pnpm-store
+# Claude Code's local tooling config — not application source.
+.claude
