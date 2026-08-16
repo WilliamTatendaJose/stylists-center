@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import Redis from 'ioredis';
-import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { AuthService } from './auth.service';
 import { TrustService } from '../trust/trust.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -42,7 +42,15 @@ const BASE_ENV: Env = {
 // hash-comparison path), `devConfig` mirrors how every other test in the
 // suite actually authenticates (the AUTH_DEV_OTP bypass), since manufacturing
 // a real 6-digit code would mean reading Redis internals from the test.
-const plainConfig = new ConfigService<Env, true>(BASE_ENV);
+// plainConfig's requestOtp always tries to actually deliver the code via
+// Infobip — these fake-but-present credentials satisfy `infobipRequest`'s
+// "is this configured at all" guard; the request itself is mocked per-test,
+// since actually reaching Infobip is neither necessary nor possible in CI.
+const plainConfig = new ConfigService<Env, true>({
+  ...BASE_ENV,
+  INFOBIP_API_KEY: 'test-infobip-key-not-real-000000000',
+  INFOBIP_BASE_URL: 'https://infobip.invalid',
+});
 const devConfig = new ConfigService<Env, true>({ ...BASE_ENV, AUTH_DEV_OTP: '000000' });
 
 describe('AuthService', () => {
@@ -127,8 +135,19 @@ describe('AuthService', () => {
   });
 
   it('rejects the wrong code against a real (non-dev-bypass) challenge', async () => {
-    const { challengeId } = await plainAuth.requestOtp(TEST_PHONE, '127.0.0.1');
-    await expect(plainAuth.verifyOtp(challengeId, '111111')).rejects.toThrow('Incorrect code');
+    // No dev bypass means requestOtp really does try to deliver the code —
+    // Infobip itself is neither reachable nor real here, so the delivery
+    // attempt is faked at the network boundary. What's under test is the
+    // hash comparison in verifyOtp, not delivery.
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { status: 200 }));
+    try {
+      const { challengeId } = await plainAuth.requestOtp(TEST_PHONE, '127.0.0.1');
+      await expect(plainAuth.verifyOtp(challengeId, '111111')).rejects.toThrow('Incorrect code');
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   it('locks a challenge out after 5 incorrect attempts', async () => {
