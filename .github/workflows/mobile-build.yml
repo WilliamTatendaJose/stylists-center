@@ -37,6 +37,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      # eas-cli reads and transpiles apps/mobile/app.config.ts locally before
+      # it ever talks to Expo's servers, which needs the project's own
+      # `typescript` resolvable from node_modules — without this install that
+      # transpile step crashed with an opaque "Cannot read properties of
+      # undefined (reading 'CommonJS')" instead of a clear "module not found".
+      - run: pnpm install --frozen-lockfile
       - run: npm install -g eas-cli
       # EXPO_TOKEN is an Expo access token (expo.dev → account settings →
       # Access Tokens) — eas-cli picks it up automatically in non-interactive
