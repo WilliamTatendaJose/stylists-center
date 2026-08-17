@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../notifications/push.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import type { MatchingService } from '../matching/matching.service';
 import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
@@ -25,6 +26,7 @@ const BASE_ENV: Env = {
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
+  EXPO_PUSH_API_URL: 'https://push.invalid/send',
 };
 
 describe('ProviderService management', () => {
@@ -95,6 +97,7 @@ describe('ProviderService management', () => {
       prisma,
       new SocketEmitterService(),
       null as unknown as MatchingService,
+      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
       new FakeEcoCashAdapter(),
     );
   });

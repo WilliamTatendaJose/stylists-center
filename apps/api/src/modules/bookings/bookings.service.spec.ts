@@ -10,6 +10,7 @@ import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
 import type { PaymentGatewayPort, PaymentIntentResult } from '../payments/payment-gateway.port';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../notifications/push.service';
 import type { Env } from '../../config/env';
 
 /**
@@ -37,6 +38,7 @@ const BASE_ENV: Env = {
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
+  EXPO_PUSH_API_URL: 'https://push.invalid/send',
 };
 
 const CLIENT_LOCATION = { lat: -17.7955, lng: 31.033 };
@@ -237,12 +239,22 @@ describe('BookingsService', () => {
   beforeEach(() => {
     const geo = new GeoRepository(prisma);
     const socketEmitter = new SocketEmitterService();
-    matching = new MatchingService(prisma, geo, socketEmitter, new FakeQueue() as unknown as Queue);
+    // Real PushService, no stub: the test users have no DevicePushToken rows,
+    // so every send short-circuits before it would reach the network.
+    const push = new PushService(prisma, new ConfigService<Env, true>(BASE_ENV));
+    matching = new MatchingService(
+      prisma,
+      geo,
+      socketEmitter,
+      push,
+      new FakeQueue() as unknown as Queue,
+    );
     bookings = new BookingsService(
       prisma,
       socketEmitter,
       matching,
       new TrustService(prisma),
+      push,
       new FakeEcoCashAdapter(),
     );
   });
@@ -540,6 +552,7 @@ describe('BookingsService', () => {
       new SocketEmitterService(),
       matching,
       new TrustService(prisma),
+      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
       new FailingGateway(),
     );
 

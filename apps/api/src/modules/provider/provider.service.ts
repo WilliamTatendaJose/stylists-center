@@ -15,6 +15,7 @@ import {
   REFERRAL_REWARD_COINS,
   coinsToUsdCents,
   nextSubscriptionPaidUntil,
+  type BookingStatus,
   type CreateProviderProductInput,
   type UpdateProviderProductInput,
   type CreateProviderServiceInput,
@@ -37,6 +38,7 @@ import {
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
+import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
 import { toBookingRowDto } from '../bookings/mappers';
@@ -45,12 +47,28 @@ import { expireStaleBookingRequests } from '../bookings/booking-expiry';
 /** Statuses a stylist still has something to do about, plus recent history for context. */
 const VISIBLE_STATUSES = ['awaiting_provider', 'confirmed', 'completed'] as const;
 
+/**
+ * What a client is told when a stylist moves their booking.
+ *
+ * `awaiting_provider` is absent on purpose: that state is the client's own
+ * request being created, so notifying them tells them something they just did.
+ * A status with no entry here simply sends nothing, which is why this is a
+ * lookup rather than a switch with a default.
+ */
+const BOOKING_STATUS_NOTIFICATION: Partial<Record<BookingStatus, { title: string }>> = {
+  confirmed: { title: 'Booking confirmed' },
+  declined: { title: 'Booking declined' },
+  cancelled: { title: 'Booking cancelled' },
+  completed: { title: 'Booking completed' },
+};
+
 @Injectable()
 export class ProviderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly socketEmitter: SocketEmitterService,
     private readonly matching: MatchingService,
+    private readonly push: PushService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
   ) {}
 
@@ -605,6 +623,19 @@ export class ProviderService {
       'booking.updated',
       toBookingRowDto(booking, !!alreadyRated),
     );
+
+    // Every provider-side booking decision funnels through here, so one send
+    // covers confirm, decline and completion. The client is waiting on an
+    // answer they did not initiate, which is exactly the case a socket cannot
+    // serve — they have almost certainly put the phone down.
+    const summary = BOOKING_STATUS_NOTIFICATION[booking.status];
+    if (summary) {
+      void this.push.sendToUser(clientId, {
+        title: summary.title,
+        body: `${booking.provider.displayName} · ${booking.service.name}`,
+        data: { type: 'booking.updated', bookingId },
+      });
+    }
   }
 
   /**

@@ -6,6 +6,7 @@ import { MatchingService } from './matching.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../notifications/push.service';
 import type { Env } from '../../config/env';
 
 /**
@@ -33,6 +34,7 @@ const BASE_ENV: Env = {
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
+  EXPO_PUSH_API_URL: 'https://push.invalid/send',
 };
 
 const CLIENT_LOCATION = { lat: -17.7955, lng: 31.033 }; // Avondale
@@ -157,7 +159,13 @@ describe('MatchingService', () => {
     queue = new FakeQueue();
     const geo = new GeoRepository(prisma);
     const socketEmitter = new SocketEmitterService(); // no server attached — emits are no-ops
-    matching = new MatchingService(prisma, geo, socketEmitter, queue as unknown as Queue);
+    matching = new MatchingService(
+      prisma,
+      geo,
+      socketEmitter,
+      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+      queue as unknown as Queue,
+    );
   });
 
   async function createTestMatch() {

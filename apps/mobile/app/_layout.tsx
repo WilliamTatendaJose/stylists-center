@@ -16,6 +16,7 @@ import { downloadAvondaleAreaPack } from '../src/offline/downloadAreaPack.js';
 import { useAuthGate } from '../src/auth/useAuthGate.js';
 import { AppErrorBoundary } from '../src/errors/AppErrorBoundary.js';
 import { registerPushToken } from '../src/notifications/registerPushToken.js';
+import { useNotificationRouting } from '../src/notifications/useNotificationRouting.js';
 import { ThemeProvider } from '@sc/ui';
 import { useClaimReferral } from '../src/api/hooks/useWallet.js';
 import { ApiError } from '../src/api/errors.js';
@@ -125,6 +126,11 @@ function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
       // Push must never block sign-in or rendering; the next launch retries.
     });
   }, [isAuthHydrated]);
+
+  // Gated on the same condition as the navigator below, since routing to a
+  // screen before <Stack> exists throws — and a cold start from a notification
+  // tap is precisely when that ordering matters.
+  useNotificationRouting(fontsReady && isAuthHydrated);
 
   if (!fontsReady || !isAuthHydrated) return null;
   return <Stack screenOptions={{ headerShown: false }} />;

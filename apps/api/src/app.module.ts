@@ -12,6 +12,7 @@ import { GeoModule } from './modules/geo/geo.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ProvidersModule } from './modules/providers/providers.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { MatchingModule } from './modules/matching/matching.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
@@ -55,6 +56,7 @@ import { AdminVerificationsModule } from './modules/admin-verifications/admin-ve
     CategoriesModule,
     ProvidersModule,
     RealtimeModule,
+    NotificationsModule,
     MatchingModule,
     PaymentsModule,
     BookingsModule,

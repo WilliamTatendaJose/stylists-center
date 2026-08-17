@@ -36,6 +36,7 @@ const BASE_ENV: Env = {
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
+  EXPO_PUSH_API_URL: 'https://push.invalid/send',
 };
 
 // Two configs: `plainConfig` has no AUTH_DEV_OTP (exercises the real

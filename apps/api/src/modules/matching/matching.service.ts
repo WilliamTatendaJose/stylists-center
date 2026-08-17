@@ -22,6 +22,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
+import { PushService } from '../notifications/push.service';
 import { MATCHING_QUEUE } from '../jobs/jobs.module';
 import { getMatchRequestDto } from './mappers';
 
@@ -42,6 +43,7 @@ export class MatchingService {
     private readonly prisma: PrismaService,
     private readonly geo: GeoRepository,
     private readonly socketEmitter: SocketEmitterService,
+    private readonly push: PushService,
     @InjectQueue(MATCHING_QUEUE) private readonly queue: Queue,
   ) {}
 
@@ -144,6 +146,14 @@ export class MatchingService {
           matchId,
           categoryName: category?.name ?? '',
           budgetLabel: label,
+        });
+        // Offers expire on a BullMQ timer, so a stylist who only finds out
+        // when they next open the app has usually already lost the job. This
+        // is the one notification whose absence costs someone money.
+        void this.push.sendToUser(profile.userId, {
+          title: 'New job offer',
+          body: `${category?.name ?? 'A client'} · ${label}`,
+          data: { type: 'match.offered', matchId },
         });
       }
     }

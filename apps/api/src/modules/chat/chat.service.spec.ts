@@ -4,6 +4,7 @@ import { describe, expect, it, beforeAll, afterAll, beforeEach, vi } from 'vites
 import { ChatService } from './chat.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../notifications/push.service';
 import type { Env } from '../../config/env';
 import { AttachmentStorageService } from './attachment-storage.service';
 
@@ -26,6 +27,7 @@ const BASE_ENV: Env = {
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
+  EXPO_PUSH_API_URL: 'https://push.invalid/send',
 };
 
 describe('ChatService', () => {
@@ -130,7 +132,12 @@ describe('ChatService', () => {
         ),
       ),
     } as unknown as AttachmentStorageService;
-    chat = new ChatService(prisma, socketEmitter, attachmentStorage);
+    chat = new ChatService(
+      prisma,
+      socketEmitter,
+      attachmentStorage,
+      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+    );
   });
 
   it('creates a conversation with a provider on first message, and reuses it on a second call', async () => {

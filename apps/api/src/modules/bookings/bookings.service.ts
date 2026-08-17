@@ -24,6 +24,7 @@ import {
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
+import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
 import {
   PAYMENT_GATEWAY,
@@ -43,6 +44,7 @@ export class BookingsService {
     private readonly socketEmitter: SocketEmitterService,
     private readonly matching: MatchingService,
     private readonly trust: TrustService,
+    private readonly push: PushService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
   ) {}
 
@@ -291,6 +293,15 @@ export class BookingsService {
     this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
     this.socketEmitter.emitToUser(booking.provider.userId, 'booking.updated', row);
 
+    // The stylist, not the client: the client is the one who just tapped
+    // confirm, and telling someone about their own action is how an app
+    // teaches people to ignore its notifications.
+    void this.push.sendToUser(booking.provider.userId, {
+      title: 'Client confirmed completion',
+      body: `Booking ${booking.reference}`,
+      data: { type: 'booking.updated', bookingId },
+    });
+
     return {
       confirmedByClient: updated.confirmedByClient,
       confirmedByProvider: updated.confirmedByProvider,
@@ -348,7 +359,10 @@ export class BookingsService {
    * behaviour it left no alternative to.
    */
   async cancel(bookingId: string, clientId: string): Promise<BookingRowDto> {
-    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { provider: true },
+    });
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.clientId !== clientId) throw new ForbiddenException();
 
@@ -389,6 +403,17 @@ export class BookingsService {
 
     const row = await this.toRowById(bookingId);
     this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
+
+    // The stylist was never told a client cancelled — not by socket, not at
+    // all — so a slot freed up and the only way to discover it was to reopen
+    // the Jobs screen and notice. They are the party with something to act on
+    // here, so they get both the live update and the notification.
+    this.socketEmitter.emitToUser(booking.provider.userId, 'booking.updated', row);
+    void this.push.sendToUser(booking.provider.userId, {
+      title: 'Booking cancelled',
+      body: `Booking ${booking.reference} was cancelled by the client`,
+      data: { type: 'booking.updated', bookingId },
+    });
     return row;
   }
 

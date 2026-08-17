@@ -73,6 +73,16 @@ export const envSchema = z
     COIN_USD_CENTS: z.coerce.number().int().positive().default(50),
     CASH_OUT_MIN_USD_CENTS: z.coerce.number().int().positive().default(500),
 
+    // Expo's push service accepts unauthenticated sends, so this is optional
+    // and everything works without it. Setting it (expo.dev → account settings
+    // → Access Tokens) means only this server can push to the project's
+    // devices — worth doing in production, where a leaked push token would
+    // otherwise let anyone send notifications to your users.
+    EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
+    // Where Expo's push API lives. A variable rather than a constant purely so
+    // tests can point it at a local stub instead of the internet.
+    EXPO_PUSH_API_URL: z.url().default('https://exp.host/--/api/v2/push/send'),
+
     // Free public demo instance — no key, no cost, fine for dev/testing. A
     // self-hosted OSRM or a paid Directions API is the production swap (plan
     // risk R2); one env var is the entire migration since geo.service.ts

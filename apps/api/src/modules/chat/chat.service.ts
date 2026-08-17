@@ -13,6 +13,7 @@ import {
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
+import { PushService } from '../notifications/push.service';
 import { toConversationDto, toMessageDto } from './mappers';
 import {
   AttachmentStorageService,
@@ -35,6 +36,7 @@ export class ChatService {
     private readonly prisma: PrismaService,
     private readonly socketEmitter: SocketEmitterService,
     private readonly attachments: AttachmentStorageService,
+    private readonly push: PushService,
   ) {}
 
   async list(viewerId: string): Promise<ConversationDto[]> {
@@ -245,6 +247,20 @@ export class ChatService {
     this.socketEmitter.emitToUser(counterpartyId, 'message.created', {
       ...dto,
       mine: false,
+    });
+
+    // Only the recipient, never the sender. `data.conversationId` is what lets
+    // tapping the notification open this thread rather than the app's home.
+    const sender = await this.prisma.user.findUnique({
+      where: { id: viewerId },
+      select: { displayName: true },
+    });
+    void this.push.sendToUser(counterpartyId, {
+      title: sender?.displayName ?? 'New message',
+      // An attachment-only message has no text, and a notification reading
+      // "" tells the recipient nothing about whether it is worth opening.
+      body: dto.text.trim() ? dto.text : 'Sent an attachment',
+      data: { type: 'message.created', conversationId },
     });
 
     return dto;
