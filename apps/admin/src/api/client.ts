@@ -1,6 +1,21 @@
 import { useAuthStore } from '../state/authStore';
 
-const BASE_URL: string = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000';
+/**
+ * Every path passed to apiFetch already starts with `/v1` (and the refresh
+ * call below hardcodes it), so a base that also ends in `/v1` produces
+ * `/v1/v1/...` — a 404 on every request, including login, which presents as
+ * "the admin console is down" rather than as a misconfiguration.
+ *
+ * RAILWAY.md documented exactly that wrong value (`.../v1`) while
+ * .env.example and .env.local both use the bare origin, so the deployed
+ * service may well have it set wrong. VITE_API_URL is inlined at build time,
+ * so a fix there needs a rebuild either way; normalising here means both forms
+ * work and this class of outage cannot come back. A trailing `/v1` is always
+ * wrong for this client, so stripping it is safe rather than magical.
+ */
+const BASE_URL: string = (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:4000')
+  .replace(/\/+$/, '')
+  .replace(/\/v1$/, '');
 
 export class ApiError extends Error {
   constructor(

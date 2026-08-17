@@ -140,8 +140,17 @@ Variables (build-time — Vite inlines these into the bundle, so they must be
 set as **build** variables, not just runtime):
 
 ```
-VITE_API_URL=https://<api service's public domain>/v1
+VITE_API_URL=https://<api service's public domain>
 ```
+
+**The bare origin, with no `/v1` and no trailing slash.** Every request the
+admin client makes already begins with `/v1`, so a base ending in `/v1` sends
+`/v1/v1/...` and returns 404 for everything — including login, so the console
+looks dead rather than misconfigured. This file previously documented the
+`/v1` form; if the deployed `admin` service still has it, correct the variable
+and redeploy (Vite inlines it at build time, so a rebuild is required). The
+client now strips a trailing `/v1` defensively, so either form works once
+`admin` is rebuilt from a commit that includes that change.
 
 ## First deploy order
 
