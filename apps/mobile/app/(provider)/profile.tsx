@@ -347,7 +347,11 @@ export default function ProviderProfile() {
                 <Text variant="bodyStrong" color={colors.accent700}>
                   Rewards wallet
                 </Text>
-                <Text variant="metaSmall" color={colors.accent700} style={styles.rewardsShortcutHint}>
+                <Text
+                  variant="metaSmall"
+                  color={colors.accent700}
+                  style={styles.rewardsShortcutHint}
+                >
                   View invites, SC Coins, and cash-out activity
                 </Text>
               </View>

@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { ClipboardList, MessageCircle, Store, Wallet, User,Banknote } from 'lucide-react-native';
+import { ClipboardList, MessageCircle, Store, Wallet, User, Banknote } from 'lucide-react-native';
 import { FloatingTabBar, type FloatingTabBarProps } from '@sc/ui';
 
 /**
@@ -64,14 +64,15 @@ export default function ProviderTabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen 
-        name="rewards" 
-        options={{ href: null ,
-        tabBarIcon: ({ color: iconColor, size }) => (
+      <Tabs.Screen
+        name="rewards"
+        options={{
+          href: null,
+          tabBarIcon: ({ color: iconColor, size }) => (
             <Wallet color={iconColor} size={size} strokeWidth={1.8} />
           ),
-      }}
-       />
+        }}
+      />
     </Tabs>
   );
 }

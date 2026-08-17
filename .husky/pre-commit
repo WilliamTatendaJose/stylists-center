@@ -1,0 +1,12 @@
+# Formats staged files with Prettier before the commit is written.
+#
+# This exists because CI's `pnpm format:check` gates the `deploy-web` job (it
+# runs inside `verify`, and `deploy-web` has `needs: verify`) — so a single
+# unformatted file does not just fail a check, it silently skips the
+# production deploy. That happened for four consecutive pushes to main, and
+# nobody noticed for ~15 hours, because a skipped job reads as an absence
+# rather than a failure.
+#
+# Only staged files are touched, so this stays fast enough to not be worth
+# bypassing. If you ever genuinely need to, `git commit --no-verify` skips it.
+pnpm lint-staged
