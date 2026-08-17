@@ -15,6 +15,12 @@ COPY apps/admin/package.json apps/admin/package.json
 COPY apps/mobile/package.json apps/mobile/package.json
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/tokens/package.json packages/tokens/package.json
+# pnpm-workspace.yaml's `patchedDependencies` makes the patch files an *input*
+# to install, not to the later source build — pnpm applies them while linking.
+# Without this the install fails on a missing patch file, and it fails here
+# rather than at `COPY . .` below, which is what makes the error look unrelated
+# to the dependency that introduced it.
+COPY patches patches
 RUN pnpm install --frozen-lockfile
 
 COPY . .
