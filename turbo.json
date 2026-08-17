@@ -4,7 +4,15 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", ".expo/**"]
+      // dist-esm/** belongs here because @sc/shared emits two trees, not one
+      // (tsc twice — CJS to dist/, ESM to dist-esm/), and its package.json
+      // "exports" resolves the .import condition to dist-esm/index.js. An
+      // undeclared output is not restored on a cache hit, so a warm cache gave
+      // @sc/api's vitest run a @sc/shared with no reachable ESM entry:
+      // "Failed to resolve entry for package @sc/shared". That made CI fail
+      // only on runs where the build was cached — passing on any commit that
+      // happened to invalidate it, which is what kept this hidden.
+      "outputs": ["dist/**", "dist-esm/**", ".expo/**"]
     },
     "typecheck": {
       "dependsOn": ["^build"]
