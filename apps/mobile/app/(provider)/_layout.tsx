@@ -64,7 +64,12 @@ export default function ProviderTabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="rewards" options={{ href: null }} />
+      <Tabs.Screen name="rewards" 
+      options={{ href: null ,
+        tabBarIcon: ({ color: iconColor, size }) => (
+            <Wallet color={iconColor} size={size} strokeWidth={1.8} />
+          )
+      }} />
     </Tabs>
   );
 }
