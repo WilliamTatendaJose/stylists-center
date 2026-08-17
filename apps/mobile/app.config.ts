@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import type { ExpoConfig } from 'expo/config';
 
 /**
@@ -22,6 +23,27 @@ if (isReleaseProfile && !process.env.EXPO_PUBLIC_MAPTILER_KEY?.trim()) {
       'release builds must not fall back to the OpenStreetMap public tile server.',
   );
 }
+
+/**
+ * Android push needs google-services.json for Firebase to initialise on the
+ * device; without it expo-notifications cannot mint a token at all, so the
+ * server never learns where to send anything.
+ *
+ * The file is a credential, so it is gitignored and supplied per build: EAS
+ * file environment variables expose the uploaded file's path in
+ * GOOGLE_SERVICES_JSON, and a local checkout can just drop the file in place.
+ *
+ * Deliberately omitted rather than defaulted when neither exists. Pointing
+ * `googleServicesFile` at a path that is not there fails the build outright,
+ * which would break the working preview pipeline to fix a feature that is
+ * merely absent — push stays silent until the credential is configured, and
+ * everything else keeps shipping. See RAILWAY.md for the setup steps.
+ */
+const googleServicesFile = (() => {
+  const fromEas = process.env.GOOGLE_SERVICES_JSON?.trim();
+  if (fromEas && existsSync(fromEas)) return fromEas;
+  return existsSync('./google-services.json') ? './google-services.json' : undefined;
+})();
 
 /**
  * app.config.ts instead of app.json: the MapLibre config plugin (§5 of the
@@ -49,6 +71,15 @@ const config: ExpoConfig = {
     // Play requires a monotonically increasing integer that is independent of
     // the user-facing `version`. Bump on every upload; Play rejects a reused
     // value outright, so this cannot be left implicit.
+    //
+    // Bumping is manual on purpose. eas.json's production profile used to set
+    // `autoIncrement: true`, which cannot work here: with
+    // `appVersionSource: "local"` EAS increments by writing the value back into
+    // the app config, and it refuses to write to a dynamic one — this project
+    // has app.config.ts and no app.json, so eas-cli threw "autoIncrement option
+    // is not supported when using app.config.js" before the build started.
+    // Switching `appVersionSource` to "remote" would let EAS own the number
+    // instead, which is the alternative if bumping this by hand ever gets missed.
     versionCode: 1,
     adaptiveIcon: {
       backgroundColor: '#EC3013',
@@ -57,6 +88,7 @@ const config: ExpoConfig = {
       monochromeImage: './assets/android-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
+    ...(googleServicesFile ? { googleServicesFile } : {}),
     // Live location is scoped to a single trip and terminates on check-in
     // (plan risk R8) — foreground-only, deliberately, so the app never
     // declares Play Store's background-location policy at all.

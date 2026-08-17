@@ -182,6 +182,42 @@ client now strips a trailing `/v1` defensively, so either form works once
   `admin` and `api` sit on different `*.up.railway.app` subdomains, a
   cross-site relationship browsers treat strictly).
 
+## Android push notifications (FCM)
+
+The API sends notifications through Expo's push service (`PushService`), and
+the app registers a device token on launch. Neither works on Android until
+Firebase credentials exist, and the failure is silent by design of the
+platform: the app just never obtains a token, so the server has nowhere to
+send. `_layout.tsx` logs `[push] could not register this device…` when that
+happens — check the device log first if notifications are missing.
+
+Two separate credentials, both required, neither in this repo:
+
+1. **`google-services.json`** — lets Firebase initialise inside the app, which
+   is what allows a push token to be minted at all. From the Firebase console:
+   Project settings → Your apps → Android app for `zw.co.stylistscenter.app` →
+   download. Then either drop it at `apps/mobile/google-services.json` (it is
+   gitignored) or, for EAS builds, upload it as a file variable:
+
+   ```bash
+   eas env:create --name GOOGLE_SERVICES_JSON --type file \
+     --value ./google-services.json --visibility secret
+   ```
+
+   `app.config.ts` picks up either form and, when neither is present, omits
+   `googleServicesFile` rather than failing the build.
+
+2. **FCM V1 service account key** — lets Expo's servers actually deliver to
+   FCM. Firebase console → Project settings → Service accounts → Generate new
+   private key, then `eas credentials` → Android → the build profile → push
+   notifications, and upload the JSON.
+
+Both are build-time, so a build made before they existed will never receive
+notifications no matter what the server does — rebuild after configuring.
+
+iOS needs an APNs key instead, through the same `eas credentials` flow; nothing
+in this repo has been set up for it yet.
+
 ## Known gaps, deliberately not solved here
 
 - **Uploads are on a single-instance Volume**, not object storage. Fine at

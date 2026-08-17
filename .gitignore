@@ -14,6 +14,10 @@ web-build/
 
 # Native build output
 android/
+
+# Firebase credential for Android push. Supplied per build (EAS file env var
+# GOOGLE_SERVICES_JSON, or dropped in locally) — never committed.
+apps/mobile/google-services.json
 ios/
 .gradle-home/
 *.apk
