@@ -1,9 +1,27 @@
 name: Mobile Build
 
-# Manual only — an EAS build takes ~10-15 minutes and spends build-minute
-# quota, so it's triggered deliberately (Actions tab → Run workflow), not on
-# every push the way ci.yml is.
+# An EAS build takes ~10-15 minutes and spends build-minute quota, so this
+# deliberately does NOT run on every push the way ci.yml does. It builds when a
+# push to main actually changed something that ships inside the app, and is
+# still available manually from the Actions tab for any profile.
+#
+# The paths filter is what keeps that affordable: most commits here touch the
+# API, the admin console or CI, none of which can change the binary. Without it,
+# a day of backend work would spend hours of build quota producing identical
+# apps. packages/* are listed because the app bundles them, and pnpm-lock.yaml
+# and patches/ because a dependency change alters what ships even when no
+# app source moved.
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/shared/**'
+      - 'packages/ui/**'
+      - 'packages/tokens/**'
+      - 'patches/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/mobile-build.yml'
   workflow_dispatch:
     inputs:
       profile:
@@ -15,6 +33,14 @@ on:
           - preview
           - development
           - production
+
+# Queue rather than cancel: cancelling this job would not stop an EAS build
+# already submitted to Expo's builders, it would just stop us watching it, so
+# the log would stop reflecting what actually shipped. Same reasoning as
+# ci.yml's deploy-web group.
+concurrency:
+  group: mobile-build
+  cancel-in-progress: false
 
 jobs:
   verify:
@@ -54,8 +80,12 @@ jobs:
       # mode, no `eas login` needed. The actual build runs on Expo's own
       # infrastructure; this job just uploads the project and waits, the same
       # as running `eas build` from a laptop.
+      # `inputs.profile` only exists on a workflow_dispatch; on a push it is
+      # empty, so main builds default to `preview` — an installable test build.
+      # `production` stays deliberate: releasing is a decision, not a
+      # consequence of merging.
       - name: Build Android
         working-directory: apps/mobile
-        run: eas build --platform android --profile ${{ inputs.profile }} --non-interactive
+        run: eas build --platform android --profile ${{ inputs.profile || 'preview' }} --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
