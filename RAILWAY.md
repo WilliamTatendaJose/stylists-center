@@ -196,16 +196,30 @@ Two separate credentials, both required, neither in this repo:
 1. **`google-services.json`** — lets Firebase initialise inside the app, which
    is what allows a push token to be minted at all. From the Firebase console:
    Project settings → Your apps → Android app for `zw.co.stylistscenter.app` →
-   download. Then either drop it at `apps/mobile/google-services.json` (it is
-   gitignored) or, for EAS builds, upload it as a file variable:
+   download. It must come from the same Firebase project as the key in step 2.
+
+   A local copy at `apps/mobile/google-services.json` only serves
+   `expo run:android`. It is gitignored, and eas-cli builds its upload archive
+   through the repo's `.gitignore` rules (`makeShallowCopyAsync`), so a
+   gitignored file never reaches the builder — an EAS build needs it as a file
+   variable instead:
 
    ```bash
-   eas env:create --name GOOGLE_SERVICES_JSON --type file \
-     --value ./google-services.json --visibility secret
+   cd apps/mobile
+   eas env:set --name GOOGLE_SERVICES_JSON --type file \
+     --value ./google-services.json --visibility secret \
+     --environment preview --environment production
    ```
 
-   `app.config.ts` picks up either form and, when neither is present, omits
-   `googleServicesFile` rather than failing the build.
+   Already done for this project, in both environments. Variables are scoped
+   per environment, and a build profile resolves its environment from
+   `distribution`/`developmentClient` unless it sets `environment` explicitly:
+   `preview` (internal) resolves to preview, `production` (store) to
+   production. `development` is deliberately not covered — add it if you ever
+   need push in a dev-client build.
+
+   `app.config.ts` prefers the file variable, falls back to a local copy, and
+   omits `googleServicesFile` when neither exists rather than failing the build.
 
 2. **FCM V1 service account key** — lets Expo's servers actually deliver to
    FCM. Firebase console → Project settings → Service accounts → Generate new
