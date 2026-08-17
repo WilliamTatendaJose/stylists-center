@@ -3,7 +3,7 @@ import { fetch as expoFetch } from 'expo/fetch';
 import { Platform } from 'react-native';
 import { useAuthStore } from '../state/useAuthStore.js';
 import { getStoredTokens, setStoredTokens, clearStoredTokens } from '../auth/tokenStorage.js';
-import { ApiError, NetworkError, extractMessage } from './errors.js';
+import { ApiError, NetworkError, TimeoutError, extractMessage } from './errors.js';
 
 /**
  * Device -> API host, solved once (plan §7) so nobody hardcodes an IP: the
@@ -71,11 +71,18 @@ async function fetchWithTimeout(
   init: RequestInit,
 ): Promise<Response> {
   const controller = new AbortController();
+  let timedOut = false;
   const timer = setTimeout(() => {
+    timedOut = true;
     controller.abort();
   }, REQUEST_TIMEOUT_MS);
   try {
     return await request(input, { ...init, signal: controller.signal });
+  } catch (cause) {
+    // Only *our* deadline means "sent, outcome unknown". Any other abort or
+    // transport failure stays a plain network error, so the flag keeps its
+    // meaning instead of being set by every failed request.
+    throw timedOut ? new TimeoutError(cause) : cause;
   } finally {
     clearTimeout(timer);
   }
@@ -146,8 +153,9 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
       });
     } catch (cause) {
       // fetch only rejects when the request never completed; every HTTP status,
-      // including 5xx, resolves normally and is handled below.
-      throw new NetworkError(cause);
+      // including 5xx, resolves normally and is handled below. A timeout has
+      // already been classified by fetchWithTimeout and keeps that meaning.
+      throw cause instanceof TimeoutError ? cause : new NetworkError(cause);
     }
   };
 
@@ -155,6 +163,12 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   try {
     res = await doFetch();
   } catch (error) {
+    // The fallback exists for a base URL that cannot be reached at all, which
+    // fails fast (connection refused) and proves the request was never seen.
+    // A timeout proves the opposite — the request may already have been
+    // applied — so re-sending it here would risk performing a non-idempotent
+    // action twice rather than recovering from a bad host.
+    if (error instanceof TimeoutError) throw error;
     if (!metroFallbackUrl || metroFallbackUrl === activeBaseUrl) throw error;
     activeBaseUrl = metroFallbackUrl;
     res = await doFetch();

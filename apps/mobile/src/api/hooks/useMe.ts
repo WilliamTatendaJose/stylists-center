@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ActiveRole, Me, UpdateProfileInput } from '@sc/shared';
 import { apiFetch } from '../client.js';
+import { confirmAfterTimeout } from '../confirmAfterTimeout.js';
 
 export const ME_QUERY_KEY = ['me'] as const;
 
@@ -27,8 +28,30 @@ export function useSetActiveRole() {
   const queryClient = useQueryClient();
 
   return useMutation({
+    /**
+     * Switching roles is the action users saw "fail" and then find had worked.
+     * The request is cheap for the server but the response has to survive a
+     * round trip on a connection that frequently does not: when the deadline
+     * passes, the switch has usually already been committed, and reporting
+     * that as an error left the app showing the old role (useMe's staleTime is
+     * five minutes) until something happened to refetch — at which point the
+     * role appeared to change on its own.
+     *
+     * A timeout is not an answer, so this goes and gets one. The role endpoint
+     * sets a value rather than toggling, so asking again is safe, and if the
+     * server already holds the role that was asked for then the switch
+     * happened and there is nothing to report. Anything else — including a
+     * server that says the role is still the old one — is a real failure and
+     * still throws.
+     */
     mutationFn: (role: ActiveRole) =>
-      apiFetch<Me>('/v1/me/role', { method: 'POST', body: { role } }),
+      apiFetch<Me>('/v1/me/role', { method: 'POST', body: { role } }).catch((error: unknown) =>
+        confirmAfterTimeout(
+          error,
+          () => apiFetch<Me>('/v1/me'),
+          (me) => me.activeRole === role,
+        ),
+      ),
     onSuccess: (me) => {
       queryClient.setQueryData(ME_QUERY_KEY, me);
       // Role decides which side of the marketplace the rest of the app is

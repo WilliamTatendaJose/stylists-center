@@ -1,4 +1,4 @@
-import { ApiError, NetworkError } from './errors.js';
+import { ApiError, NetworkError, TimeoutError } from './errors.js';
 
 /**
  * One place that turns a thrown error into something a user can act on.
@@ -11,6 +11,14 @@ import { ApiError, NetworkError } from './errors.js';
  * Nest's JSON envelope and which is written for humans ("Incorrect code").
  */
 export function describeError(error: unknown, fallback: string): string {
+  // Before NetworkError, which it extends: a timeout is the one case where we
+  // genuinely do not know whether the action happened, and telling someone to
+  // "try again" invites them to do a thing that may already be done. Say what
+  // is true instead.
+  if (error instanceof TimeoutError) {
+    return 'The server is taking too long to answer. Check whether it went through before trying again — it may have.';
+  }
+
   if (error instanceof NetworkError) {
     return "Can't reach the server. Check your connection, then try again.";
   }

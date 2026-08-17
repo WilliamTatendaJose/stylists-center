@@ -21,8 +21,31 @@ export class ApiError extends Error {
  * ApiError is "we asked and the answer was no".
  */
 export class NetworkError extends Error {
-  constructor(override readonly cause: unknown) {
-    super('Could not reach the server');
+  constructor(
+    override readonly cause: unknown,
+    message = 'Could not reach the server',
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * The request was sent and then the deadline passed with no response.
+ *
+ * This is a different fact from NetworkError, and conflating the two is what
+ * makes an action "fail" and then turn out to have worked: a refused
+ * connection proves the server never saw the request, but a timeout proves
+ * nothing at all. The server may have received it, committed it, and simply
+ * been too slow — or fast enough, with the response lost on the way back.
+ *
+ * So this must never be reported as failure on its own. The caller either
+ * reconciles against server state (see useSetActiveRole) or tells the user the
+ * outcome is unconfirmed; what it must not do is say "it didn't work" about
+ * something that usually did.
+ */
+export class TimeoutError extends NetworkError {
+  constructor(cause: unknown) {
+    super(cause, 'The server did not respond in time');
   }
 }
 

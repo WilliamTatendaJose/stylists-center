@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError, NetworkError, extractMessage } from './errors.js';
+import { ApiError, NetworkError, TimeoutError, extractMessage } from './errors.js';
 import { describeError, isRejectedCode, isValidationError } from './errorMessage.js';
 
 /**
@@ -55,6 +55,15 @@ describe('describeError', () => {
   it('tells the user to wait on a rate limit rather than inviting a retry', () => {
     const message = describeError(new ApiError(429, 'Too many requests'), 'fallback');
     expect(message).toContain('Wait a minute');
+  });
+
+  it('does not claim a timed-out action failed, because it usually did not', () => {
+    // TimeoutError extends NetworkError, so this must be matched first or it
+    // inherits "Can't reach the server" — a sentence that is simply false
+    // about a request the server received and acted on.
+    const message = describeError(new TimeoutError(new TypeError('Aborted')), 'fallback');
+    expect(message).not.toBe("Can't reach the server. Check your connection, then try again.");
+    expect(message).toContain('may have');
   });
 
   it('does not blame the user for a 5xx', () => {
