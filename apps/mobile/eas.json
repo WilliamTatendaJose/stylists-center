@@ -25,6 +25,10 @@
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api-production-2b23.up.railway.app",
+        "EXPO_PUBLIC_MAPTILER_KEY": "fUkIPu3tIroBK5OT6r7w"
       }
     }
   },
