@@ -33,10 +33,20 @@ export default defineConfig({
      * that all of those races need. Tests within a file are already
      * sequential, so this makes the whole suite deterministic.
      *
-     * The cost is wall-clock time on a suite that is dominated by database
-     * round-trips anyway. Proper per-spec isolation (a schema or database per
-     * worker) would buy the parallelism back, and is the thing to do if this
-     * ever gets slow enough to matter.
+     * Isolating per worker instead — a database each, so the files could run
+     * in parallel again — was measured rather than assumed, and does not pay
+     * for itself. There is no `template_postgis` to clone from (compose's
+     * initdb installs the extensions into sc_dev/sc_test directly), so each
+     * worker has to create a database, add postgis + pg_trgm, and apply all 24
+     * migrations: ~21s per worker locally, of which ~19s is `migrate deploy`.
+     * Parallelism was only worth ~60s of CI wall clock (1m38s vs 2m43s), so
+     * four workers spend most of the saving on setup — and buy provisioning
+     * code, stale-database cleanup and N concurrent migrate runs against one
+     * server with it. Serial is both simpler and roughly the same speed.
+     *
+     * What would change that calculation: a prebuilt template database (clone
+     * in ~0.5s instead of migrating), or enough new specs that the suite's own
+     * runtime dwarfs a one-off 20s setup.
      */
     fileParallelism: false,
   },
