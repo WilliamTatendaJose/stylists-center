@@ -17,6 +17,22 @@ is a `workflow_dispatch` you trigger from the Actions tab (pick a build
 profile), since an EAS build takes 10-15 minutes and spends build-minute
 quota — not something you want firing on every commit.
 
+### Deliberately not using Railway's infrastructure-as-code
+
+The services below are configured in the Railway dashboard and deployed with
+`railway up --service <name>`; there is no `.railway/railway.ts`. A
+`railway config init` scaffold used to sit in this repo declaring a single
+`web` service, which described none of the four services that actually exist.
+It was never wired into CI (nothing runs `railway config`) and could not have
+run anyway — `railway/iac` was not a dependency — but `railway config apply`
+against it would have treated `db`, `redis`, `api` and `admin` as undeclared,
+and `db`/`redis` own the volumes holding production data. It was deleted
+rather than corrected: hand-maintaining a second, untested description of the
+topology earns nothing while the dashboard remains the source of truth.
+
+If you do want IaC later, `railway config pull` imports the real project
+instead of starting from a scaffold that has to be made true by hand.
+
 Both workflows need a GitHub Actions secret that only your own dashboard
 login can create (the CLI is deliberately blocked from minting these):
 
