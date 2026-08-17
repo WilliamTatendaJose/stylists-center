@@ -26,6 +26,7 @@ import { AdminProvidersModule } from './modules/admin-providers/admin-providers.
 import { AdminOverviewModule } from './modules/admin-overview/admin-overview.module';
 import { AdminAuditModule } from './modules/admin-audit/admin-audit.module';
 import { AdminPaymentsModule } from './modules/admin-payments/admin-payments.module';
+import { AdminWalletModule } from './modules/admin-wallet/admin-wallet.module';
 import { AdminStaffModule } from './modules/admin-staff/admin-staff.module';
 import { AdminCatalogModule } from './modules/admin-catalog/admin-catalog.module';
 import { AdminLookupModule } from './modules/admin-lookup/admin-lookup.module';
@@ -68,6 +69,7 @@ import { AdminVerificationsModule } from './modules/admin-verifications/admin-ve
     AdminOverviewModule,
     AdminAuditModule,
     AdminPaymentsModule,
+    AdminWalletModule,
     AdminStaffModule,
     AdminCatalogModule,
     AdminLookupModule,

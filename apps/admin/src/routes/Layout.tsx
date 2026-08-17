@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import {
   CreditCard,
   Flag,
+  HandCoins,
   LayoutDashboard,
   ListChecks,
   LogOut,
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { to: '/verifications', label: 'Verifications', icon: ShieldCheck },
   { to: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
   { to: '/payments', label: 'Payments', icon: Wallet },
+  { to: '/cash-outs', label: 'Cash-outs', icon: HandCoins },
   { to: '/catalog', label: 'Catalog', icon: MapPinned },
   { to: '/staff', label: 'Staff', icon: UserCog },
   { to: '/audit-log', label: 'Audit log', icon: ListChecks },

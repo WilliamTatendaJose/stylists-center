@@ -9,6 +9,7 @@ import { BansPage } from './routes/BansPage';
 import { ProvidersPage } from './routes/ProvidersPage';
 import { SubscriptionsPage } from './routes/SubscriptionsPage';
 import { PaymentsPage } from './routes/PaymentsPage';
+import { CashOutsPage } from './routes/CashOutsPage';
 import { AuditLogPage } from './routes/AuditLogPage';
 import { LookupPage } from './routes/LookupPage';
 import { BookingDetailPage } from './routes/BookingDetailPage';
@@ -56,6 +57,7 @@ export function App() {
         <Route path="verifications" element={<VerificationsPage />} />
         <Route path="subscriptions" element={<SubscriptionsPage />} />
         <Route path="payments" element={<PaymentsPage />} />
+        <Route path="cash-outs" element={<CashOutsPage />} />
         <Route path="lookup" element={<LookupPage />} />
         <Route path="lookup/bookings/:id" element={<BookingDetailPage />} />
         <Route path="lookup/orders/:id" element={<OrderDetailPage />} />

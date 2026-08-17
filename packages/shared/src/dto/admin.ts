@@ -240,6 +240,33 @@ export const adminPayoutRowSchema = z.object({
 });
 export type AdminPayoutRowDto = z.infer<typeof adminPayoutRowSchema>;
 
+// --- Wallet cash-outs --------------------------------------------------------
+//
+// A cash-out request (WalletTransaction.type = 'cash_out') already debited
+// the coin ledger the moment a stylist requested it — nothing in this
+// codebase moves real money to them. These DTOs cover an admin's view of
+// cash-out requests and CashOutSettlement, an admin's attestation that the
+// real-world transfer happened, mirroring Payout's relationship to Payment.
+
+export const adminCashOutRowSchema = z.object({
+  transactionId: z.uuid(),
+  userId: z.uuid(),
+  displayName: z.string(),
+  phone: z.string(),
+  amountUsdCents: z.number().int(),
+  coins: z.number().int(),
+  requestedAt: z.iso.datetime(),
+  settled: z.boolean(),
+  settledAt: z.iso.datetime().nullable(),
+  settledNote: z.string().nullable(),
+});
+export type AdminCashOutRowDto = z.infer<typeof adminCashOutRowSchema>;
+
+export const recordCashOutSettlementSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+});
+export type RecordCashOutSettlementInput = z.infer<typeof recordCashOutSettlementSchema>;
+
 // --- Overview trends -------------------------------------------------------
 
 export const adminOverviewTrendPointSchema = z.object({

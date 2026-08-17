@@ -5,7 +5,8 @@ import { color, space } from '@sc/tokens';
 import { Screen, ScreenHeader, Text, Chip, TextField, RangeInput, Button } from '@sc/ui';
 import { useCategories } from '../src/api/hooks/useCategories.js';
 import { useCreateProviderProfile } from '../src/api/hooks/useProviders.js';
-import { useSessionStore } from '../src/state/index.js';
+import { useClaimReferral } from '../src/api/hooks/useWallet.js';
+import { useInviteStore, useSessionStore } from '../src/state/index.js';
 import { describeError } from '../src/api/errorMessage.js';
 import { useBack } from '../src/navigation/useBack.js';
 
@@ -49,8 +50,11 @@ export default function ProviderSetup() {
   const onBack = useBack('/(tabs)');
   const location = useSessionStore((s) => s.location);
   const areaLabel = useSessionStore((s) => s.areaLabel);
+  const pendingReferralCode = useInviteStore((s) => s.pendingReferralCode);
+  const clearPendingReferralCode = useInviteStore((s) => s.clearPendingReferralCode);
   const { data: categories } = useCategories();
   const createProfile = useCreateProviderProfile();
+  const claimReferral = useClaimReferral();
 
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [areaName, setAreaName] = useState(areaLabel ?? '');
@@ -59,17 +63,53 @@ export default function ProviderSetup() {
   const [serviceName, setServiceName] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(DEFAULT_DURATION_MINUTES);
   const [priceUsd, setPriceUsd] = useState(DEFAULT_PRICE_USD);
+  const [referralCode, setReferralCode] = useState(pendingReferralCode ?? '');
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [referralError, setReferralError] = useState<string | null>(null);
+
+  const [profileCreated, setProfileCreated] = useState(false);
 
   const canSubmit =
-    !!categoryId &&
-    areaName.trim().length >= 2 &&
-    workingHoursLabel.trim().length >= 2 &&
-    serviceName.trim().length >= 2 &&
-    !createProfile.isPending;
+    (profileCreated ||
+      (!!categoryId &&
+        areaName.trim().length >= 2 &&
+        workingHoursLabel.trim().length >= 2 &&
+        serviceName.trim().length >= 2)) &&
+    !createProfile.isPending &&
+    !claimReferral.isPending;
+
+  // Referral linking is independent of the stylist page itself (an Agent/Referral
+  // row, not a ProviderProfile field) — it runs after the page is created so a
+  // rejected code never blocks the page from existing, and can be retried without
+  // re-submitting the page fields.
+  const finishAfterProfile = () => {
+    const code = referralCode.trim().toUpperCase();
+    if (!code) {
+      router.replace('/(tabs)');
+      return;
+    }
+    setReferralError(null);
+    claimReferral.mutate(
+      { referralCode: code },
+      {
+        onSuccess: () => {
+          clearPendingReferralCode();
+          router.replace('/(tabs)');
+        },
+        onError: (error) => {
+          setReferralError(describeError(error, "Couldn't apply that referral code."));
+        },
+      },
+    );
+  };
 
   const submit = () => {
-    if (!categoryId || !canSubmit) return;
+    if (!canSubmit) return;
+    if (profileCreated) {
+      finishAfterProfile();
+      return;
+    }
+    if (!categoryId) return;
     setSubmitError(null);
     createProfile.mutate(
       {
@@ -90,7 +130,8 @@ export default function ProviderSetup() {
       },
       {
         onSuccess: () => {
-          router.replace('/(tabs)');
+          setProfileCreated(true);
+          finishAfterProfile();
         },
         onError: (error) => {
           setSubmitError(describeError(error, "Couldn't set up your page. Try again."));
@@ -98,6 +139,19 @@ export default function ProviderSetup() {
       },
     );
   };
+
+  const skipReferral = () => {
+    clearPendingReferralCode();
+    router.replace('/(tabs)');
+  };
+
+  const buttonLabel = createProfile.isPending
+    ? 'Setting up…'
+    : claimReferral.isPending
+      ? 'Applying referral…'
+      : profileCreated
+        ? 'Continue'
+        : 'Create my page';
 
   return (
     <Screen
@@ -114,14 +168,27 @@ export default function ProviderSetup() {
               {submitError}
             </Text>
           ) : null}
+          {referralError ? (
+            <Text
+              variant="meta"
+              color={color.accent700}
+              accessibilityLiveRegion="polite"
+              accessibilityRole="alert"
+            >
+              {referralError}
+            </Text>
+          ) : null}
           <Button
-            label={createProfile.isPending ? 'Setting up…' : 'Create my page'}
+            label={buttonLabel}
             onPress={submit}
             block
             size="lg"
             arrow
             disabled={!canSubmit}
           />
+          {profileCreated && referralError ? (
+            <Button label="Skip and continue" onPress={skipReferral} block variant="ghost" />
+          ) : null}
         </View>
       }
     >
@@ -223,6 +290,24 @@ export default function ProviderSetup() {
           value={priceUsd}
           onChange={setPriceUsd}
           accessibilityLabel="Service price"
+        />
+      </View>
+
+      <View style={[styles.section, styles.field]}>
+        <Text variant="sectionLabel" style={styles.sectionLabelSpace}>
+          Referral code
+        </Text>
+        <Text variant="meta" color="neutral700" style={styles.sectionLabelSpace}>
+          Were you invited by another stylist or agent? Enter their code — optional.
+        </Text>
+        <TextField
+          value={referralCode}
+          onChangeText={(value) => {
+            setReferralCode(value.toUpperCase());
+            setReferralError(null);
+          }}
+          placeholder="SC-ABC123"
+          editable={!claimReferral.isPending}
         />
       </View>
     </Screen>

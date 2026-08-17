@@ -607,7 +607,24 @@ model WalletTransaction {
   reference String?
   createdAt DateTime      @default(now())
 
+  cashOutSettlement CashOutSettlement?
+
   @@index([userId])
+}
+
+/// A cash-out request (WalletTransaction.type = 'cash_out') already debited
+/// the coin ledger the moment it was requested — nothing in this codebase
+/// actually moves real money to a stylist. This row is an admin's attestation
+/// that the real-world transfer (EcoCash, cash, bank) happened, the same
+/// relationship Payout has to Payment: it never touches WalletTransaction,
+/// so the ledger and "did we actually pay them" stay two honest,
+/// separately-auditable things. One row per settled cash-out (existence = paid).
+model CashOutSettlement {
+  id                  String            @id @default(uuid())
+  walletTransactionId String            @unique
+  walletTransaction   WalletTransaction @relation(fields: [walletTransactionId], references: [id])
+  note                String?
+  createdAt           DateTime          @default(now())
 }
 
 /// Live trip state (plan risk R8 — Data Protection Act). Deliberately holds

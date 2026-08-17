@@ -69,7 +69,7 @@ export class WalletService {
         select: { agentId: true },
       });
       const referrer = normalizedReferralCode
-          ? await tx.agent.findUnique({
+        ? await tx.agent.findUnique({
             where: {
               referralCode: normalizedReferralCode,
               status: 'active',
@@ -178,6 +178,7 @@ export class WalletService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 100,
+      include: { cashOutSettlement: true },
     });
     return transactions.map((transaction) => ({
       id: transaction.id,
@@ -186,6 +187,7 @@ export class WalletService {
       usdCents: transaction.usdCents,
       reference: transaction.reference,
       createdAt: transaction.createdAt.toISOString(),
+      settled: transaction.type === 'cash_out' ? !!transaction.cashOutSettlement : null,
     }));
   }
 

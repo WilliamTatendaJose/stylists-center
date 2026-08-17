@@ -13,6 +13,7 @@ import {
   isSubscriptionActive,
   needsCashReconciliation,
   REFERRAL_REWARD_COINS,
+  coinsToUsdCents,
   nextSubscriptionPaidUntil,
   type CreateProviderProductInput,
   type UpdateProviderProductInput,
@@ -447,7 +448,7 @@ export class ProviderService {
                 userId: referral.agent.userId,
                 type: 'referral_coin',
                 coins: REFERRAL_REWARD_COINS,
-                usdCents: REFERRAL_REWARD_COINS * 50,
+                usdCents: coinsToUsdCents(REFERRAL_REWARD_COINS),
                 reference: `First completed booking ${current.reference}`,
               },
             });

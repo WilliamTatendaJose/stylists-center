@@ -20,6 +20,7 @@ import {
   isSubscriptionActive,
   needsCashReconciliation,
   REFERRAL_REWARD_COINS,
+  coinsToUsdCents,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
@@ -276,7 +277,7 @@ export class BookingsService {
                 userId: referral.agent.userId,
                 type: 'referral_coin',
                 coins: REFERRAL_REWARD_COINS,
-                usdCents: REFERRAL_REWARD_COINS * 50,
+                usdCents: coinsToUsdCents(REFERRAL_REWARD_COINS),
                 reference: `First completed booking ${current.reference}`,
               },
             });

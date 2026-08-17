@@ -70,6 +70,7 @@ const styles = StyleSheet.create({
   },
   transactionCopy: { flex: 1, minWidth: 0 },
   transactionMeta: { marginTop: 2 },
+  transactionAmount: { alignItems: 'flex-end', gap: space.xs },
 });
 
 /** Agent wallet (handoff screen 11). Non-agents get an explicit "become an agent" CTA â€” unspecified in the handoff, but this tab needs some state for a client who hasn't verified yet. */
@@ -347,10 +348,21 @@ export default function WalletScreen() {
                   {formatInHarare(transaction.createdAt, 'd MMM, HH:mm')}
                 </Text>
               </View>
-              <Text variant="bodyStrong" color={transaction.coins >= 0 ? colors.accent : undefined}>
-                {transaction.coins > 0 ? '+' : ''}
-                {transaction.coins} coins
-              </Text>
+              <View style={styles.transactionAmount}>
+                <Text
+                  variant="bodyStrong"
+                  color={transaction.coins >= 0 ? colors.accent : undefined}
+                >
+                  {transaction.coins > 0 ? '+' : ''}
+                  {transaction.coins} coins
+                </Text>
+                {transaction.type === 'cash_out' ? (
+                  <Badge
+                    label={transaction.settled ? 'Paid' : 'Processing'}
+                    tone={transaction.settled ? 'accent100' : 'neutral'}
+                  />
+                ) : null}
+              </View>
             </View>
           ))
         ) : (

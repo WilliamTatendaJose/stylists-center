@@ -36,6 +36,8 @@ export const walletTransactionSchema = z.object({
   usdCents: z.number().int(),
   reference: z.string().nullable(),
   createdAt: z.iso.datetime(),
+  /** Only meaningful for `cash_out` rows — whether an admin has recorded the real-world transfer. Null for every other type. */
+  settled: z.boolean().nullable(),
 });
 export type WalletTransactionDto = z.infer<typeof walletTransactionSchema>;
 
