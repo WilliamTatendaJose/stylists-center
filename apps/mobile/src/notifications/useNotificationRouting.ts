@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { notificationRoute } from './notificationRoute.js';
 
 /**
@@ -28,7 +28,16 @@ export function useNotificationRouting(isReady: boolean): void {
     const go = (data: unknown) => {
       const path = notificationRoute(data);
       if (!path || cancelled) return;
-      router.push(path as Parameters<typeof router.push>[0]);
+      // Same cast, and the same reason, as useBack.ts: the destination is
+      // decided at runtime from a server payload, so typed routes cannot
+      // narrow it statically — notificationRoute's own return values are what
+      // keep it to real routes. Whether the assertion reads as "necessary"
+      // depends on whether Expo Router's generated typed-route union
+      // (.expo/types/router.d.ts, gitignored) exists in the environment doing
+      // the linting: present locally, absent on a fresh CI checkout, where
+      // plain `string` already satisfies the ungenerated, broader `Href`.
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+      router.push(path as Href);
     };
 
     void Notifications.getLastNotificationResponseAsync()
