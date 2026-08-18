@@ -57,6 +57,10 @@ export default function VerifyIdentity() {
             <Text variant="meta" color={colors.accent700} accessibilityRole="alert">
               {error}
             </Text>
+          ) : submitVerification.isSuccess ? (
+            <Text variant="meta" color="neutral700" accessibilityLiveRegion="polite">
+              Documents sent for review.
+            </Text>
           ) : null}
           <Button
             label={

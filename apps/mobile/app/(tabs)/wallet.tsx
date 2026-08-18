@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
   inviteCard: { padding: space.l, marginBottom: space.xxl },
   inviteTitle: { marginBottom: space.s },
   inviteBody: { marginBottom: space.l },
+  inviteField: { marginBottom: space.m },
   transactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -110,15 +111,17 @@ export default function WalletScreen() {
         <Text variant="body" color="neutral700" style={styles.inviteBody}>
           Link it now. Your friend earns 6 SC Coins after your first completed booking.
         </Text>
-        <TextField
-          label="Invite code"
-          value={inviteCode}
-          onChangeText={(value) => {
-            setInviteCode(value.toUpperCase());
-            setInviteError(null);
-          }}
-          placeholder="SC-ABC123"
-        />
+        <View style={styles.inviteField}>
+          <TextField
+            label="Invite code"
+            value={inviteCode}
+            onChangeText={(value) => {
+              setInviteCode(value.toUpperCase());
+              setInviteError(null);
+            }}
+            placeholder="SC-ABC123"
+          />
+        </View>
         <Button
           label={claimReferral.isPending ? 'Applying…' : 'Apply invite'}
           block
