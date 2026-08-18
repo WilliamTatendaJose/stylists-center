@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
+import { ledgerStatus } from './ledger-status';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from './payment-gateway.port';
 import { Inject } from '@nestjs/common';
 
@@ -89,21 +90,4 @@ function parseAmountCents(value: string | undefined): number | null {
   const [whole, fraction = ''] = value.split('.');
   const cents = Number(whole) * 100 + Number((fraction + '00').slice(0, 2));
   return Number.isSafeInteger(cents) ? cents : null;
-}
-
-function ledgerStatus(status: string | undefined): string {
-  switch (status?.toLowerCase()) {
-    case 'paid':
-    case 'awaiting delivery':
-    case 'delivered':
-      return 'paid';
-    case 'refunded':
-      return 'refunded';
-    case 'cancelled':
-      return 'failed';
-    case 'disputed':
-      return 'disputed';
-    default:
-      return 'pending';
-  }
 }

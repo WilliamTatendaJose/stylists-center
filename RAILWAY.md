@@ -111,11 +111,12 @@ INFOBIP_BASE_URL=...
 INFOBIP_WHATSAPP_SENDER=...
 INFOBIP_WHATSAPP_TEMPLATE_NAME=...
 INFOBIP_DEFAULT_CHANNEL=whatsapp
-PAYMENT_PROVIDER=fake   # do not flip until the Paynow checkout/refund model is chosen
+PAYMENT_PROVIDER=paynow   # Paynow's test integration IDs reject transactions with an email field — never add one to the checkout request
 PAYNOW_INTEGRATION_ID=...
 PAYNOW_INTEGRATION_KEY=...
 PAYNOW_RETURN_URL=https://<api public domain>/v1/payments/paynow/return
 PAYNOW_RESULT_URL=https://<api public domain>/v1/payments/paynow/callback
+PAYNOW_AUTH_EMAIL=<a login email on the Paynow merchant account>   # required for the EcoCash phone-prompt checkout
 COIN_USD_CENTS=50
 CASH_OUT_MIN_USD_CENTS=500
 ```
@@ -238,8 +239,6 @@ in this repo has been set up for it yet.
   one `api` replica; if this ever needs to scale horizontally, provider
   photos need to move to S3/R2 first — `ImageStorageService` is the only
   place that would need to change.
-- **`PAYMENT_PROVIDER=fake`** — real money movement needs the Paynow
-  integration finished first (see `apps/api/.env.example`'s comment on this).
 - **Mobile app** deploys through EAS, not Railway — `apps/mobile/.env`'s
   `EXPO_PUBLIC_API_URL` needs to point at `api`'s public domain for release
   builds.

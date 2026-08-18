@@ -24,6 +24,11 @@ export class BookingsController {
     return this.bookings.confirmCompletion(id, user.id);
   }
 
+  @Get(':id/payment-status')
+  paymentStatus(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.bookings.getPaymentStatus(id, user.id);
+  }
+
   @Post(':id/cancel')
   cancel(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.bookings.cancel(id, user.id);

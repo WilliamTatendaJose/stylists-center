@@ -8,7 +8,11 @@ import { MatchingService } from '../matching/matching.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
-import type { PaymentGatewayPort, PaymentIntentResult } from '../payments/payment-gateway.port';
+import type {
+  PaymentGatewayPort,
+  PaymentIntentResult,
+  PaymentPollStatus,
+} from '../payments/payment-gateway.port';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
 import type { Env } from '../../config/env';
@@ -73,6 +77,9 @@ class FailingGateway implements PaymentGatewayPort {
   }
   verifyCallback(): boolean {
     return false;
+  }
+  pollStatus(): Promise<PaymentPollStatus> {
+    return Promise.reject(new Error('gateway unavailable'));
   }
 }
 

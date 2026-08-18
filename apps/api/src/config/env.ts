@@ -69,6 +69,11 @@ export const envSchema = z
     PAYNOW_INTEGRATION_KEY: z.string().min(20).optional(),
     PAYNOW_RETURN_URL: z.url().optional(),
     PAYNOW_RESULT_URL: z.url().optional(),
+    // Bookings push an EcoCash prompt straight to the client's phone (Paynow's
+    // Express Checkout / "mobile transaction" API) instead of opening a
+    // browser. That endpoint requires authemail — in test mode it must match
+    // one of the merchant account's own login emails, not the customer's.
+    PAYNOW_AUTH_EMAIL: z.email().optional(),
 
     COIN_USD_CENTS: z.coerce.number().int().positive().default(50),
     CASH_OUT_MIN_USD_CENTS: z.coerce.number().int().positive().default(500),
@@ -124,6 +129,7 @@ export const envSchema = z
         'PAYNOW_INTEGRATION_KEY',
         'PAYNOW_RETURN_URL',
         'PAYNOW_RESULT_URL',
+        'PAYNOW_AUTH_EMAIL',
       ] as const) {
         if (!env[key]) {
           ctx.addIssue({

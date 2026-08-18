@@ -84,10 +84,15 @@ export class BookingsService {
     // MatchRequest was not.
     let checkoutIntent: PaymentIntentResult | undefined;
     if (input.paymentMethod === 'ecocash') {
+      const client = await this.prisma.user.findUniqueOrThrow({
+        where: { id: clientId },
+        select: { phone: true },
+      });
       checkoutIntent = await this.paymentGateway.createCheckout({
         reference,
         amountUsdCents: service.priceUsdCents,
         description: `Booking ${reference}: ${service.name}`,
+        phone: client.phone,
       });
     }
 
@@ -151,8 +156,48 @@ export class BookingsService {
       id: booking.id,
       reference: booking.reference,
       status: booking.status,
-      ...(checkoutIntent ? { checkoutUrl: checkoutIntent.checkoutUrl } : {}),
+      ...(checkoutIntent?.checkoutUrl ? { checkoutUrl: checkoutIntent.checkoutUrl } : {}),
+      ...(checkoutIntent?.instructions ? { instructions: checkoutIntent.instructions } : {}),
     };
+  }
+
+  /**
+   * Reports the latest known state of a booking's payment, actively polling
+   * Paynow first if it's still pending — the client screen that sent someone
+   * a phone prompt needs a real answer to show, and the inbound webhook alone
+   * cannot be relied on (never reaches a non-public dev server, and even in
+   * production there's a window before it arrives).
+   */
+  async getPaymentStatus(bookingId: string, clientId: string): Promise<{ status: string }> {
+    const booking = await this.prisma.booking.findUnique({ where: { id: bookingId } });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.clientId !== clientId) throw new ForbiddenException();
+
+    const payment = await this.prisma.payment.findFirst({
+      where: { bookingId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!payment) return { status: 'none' };
+
+    const TERMINAL = new Set(['held', 'paid', 'released', 'refunded', 'failed', 'disputed']);
+    if (TERMINAL.has(payment.status) || payment.provider !== 'paynow' || !payment.externalRef) {
+      return { status: payment.status };
+    }
+
+    const polled = await this.paymentGateway.pollStatus(payment.externalRef);
+    if (polled === payment.status) return { status: payment.status };
+
+    await this.prisma.payment.create({
+      data: {
+        bookingId,
+        provider: payment.provider,
+        status: polled,
+        amountUsdCents: payment.amountUsdCents,
+        feeUsdCents: polled === 'refunded' ? 0 : payment.feeUsdCents,
+        externalRef: payment.externalRef,
+      },
+    });
+    return { status: polled };
   }
 
   async listForClient(clientId: string): Promise<BookingRowDto[]> {

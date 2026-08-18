@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  BookingPaymentStatus,
   BookingRowDto,
   ConfirmCompletionResponse,
   CreateBookingInput,
@@ -71,6 +72,34 @@ export function useCreateBooking() {
       apiFetch<CreateBookingResponse>('/v1/bookings', { method: 'POST', body: input }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: BOOKINGS_KEY });
+    },
+  });
+}
+
+const TERMINAL_PAYMENT_STATUSES = new Set<BookingPaymentStatus['status']>([
+  'held',
+  'paid',
+  'released',
+  'refunded',
+  'failed',
+  'disputed',
+]);
+
+/**
+ * `GET /v1/bookings/:id/payment-status` — polled by the "check your phone"
+ * screen after a phone-prompt checkout, since the only other way to learn
+ * the outcome (Paynow's webhook) can't reach a non-public dev server and
+ * even in production isn't instant. Stops polling once the status is no
+ * longer 'pending'/'none'.
+ */
+export function useBookingPaymentStatus(bookingId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['booking-payment-status', bookingId],
+    queryFn: () => apiFetch<BookingPaymentStatus>(`/v1/bookings/${bookingId}/payment-status`),
+    enabled: Boolean(bookingId) && enabled,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status && TERMINAL_PAYMENT_STATUSES.has(status) ? false : 3000;
     },
   });
 }

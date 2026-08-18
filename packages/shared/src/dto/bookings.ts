@@ -24,10 +24,23 @@ export const createBookingResponseSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   status: bookingStatusSchema,
-  /** Present for Paynow bookings; the client must open it to complete checkout. */
+  /** Present when Paynow returned a hosted checkout page instead of a phone prompt; the client must open it to complete checkout. */
   checkoutUrl: z.url().optional(),
+  /** Present when Paynow pushed an EcoCash prompt to the client's phone — show this text while polling payment-status. */
+  instructions: z.string().optional(),
 });
 export type CreateBookingResponse = z.infer<typeof createBookingResponseSchema>;
+
+/**
+ * `status` mirrors the Payment ledger's own vocabulary (a plain string in
+ * Prisma, not an enum — see schema.prisma) rather than collapsing it, so a
+ * screen can distinguish e.g. 'refunded' from 'failed' if it ever needs to.
+ * 'none' covers a cash booking, which never has a Payment row.
+ */
+export const bookingPaymentStatusSchema = z.object({
+  status: z.enum(['none', 'pending', 'held', 'paid', 'released', 'refunded', 'failed', 'disputed']),
+});
+export type BookingPaymentStatus = z.infer<typeof bookingPaymentStatusSchema>;
 
 export const bookingRowSchema = z.object({
   id: z.uuid(),

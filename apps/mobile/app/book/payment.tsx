@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { space } from '@sc/tokens';
 import { formatUsd } from '@sc/shared';
 import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button, useTheme } from '@sc/ui';
@@ -67,29 +66,38 @@ export default function Payment() {
       },
       {
         onSuccess: (created) => {
-          const finish = () => {
+          const doneParams = {
+            reference: created.reference,
+            providerId: provider.id,
+            providerName: provider.displayName,
+            serviceName: service.name,
+            whenLabel,
+            areaName: provider.areaName,
+          };
+          // An EcoCash prompt was pushed to the client's phone — wait for and
+          // show the real outcome instead of declaring the booking done the
+          // instant this screen hands off, before Paynow has confirmed anything.
+          if (created.instructions) {
             resetDraft();
             router.replace({
-              pathname: '/book/done',
+              pathname: '/book/paying',
               params: {
-                reference: created.reference,
-                providerId: provider.id,
-                providerName: provider.displayName,
-                serviceName: service.name,
-                whenLabel,
-                areaName: provider.areaName,
-                paymentLabel:
-                  paymentMethod === 'ecocash'
-                    ? 'Paynow — payment verification pending'
-                    : 'Cash — pay in person',
+                ...doneParams,
+                bookingId: created.id,
+                instructions: created.instructions,
               },
             });
-          };
-          if (created.checkoutUrl) {
-            void WebBrowser.openBrowserAsync(created.checkoutUrl).finally(finish);
-          } else {
-            finish();
+            return;
           }
+          resetDraft();
+          router.replace({
+            pathname: '/book/done',
+            params: {
+              ...doneParams,
+              paymentLabel:
+                paymentMethod === 'ecocash' ? 'Paynow — EcoCash' : 'Cash — pay in person',
+            },
+          });
         },
         onError: (error) => {
           setBookingError(describeError(error, "Couldn't confirm that booking. Try again."));
