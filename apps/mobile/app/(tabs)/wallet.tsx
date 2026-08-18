@@ -55,6 +55,7 @@ const styles = StyleSheet.create({
   colReferral: { flex: 2 },
   colCoins: { flex: 1 },
   emptyBody: { marginTop: space.s, marginBottom: space.xl },
+  verificationStatus: { marginBottom: space.xl },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   referralField: { marginBottom: space.m },
   inviteCard: { padding: space.l, marginBottom: space.xxl },
@@ -172,6 +173,15 @@ export default function WalletScreen() {
           every stylist and client you refer who completes a booking. We delete the uploaded
           documents after review; the first completed booking releases the reward.
         </Text>
+        {verification && verification.status !== 'unverified' ? (
+          <View style={styles.verificationStatus}>
+            <Badge
+              label={verification.status === 'verified' ? 'Verified' : 'Under review'}
+              tone={verification.status === 'verified' ? 'accent100' : 'neutral'}
+              size="md"
+            />
+          </View>
+        ) : null}
         {verification?.status === 'verified' || wallet.canBecomeAgent ? (
           <>
             {!wallet.referredByName ? (
