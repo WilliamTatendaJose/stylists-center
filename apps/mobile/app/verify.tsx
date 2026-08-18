@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { space } from '@sc/tokens';
-import { Screen, ScreenHeader, Text, Button, useTheme } from '@sc/ui';
+import { Badge, Screen, ScreenHeader, Text, Button, useTheme } from '@sc/ui';
 import { useBack } from '../src/navigation/useBack.js';
 import { useSubmitVerification, useVerification } from '../src/api/hooks/useVerification.js';
 import { describeError } from '../src/api/errorMessage.js';
@@ -11,6 +11,7 @@ const styles = StyleSheet.create({
   intro: { marginBottom: space.xl },
   field: { marginBottom: space.xl },
   status: { marginBottom: space.l },
+  statusBadge: { marginBottom: space.s },
   footer: { gap: space.s },
 });
 
@@ -86,15 +87,20 @@ export default function VerifyIdentity() {
       </Text>
 
       {status !== 'unverified' ? (
-        <Text
-          variant="meta"
-          color={status === 'verified' ? 'accent700' : 'neutral700'}
-          style={styles.status}
-        >
-          {status === 'verified'
-            ? 'Your identity is verified. Your uploaded documents were deleted after review.'
-            : 'Your documents are under review. They will be deleted after the review decision.'}
-        </Text>
+        <View style={styles.status}>
+          <View style={styles.statusBadge}>
+            <Badge
+              label={status === 'verified' ? 'Verified' : 'Under review'}
+              tone={status === 'verified' ? 'accent100' : 'neutral'}
+              size="md"
+            />
+          </View>
+          <Text variant="meta" color={status === 'verified' ? 'accent700' : 'neutral700'}>
+            {status === 'verified'
+              ? 'Your identity is verified. Your uploaded documents were deleted after review.'
+              : 'Your documents are under review. They will be deleted after the review decision.'}
+          </Text>
+        </View>
       ) : null}
 
       <View style={styles.field}>
