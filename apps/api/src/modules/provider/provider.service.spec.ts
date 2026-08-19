@@ -7,6 +7,8 @@ import { PushService } from '../notifications/push.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import type { MatchingService } from '../matching/matching.service';
 import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
+import { PaymentStatusService } from '../payments/payment-status.service';
+import type { PaymentGatewayPort } from '../payments/payment-gateway.port';
 import { ProviderService } from './provider.service';
 
 const BASE_ENV: Env = {
@@ -93,12 +95,14 @@ describe('ProviderService management', () => {
   });
 
   beforeEach(() => {
+    const gateway = new FakeEcoCashAdapter();
     provider = new ProviderService(
       prisma,
       new SocketEmitterService(),
       null as unknown as MatchingService,
       new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
-      new FakeEcoCashAdapter(),
+      gateway,
+      new PaymentStatusService(prisma, gateway),
     );
   });
 
@@ -227,8 +231,9 @@ describe('ProviderService management', () => {
       const before = Date.now();
       const result = await provider.paySubscription(providerId, { paymentMethod: 'cash' });
       expect(result.checkoutUrl).toBeUndefined();
+      expect(result.pending).toBe(false);
 
-      const paidUntilMs = new Date(result.paidUntil).getTime();
+      const paidUntilMs = new Date(result.paidUntil ?? '').getTime();
       const thirtyDaysMs = 30 * 24 * 60 * 60_000;
       // Allow a little slack either side for how long the test itself took to run.
       expect(paidUntilMs).toBeGreaterThan(before + thirtyDaysMs - 5000);
@@ -254,7 +259,7 @@ describe('ProviderService management', () => {
     it('creates a checkout intent for EcoCash and applies it on success, same as a fresh booking', async () => {
       const before = await provider.getSubscription(providerId);
       const result = await provider.paySubscription(providerId, { paymentMethod: 'ecocash' });
-      expect(new Date(result.paidUntil).getTime()).toBeGreaterThan(
+      expect(new Date(result.paidUntil ?? '').getTime()).toBeGreaterThan(
         before.paidUntil ? new Date(before.paidUntil).getTime() : Date.now(),
       );
 
@@ -262,6 +267,89 @@ describe('ProviderService management', () => {
         where: { subscriptionProviderId: providerId, provider: 'fake-ecocash' },
       });
       expect(payment).toMatchObject({ status: 'held', amountUsdCents: 500 });
+    });
+
+    /**
+     * The gateway call only proves a prompt was sent. Crediting the month at
+     * that point handed a free month to anyone who opened a Paynow checkout
+     * and walked away — the whole reason the paid/pending split exists.
+     */
+    it('does not extend the subscription while a real gateway payment is still pending', async () => {
+      const pendingGateway: PaymentGatewayPort = {
+        createCheckout: () =>
+          Promise.resolve({
+            externalRef: 'https://paynow.example/poll/1',
+            status: 'pending',
+            instructions: 'Approve the prompt on your phone',
+            provider: 'paynow',
+          }),
+        verifyCallback: () => false,
+        pollStatus: () => Promise.resolve('pending'),
+      };
+      const pendingProvider = new ProviderService(
+        prisma,
+        new SocketEmitterService(),
+        null as unknown as MatchingService,
+        new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+        pendingGateway,
+        new PaymentStatusService(prisma, pendingGateway),
+      );
+
+      const before = await pendingProvider.getSubscription(providerId);
+      const result = await pendingProvider.paySubscription(providerId, {
+        paymentMethod: 'ecocash',
+      });
+
+      expect(result.pending).toBe(true);
+      expect(result.paidUntil).toBe(before.paidUntil);
+      expect(result.instructions).toBe('Approve the prompt on your phone');
+
+      const after = await pendingProvider.getSubscription(providerId);
+      expect(after.paidUntil).toBe(before.paidUntil);
+      expect(after.active).toBe(before.active);
+    });
+
+    it('credits the month once a poll reports the payment paid', async () => {
+      let reported: 'pending' | 'paid' = 'pending';
+      const settlingGateway: PaymentGatewayPort = {
+        createCheckout: () =>
+          Promise.resolve({
+            externalRef: 'https://paynow.example/poll/2',
+            status: 'pending',
+            provider: 'paynow',
+          }),
+        verifyCallback: () => false,
+        pollStatus: () => Promise.resolve(reported),
+      };
+      const settlingProvider = new ProviderService(
+        prisma,
+        new SocketEmitterService(),
+        null as unknown as MatchingService,
+        new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+        settlingGateway,
+        new PaymentStatusService(prisma, settlingGateway),
+      );
+
+      const before = await settlingProvider.getSubscription(providerId);
+      await settlingProvider.paySubscription(providerId, { paymentMethod: 'ecocash' });
+
+      // Still unpaid: whatever the provider had before is exactly what they
+      // still have — this call must not have bought them anything.
+      const stillPending = await settlingProvider.subscriptionPaymentStatus(providerId);
+      expect(stillPending.status).toBe('pending');
+      expect(stillPending.paidUntil).toBe(before.paidUntil);
+
+      reported = 'paid';
+      const settled = await settlingProvider.subscriptionPaymentStatus(providerId);
+      expect(settled.status).toBe('paid');
+      expect(settled.active).toBe(true);
+      expect(new Date(settled.paidUntil ?? '').getTime()).toBeGreaterThan(
+        new Date(before.paidUntil ?? 0).getTime(),
+      );
+
+      // Polling again after settlement must not stack a second month on.
+      const repeat = await settlingProvider.subscriptionPaymentStatus(providerId);
+      expect(repeat.paidUntil).toBe(settled.paidUntil);
     });
   });
 });

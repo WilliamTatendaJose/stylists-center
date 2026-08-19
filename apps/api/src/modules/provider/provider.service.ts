@@ -41,6 +41,8 @@ import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { PaymentStatusService } from '../payments/payment-status.service';
+import { applySubscriptionPayment } from '../payments/payments.service';
 import { toBookingRowDto } from '../bookings/mappers';
 import { expireStaleBookingRequests } from '../bookings/booking-expiry';
 
@@ -70,6 +72,7 @@ export class ProviderService {
     private readonly matching: MatchingService,
     private readonly push: PushService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
+    private readonly paymentStatus: PaymentStatusService,
   ) {}
 
   /** One request for the whole Jobs screen — availability, live offers, and the work itself. */
@@ -504,13 +507,15 @@ export class ProviderService {
 
   /**
    * Cash is a self-report — extends `subscriptionPaidUntil` immediately,
-   * since (unlike a booking) this money is owed to the platform, not held
-   * for a counterparty to double-confirm against. EcoCash goes through the
-   * same gateway checkout as a booking and is applied on successful
-   * checkout-intent creation, the same optimistic-then-reconciled pattern
-   * the rest of the app already uses for a fresh booking (see
-   * BookingsService.create) rather than waiting on a webhook this ledger
-   * entry has no `reference` to be matched against yet.
+   * since (unlike a booking) this money is owed to the platform, not held for
+   * a counterparty to double-confirm against.
+   *
+   * EcoCash does NOT. Extending the subscription when the checkout was merely
+   * *created* handed a free month to anyone who opened a Paynow checkout and
+   * never paid — the gateway call only proves a prompt was sent. The month is
+   * credited by `applySubscriptionPayment` once the payment reaches 'paid',
+   * via whichever confirmation arrives first: Paynow's callback, or the
+   * provider's own screen polling `subscription/payment-status`.
    */
   async paySubscription(
     providerProfileId: string,
@@ -523,12 +528,17 @@ export class ProviderService {
     const amountUsdCents = profile.subscriptionPriceUsdCents;
     const currentPaidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
 
-    let checkoutUrl: string | undefined;
     if (input.paymentMethod === 'ecocash') {
+      const user = await this.prisma.user.findFirstOrThrow({
+        where: { providerProfile: { id: providerProfileId } },
+        select: { phone: true },
+      });
+      const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
       const intent = await this.paymentGateway.createCheckout({
-        reference: `SUB-${providerProfileId}-${String(Date.now())}`,
+        reference,
         amountUsdCents,
         description: 'Stylists Center monthly subscription',
+        phone: user.phone,
       });
       await this.prisma.payment.create({
         data: {
@@ -537,27 +547,58 @@ export class ProviderService {
           status: intent.status,
           amountUsdCents,
           externalRef: intent.externalRef,
+          reference,
         },
       });
-      checkoutUrl = intent.checkoutUrl;
-    } else {
-      await this.prisma.payment.create({
-        data: {
-          subscriptionProviderId: providerProfileId,
-          provider: 'cash',
-          status: 'released',
-          amountUsdCents,
-        },
-      });
+      // The fake dev adapter settles instantly ('held'); Paynow returns
+      // 'pending' and is only credited once a poll or callback confirms it.
+      const paidNow = intent.status === 'held';
+      return {
+        paidUntil: paidNow
+          ? await applySubscriptionPayment(this.prisma, providerProfileId)
+          : currentPaidUntil,
+        pending: !paidNow,
+        ...(intent.checkoutUrl ? { checkoutUrl: intent.checkoutUrl } : {}),
+        ...(intent.instructions ? { instructions: intent.instructions } : {}),
+      };
     }
 
+    await this.prisma.payment.create({
+      data: {
+        subscriptionProviderId: providerProfileId,
+        provider: 'cash',
+        status: 'released',
+        amountUsdCents,
+      },
+    });
     const paidUntil = nextSubscriptionPaidUntil(currentPaidUntil);
     await this.prisma.providerProfile.update({
       where: { id: providerProfileId },
       data: { subscriptionPaidUntil: paidUntil },
     });
+    return { paidUntil, pending: false };
+  }
 
-    return { paidUntil, ...(checkoutUrl ? { checkoutUrl } : {}) };
+  /**
+   * Polls Paynow for an in-flight subscription payment and credits the month
+   * the moment it clears — the provider's screen calls this while waiting on
+   * the EcoCash prompt they were just sent.
+   */
+  async subscriptionPaymentStatus(
+    providerProfileId: string,
+  ): Promise<{ status: string; paidUntil: string | null; active: boolean }> {
+    const result = await this.paymentStatus.resolve({
+      subscriptionProviderId: providerProfileId,
+    });
+    if (result.changed && result.status === 'paid') {
+      await applySubscriptionPayment(this.prisma, providerProfileId);
+    }
+    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
+      where: { id: providerProfileId },
+      select: { subscriptionPaidUntil: true },
+    });
+    const paidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
+    return { status: result.status, paidUntil, active: isSubscriptionActive(paidUntil) };
   }
 
   /**

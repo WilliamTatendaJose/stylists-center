@@ -6,6 +6,7 @@ import {
   type CreateProviderProductInput,
   type RestockProviderProductInput,
   type UpdateProviderProductInput,
+  type OrderPaymentStatusDto,
   type OrderRowDto,
   type ProductDetailDto,
   type ProductPageDto,
@@ -82,6 +83,37 @@ export function useCreateOrder() {
       // The order just consumed stock — the catalogue is now stale.
       void queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
     },
+  });
+}
+
+const TERMINAL_PAYMENT_STATUSES = new Set<OrderPaymentStatusDto['status']>([
+  'held',
+  'paid',
+  'released',
+  'refunded',
+  'failed',
+  'disputed',
+]);
+
+/** Widened to `string` so a screen holding statuses in local state needn't re-narrow them. */
+export function isTerminalOrderPayment(status: string | undefined) {
+  return Boolean(
+    status && TERMINAL_PAYMENT_STATUSES.has(status as OrderPaymentStatusDto['status']),
+  );
+}
+
+/**
+ * Polls one order's payment while its EcoCash prompt is outstanding. A cart
+ * spanning several sellers places one order each, so the waiting screen runs
+ * one of these per order and only calls the checkout done when all have
+ * settled.
+ */
+export function useOrderPaymentStatus(orderId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ['order-payment-status', orderId],
+    queryFn: () => apiFetch<OrderPaymentStatusDto>(`/v1/market/orders/${orderId}/payment-status`),
+    enabled: Boolean(orderId) && enabled,
+    refetchInterval: (query) => (isTerminalOrderPayment(query.state.data?.status) ? false : 3000),
   });
 }
 

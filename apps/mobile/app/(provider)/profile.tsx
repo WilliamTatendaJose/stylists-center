@@ -31,6 +31,7 @@ import {
   usePaySubscription,
   useProviderManagementProfile,
   useProviderSubscription,
+  useSubscriptionPaymentStatus,
   useUpdateProviderProfile,
   useUpdateProviderService,
 } from '../../src/api/hooks/useProviders.js';
@@ -109,6 +110,9 @@ export default function ProviderProfile() {
   const updateService = useUpdateProviderService();
   const { data: subscription } = useProviderSubscription();
   const paySubscription = usePaySubscription();
+  const [subPendingNote, setSubPendingNote] = useState<string | null>(null);
+  const { data: subPaymentStatus } = useSubscriptionPaymentStatus(subPendingNote !== null);
+  const subPaymentPending = subPendingNote !== null;
   const setActiveRole = useSetActiveRole();
   const deviceLocation = useSessionStore((state) => state.location);
   const locationSource = useSessionStore((state) => state.locationSource);
@@ -146,6 +150,17 @@ export default function ProviderProfile() {
     setLat(data.lat);
     setLng(data.lng);
   }, [data]);
+
+  // The poll has reached a verdict: stop polling and say what happened. A
+  // failed payment must not leave the card sitting on "waiting" forever.
+  useEffect(() => {
+    const status = subPaymentStatus?.status;
+    if (!status || status === 'pending' || status === 'none') return;
+    setSubPendingNote(null);
+    if (!['held', 'paid', 'released'].includes(status)) {
+      setSubError("That payment didn't go through. Your subscription hasn't been extended.");
+    }
+  }, [subPaymentStatus?.status]);
 
   if (isError && !data) {
     return (
@@ -255,6 +270,15 @@ export default function ProviderProfile() {
       {
         onSuccess: (result) => {
           setSubSheetOpen(false);
+          // A pending EcoCash payment has NOT extended the subscription yet —
+          // the month is credited only once Paynow confirms, so start polling
+          // and say so rather than showing a renewed card straight away.
+          if (result.pending) {
+            setSubPendingNote(
+              result.instructions ??
+                'Approve the EcoCash prompt on your phone to finish this payment.',
+            );
+          }
           if (result.checkoutUrl) void WebBrowser.openBrowserAsync(result.checkoutUrl);
         },
         onError: (reason) =>
@@ -470,23 +494,41 @@ export default function ProviderProfile() {
                   ) : null}
                 </View>
                 <Badge
-                  label={subscription.active ? 'Active' : 'Past due'}
-                  tone={subscription.active ? 'accent100' : 'accent'}
+                  label={
+                    subPaymentPending
+                      ? 'Payment pending'
+                      : subscription.active
+                        ? 'Active'
+                        : 'Past due'
+                  }
+                  tone={subscription.active && !subPaymentPending ? 'accent100' : 'accent'}
                 />
               </View>
-              {!subscription.active ? (
+              {subPendingNote ? (
+                <Text
+                  variant="meta"
+                  color="neutral700"
+                  style={styles.subscriptionMeta}
+                  accessibilityLiveRegion="polite"
+                >
+                  {subPendingNote}
+                </Text>
+              ) : !subscription.active ? (
                 <Text variant="meta" color="neutral700" style={styles.subscriptionMeta}>
                   Pay to appear in search and smart-match.
                 </Text>
               ) : null}
               <Button
                 label={
-                  subscription.active
-                    ? 'Renew early'
-                    : `Pay ${formatUsd(subscription.priceUsdCents)}`
+                  subPaymentPending
+                    ? 'Waiting for EcoCash…'
+                    : subscription.active
+                      ? 'Renew early'
+                      : `Pay ${formatUsd(subscription.priceUsdCents)}`
                 }
                 variant={subscription.active ? 'secondary' : 'primary'}
                 block
+                disabled={subPaymentPending}
                 style={styles.cardAction}
                 onPress={() => {
                   setSubError(null);

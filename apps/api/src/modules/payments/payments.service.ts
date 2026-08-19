@@ -1,5 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { nextSubscriptionPaidUntil } from '@sc/shared';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { ledgerStatus } from './ledger-status';
@@ -36,13 +37,30 @@ export class PaymentsService {
       this.prisma.booking.findUnique({ where: { reference } }),
       this.prisma.order.findUnique({ where: { reference } }),
     ]);
-    if ((!booking && !order) || (booking && order))
-      throw new NotFoundException('Unknown Paynow reference');
-    const expected = booking?.priceUsdCents ?? order?.totalUsdCents;
+    if (booking && order) throw new NotFoundException('Unknown Paynow reference');
+
+    // A subscription has no booking/order row to resolve against — it is
+    // identified only by the reference its Payment was initiated under.
+    const subscriptionPayment =
+      booking || order
+        ? null
+        : await this.prisma.payment.findFirst({
+            where: { reference, subscriptionProviderId: { not: null } },
+            orderBy: { createdAt: 'desc' },
+          });
+
+    const expected =
+      booking?.priceUsdCents ?? order?.totalUsdCents ?? subscriptionPayment?.amountUsdCents;
     if (expected === undefined) throw new NotFoundException('Unknown Paynow reference');
     if (expected !== amountUsdCents)
       throw new ForbiddenException('Paynow callback amount mismatch');
-    const subjectWhere = booking ? { bookingId: booking.id } : order ? { orderId: order.id } : {};
+    const subjectWhere = booking
+      ? { bookingId: booking.id }
+      : order
+        ? { orderId: order.id }
+        : subscriptionPayment?.subscriptionProviderId
+          ? { subscriptionProviderId: subscriptionPayment.subscriptionProviderId }
+          : {};
 
     const prior = await this.prisma.payment.findFirst({
       where: {
@@ -71,9 +89,39 @@ export class PaymentsService {
         amountUsdCents,
         feeUsdCents: status === 'refunded' ? 0 : prior.feeUsdCents,
         externalRef: fields.paynowreference ?? prior.externalRef,
+        reference,
       },
     });
+
+    if (subjectWhere.subscriptionProviderId && status === 'paid') {
+      await applySubscriptionPayment(this.prisma, subjectWhere.subscriptionProviderId);
+    }
   }
+}
+
+/**
+ * Credits a provider's subscription once its payment is genuinely confirmed.
+ *
+ * This deliberately does NOT run when the checkout is merely created: doing
+ * so handed out a free month to anyone who started a Paynow checkout and
+ * walked away. Shared with the poll path so both routes to "it's paid" credit
+ * exactly once — `subscriptionPaidUntil` is only ever extended from a payment
+ * row that has already reached 'paid'.
+ */
+export async function applySubscriptionPayment(
+  prisma: PrismaService,
+  providerProfileId: string,
+): Promise<string> {
+  const profile = await prisma.providerProfile.findUniqueOrThrow({
+    where: { id: providerProfileId },
+    select: { subscriptionPaidUntil: true },
+  });
+  const paidUntil = nextSubscriptionPaidUntil(profile.subscriptionPaidUntil?.toISOString() ?? null);
+  await prisma.providerProfile.update({
+    where: { id: providerProfileId },
+    data: { subscriptionPaidUntil: paidUntil },
+  });
+  return paidUntil;
 }
 
 function toStringFields(body: Record<string, unknown>): Record<string, string> {

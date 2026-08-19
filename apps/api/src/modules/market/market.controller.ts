@@ -39,6 +39,11 @@ export class MarketController {
     return this.market.createOrder(user.id, dto);
   }
 
+  @Get('orders/:id/payment-status')
+  orderPaymentStatus(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.market.orderPaymentStatus(id, user.id);
+  }
+
   @Post('orders/:id/collect')
   collectOrder(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.market.collectOrder(id, user.id);

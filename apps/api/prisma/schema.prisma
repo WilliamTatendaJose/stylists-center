@@ -358,11 +358,14 @@ model Payment {
   amountUsdCents Int
   feeUsdCents    Int      @default(0)
   externalRef    String?
+  /// The gateway reference this payment was initiated under. Bookings and orders carry their own `reference` column, but a subscription has no such row — without this, a Paynow callback for a subscription had nothing to match against and was rejected as unknown. Nullable because rows written before this column existed cannot be backfilled.
+  reference      String?
   createdAt      DateTime @default(now())
 
   @@index([bookingId])
   @@index([orderId])
   @@index([subscriptionProviderId])
+  @@index([reference])
 }
 
 /// `Payment.status = 'released'` only marks escrow as settled inside this

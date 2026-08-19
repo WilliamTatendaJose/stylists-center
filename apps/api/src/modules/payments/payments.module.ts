@@ -6,11 +6,13 @@ import { PaynowAdapter } from './paynow.adapter';
 import { PAYMENT_GATEWAY } from './payment-gateway.port';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { PaymentStatusService } from './payment-status.service';
 
 @Module({
   controllers: [PaymentsController],
   providers: [
     PaymentsService,
+    PaymentStatusService,
     FakeEcoCashAdapter,
     PaynowAdapter,
     {
@@ -23,6 +25,6 @@ import { PaymentsService } from './payments.service';
       ) => (config.get('PAYMENT_PROVIDER', { infer: true }) === 'paynow' ? paynow : fake),
     },
   ],
-  exports: [PAYMENT_GATEWAY],
+  exports: [PAYMENT_GATEWAY, PaymentStatusService],
 })
 export class PaymentsModule {}

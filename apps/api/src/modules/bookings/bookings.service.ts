@@ -31,6 +31,7 @@ import {
   type PaymentGatewayPort,
   type PaymentIntentResult,
 } from '../payments/payment-gateway.port';
+import { PaymentStatusService } from '../payments/payment-status.service';
 import { TrustService } from '../trust/trust.service';
 import { toBookingRowDto } from './mappers';
 import { expireStaleBookingRequests } from './booking-expiry';
@@ -46,6 +47,7 @@ export class BookingsService {
     private readonly trust: TrustService,
     private readonly push: PushService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
+    private readonly paymentStatus: PaymentStatusService,
   ) {}
 
   async create(clientId: string, input: CreateBookingInput): Promise<CreateBookingResponse> {
@@ -142,6 +144,7 @@ export class BookingsService {
             status: checkoutIntent.status,
             amountUsdCents: service.priceUsdCents,
             externalRef: checkoutIntent.externalRef,
+            reference,
           },
         });
       }
@@ -173,31 +176,8 @@ export class BookingsService {
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.clientId !== clientId) throw new ForbiddenException();
 
-    const payment = await this.prisma.payment.findFirst({
-      where: { bookingId },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (!payment) return { status: 'none' };
-
-    const TERMINAL = new Set(['held', 'paid', 'released', 'refunded', 'failed', 'disputed']);
-    if (TERMINAL.has(payment.status) || payment.provider !== 'paynow' || !payment.externalRef) {
-      return { status: payment.status };
-    }
-
-    const polled = await this.paymentGateway.pollStatus(payment.externalRef);
-    if (polled === payment.status) return { status: payment.status };
-
-    await this.prisma.payment.create({
-      data: {
-        bookingId,
-        provider: payment.provider,
-        status: polled,
-        amountUsdCents: payment.amountUsdCents,
-        feeUsdCents: polled === 'refunded' ? 0 : payment.feeUsdCents,
-        externalRef: payment.externalRef,
-      },
-    });
-    return { status: polled };
+    const { status } = await this.paymentStatus.resolve({ bookingId });
+    return { status };
   }
 
   async listForClient(clientId: string): Promise<BookingRowDto[]> {

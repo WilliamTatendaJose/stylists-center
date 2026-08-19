@@ -8,6 +8,7 @@ import { MatchingService } from '../matching/matching.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
+import { PaymentStatusService } from '../payments/payment-status.service';
 import type {
   PaymentGatewayPort,
   PaymentIntentResult,
@@ -256,13 +257,15 @@ describe('BookingsService', () => {
       push,
       new FakeQueue() as unknown as Queue,
     );
+    const gateway = new FakeEcoCashAdapter();
     bookings = new BookingsService(
       prisma,
       socketEmitter,
       matching,
       new TrustService(prisma),
       push,
-      new FakeEcoCashAdapter(),
+      gateway,
+      new PaymentStatusService(prisma, gateway),
     );
   });
 
@@ -554,13 +557,15 @@ describe('BookingsService', () => {
       },
     });
 
+    const failingGateway = new FailingGateway();
     const flakyBookings = new BookingsService(
       prisma,
       new SocketEmitterService(),
       matching,
       new TrustService(prisma),
       new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
-      new FailingGateway(),
+      failingGateway,
+      new PaymentStatusService(prisma, failingGateway),
     );
 
     await expect(

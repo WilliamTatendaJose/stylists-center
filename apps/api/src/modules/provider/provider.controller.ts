@@ -143,6 +143,11 @@ export class ProviderController {
     return this.provider.paySubscription(providerId, dto);
   }
 
+  @Get('subscription/payment-status')
+  subscriptionPaymentStatus(@CurrentProvider() providerId: string) {
+    return this.provider.subscriptionPaymentStatus(providerId);
+  }
+
   @Post('bookings/:id/confirm')
   confirmBooking(@Param('id') id: string, @CurrentProvider() providerId: string) {
     return this.provider.confirmBooking(id, providerId);

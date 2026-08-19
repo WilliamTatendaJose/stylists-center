@@ -92,10 +92,18 @@ export const createOrderResponseSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   totalUsdCents: z.number().int(),
-  /** Present for Paynow orders; the client must open it to complete checkout. */
+  /** Present when Paynow returned a hosted checkout page rather than a phone prompt. */
   checkoutUrl: z.url().optional(),
+  /** Present when Paynow pushed an EcoCash prompt to the buyer's phone — show this while polling payment-status. */
+  instructions: z.string().optional(),
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
+
+/** `GET /v1/market/orders/:id/payment-status` — polled while an EcoCash order payment is in flight. */
+export const orderPaymentStatusSchema = z.object({
+  status: z.enum(['none', 'pending', 'held', 'paid', 'released', 'refunded', 'failed', 'disputed']),
+});
+export type OrderPaymentStatusDto = z.infer<typeof orderPaymentStatusSchema>;
 
 /** A seller's own inventory row; distance/provider identity are implicit. */
 export const providerProductSchema = z.object({

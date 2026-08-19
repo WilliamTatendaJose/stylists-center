@@ -18,8 +18,26 @@ export const paySubscriptionSchema = z.object({
 export type PaySubscriptionInput = z.infer<typeof paySubscriptionSchema>;
 
 export const paySubscriptionResponseSchema = z.object({
-  paidUntil: z.iso.datetime(),
-  /** Present only for EcoCash — the Paynow-hosted checkout page to open. */
+  /**
+   * Null when an EcoCash payment is still in flight and the provider has
+   * never paid before — there is no renewal date to show yet. Unchanged from
+   * the previous value while a renewal is pending: the month is credited only
+   * once Paynow confirms.
+   */
+  paidUntil: z.iso.datetime().nullable(),
+  /** True while awaiting confirmation — the caller must poll `subscription/payment-status`, not assume success. */
+  pending: z.boolean(),
+  /** Present only when Paynow returned a hosted checkout page rather than a phone prompt. */
   checkoutUrl: z.string().optional(),
+  /** Present when Paynow pushed an EcoCash prompt to the provider's phone — show while polling. */
+  instructions: z.string().optional(),
 });
 export type PaySubscriptionResponse = z.infer<typeof paySubscriptionResponseSchema>;
+
+/** `GET /v1/provider/subscription/payment-status` — polled while an EcoCash subscription payment is in flight. */
+export const subscriptionPaymentStatusSchema = z.object({
+  status: z.enum(['none', 'pending', 'held', 'paid', 'released', 'refunded', 'failed', 'disputed']),
+  paidUntil: z.iso.datetime().nullable(),
+  active: z.boolean(),
+});
+export type SubscriptionPaymentStatusDto = z.infer<typeof subscriptionPaymentStatusSchema>;

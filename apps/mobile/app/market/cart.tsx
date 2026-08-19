@@ -133,10 +133,6 @@ export default function Cart() {
       removeSeller(group.providerId);
     }
 
-    for (const { created } of succeeded) {
-      if (created.checkoutUrl) await WebBrowser.openBrowserAsync(created.checkoutUrl);
-    }
-
     if (Object.keys(nextErrors).length > 0) {
       // At least one seller failed: stay here. The cart now shows only the
       // sellers still pending, each with its own error, ready to retry —
@@ -146,6 +142,39 @@ export default function Cart() {
     }
 
     clear();
+
+    // Paynow pushed an EcoCash prompt per order — wait for the real outcome
+    // rather than calling the checkout done the moment the request returned.
+    const awaitingPayment = succeeded.some(({ created }) => created.instructions);
+    if (awaitingPayment) {
+      router.replace({
+        pathname: '/market/paying',
+        params: {
+          orders: JSON.stringify(
+            succeeded.map(({ group, created }) => ({
+              id: created.id,
+              reference: created.reference,
+              providerName: group.providerName,
+              totalUsdCents: created.totalUsdCents,
+            })),
+          ),
+          ...(succeeded.find(({ created }) => created.instructions)?.created.instructions
+            ? {
+                instructions: succeeded.find(({ created }) => created.instructions)?.created
+                  .instructions,
+              }
+            : {}),
+        },
+      });
+      return;
+    }
+
+    // A hosted checkout page (no phone prompt) still needs the browser; the
+    // orders screen is where its result will show up.
+    for (const { created } of succeeded) {
+      if (created.checkoutUrl) await WebBrowser.openBrowserAsync(created.checkoutUrl);
+    }
+
     router.replace({
       pathname: '/market/done',
       params: {

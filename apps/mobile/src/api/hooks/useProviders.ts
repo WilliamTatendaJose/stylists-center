@@ -11,6 +11,7 @@ import {
   type ProviderProfileDto,
   type ProviderSlotsResponse,
   type ProviderSubscriptionDto,
+  type SubscriptionPaymentStatusDto,
   type ServiceDto,
   type UpdateProviderProfileInput,
   type UpdateProviderServiceInput,
@@ -216,6 +217,43 @@ export function usePaySubscription() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROVIDER_SUBSCRIPTION_KEY });
+    },
+  });
+}
+
+const TERMINAL_PAYMENT_STATUSES = new Set<SubscriptionPaymentStatusDto['status']>([
+  'held',
+  'paid',
+  'released',
+  'refunded',
+  'failed',
+  'disputed',
+]);
+
+/**
+ * Polls while an EcoCash subscription payment is in flight. The month is only
+ * credited once Paynow confirms, so this is how the card learns it went
+ * through — stops as soon as the status settles either way.
+ */
+export function useSubscriptionPaymentStatus(enabled: boolean) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: ['provider', 'subscription', 'payment-status'],
+    queryFn: async () => {
+      const result = await apiFetch<SubscriptionPaymentStatusDto>(
+        '/v1/provider/subscription/payment-status',
+      );
+      // The subscription card reads `paidUntil`/`active` from its own query;
+      // a confirmed payment changes both.
+      if (TERMINAL_PAYMENT_STATUSES.has(result.status)) {
+        void queryClient.invalidateQueries({ queryKey: PROVIDER_SUBSCRIPTION_KEY });
+      }
+      return result;
+    },
+    enabled,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status && TERMINAL_PAYMENT_STATUSES.has(status) ? false : 3000;
     },
   });
 }

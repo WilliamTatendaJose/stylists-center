@@ -18,6 +18,7 @@ import {
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { PaymentStatusService } from '../payments/payment-status.service';
 import { Inject } from '@nestjs/common';
 import { toOrderRow, toProductDetail, toProductRow, type ProductGeoRow } from './mappers';
 
@@ -26,6 +27,7 @@ export class MarketService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
+    private readonly paymentStatus: PaymentStatusService,
   ) {}
 
   /**
@@ -196,11 +198,17 @@ export class MarketService {
       });
 
       let checkoutUrl: string | undefined;
+      let instructions: string | undefined;
       if (input.paymentMethod === 'ecocash') {
+        const buyer = await tx.user.findUniqueOrThrow({
+          where: { id: buyerId },
+          select: { phone: true },
+        });
         const intent = await this.paymentGateway.createCheckout({
           reference: order.reference,
           amountUsdCents: totalUsdCents,
           description: `Market order ${order.reference}`,
+          phone: buyer.phone,
         });
         await tx.payment.create({
           data: {
@@ -209,9 +217,11 @@ export class MarketService {
             status: intent.status,
             amountUsdCents: totalUsdCents,
             externalRef: intent.externalRef,
+            reference: order.reference,
           },
         });
         checkoutUrl = intent.checkoutUrl;
+        instructions = intent.instructions;
       }
 
       return {
@@ -219,8 +229,16 @@ export class MarketService {
         reference: order.reference,
         totalUsdCents,
         ...(checkoutUrl ? { checkoutUrl } : {}),
+        ...(instructions ? { instructions } : {}),
       };
     });
+  }
+
+  /** Polls Paynow for an in-flight order payment — the cart's waiting screen calls this. */
+  async orderPaymentStatus(orderId: string, buyerId: string): Promise<{ status: string }> {
+    await this.requireOwnOrder(orderId, buyerId);
+    const { status } = await this.paymentStatus.resolve({ orderId });
+    return { status };
   }
 
   async listOrders(buyerId: string): Promise<OrderRowDto[]> {
