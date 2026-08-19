@@ -52,6 +52,15 @@ export default function Payment() {
   const [payerPhone, setPayerPhone] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [doneParams, setDoneParams] = useState<Record<string, string> | null>(null);
+  /**
+   * Only ever set by a checkout started on this visit.
+   *
+   * Without it, a pending payment left in the store by an earlier attempt made
+   * this screen redirect to the waiting screen the moment it mounted — so
+   * "Continue to payment" appeared to open Paynow's website by itself, before
+   * the user had chosen anything.
+   */
+  const [handingOff, setHandingOff] = useState(false);
 
   // Prefilled with the account number as the common case, still editable —
   // the line someone pays from is not necessarily the one they log in with.
@@ -92,17 +101,17 @@ export default function Payment() {
    * An effect runs after the commit, when the navigator is settled.
    */
   useEffect(() => {
-    if (!pendingPayment && !doneParams) return;
+    if (!handingOff && !doneParams) return;
     leavingRef.current = true;
     resetDraft();
-  }, [pendingPayment, doneParams, resetDraft]);
+  }, [handingOff, doneParams, resetDraft]);
 
   // Declarative, not imperative. `router.replace`/`router.push` called from
   // here were dispatched and then silently dropped — the screen never
   // mounted, no error was raised, and the user was left on the home tab with
   // a booking made, a prompt sent, and nothing polling the payment.
   // <Redirect> hands the navigation to the mounted navigator instead.
-  if (pendingPayment) return <Redirect href="/book/paying" />;
+  if (handingOff && pendingPayment) return <Redirect href="/book/paying" />;
   if (doneParams) return <Redirect href={{ pathname: '/book/done', params: doneParams }} />;
 
   if (!providerId || !serviceId || !date || !time || !provider || !service) return null;
@@ -162,8 +171,7 @@ export default function Payment() {
               ...(created.instructions ? { instructions: created.instructions } : {}),
               ...(created.checkoutUrl ? { checkoutUrl: created.checkoutUrl } : {}),
             });
-            // Navigation is handled by the effect watching `pendingPayment`.
-            // The draft is cleared there too, once the handoff has happened.
+            setHandingOff(true);
             return;
           }
           // Cash: nothing to wait on, but the handoff still goes through a

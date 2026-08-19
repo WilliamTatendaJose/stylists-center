@@ -21,7 +21,7 @@ import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { apiAssetUrl } from '../../src/api/client.js';
-import { useBookingDraftStore } from '../../src/state/index.js';
+import { useBookingDraftStore, usePendingPaymentStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { FullScreenImageViewer } from '../../src/components/FullScreenImageViewer.js';
 
@@ -81,6 +81,7 @@ export default function ProviderProfile() {
   const onBack = useBack('/(tabs)');
   const { data: provider, isError: providerError, refetch: refetchProvider } = useProvider(id);
   const setProvider = useBookingDraftStore((s) => s.setProvider);
+  const clearPendingPayment = usePendingPaymentStore((s) => s.clearPending);
 
   const [reportSheetOpen, setReportSheetOpen] = useState(false);
   const [reportOutcome, setReportOutcome] = useState<{ ok: boolean; message: string } | null>(null);
@@ -115,6 +116,9 @@ export default function ProviderProfile() {
 
   const goBook = () => {
     if (!id) return;
+    // Starting a fresh booking retires any payment left over from an earlier
+    // one, so nothing stale can be mistaken for this booking's checkout.
+    clearPendingPayment();
     setProvider(id, matchId ?? null);
     router.push('/book/slot');
   };

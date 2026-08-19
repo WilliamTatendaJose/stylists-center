@@ -281,9 +281,9 @@ export default function ProviderShop() {
                     // `text`, not `neutral900`: the dark palette inherits
                     // neutral900 unchanged, so on dark it matched both the
                     // icon and the screen behind it and the button vanished.
-                    style={[styles.cartButton, { backgroundColor: colors.text }]}
+                    style={[styles.cartButton, { borderColor: colors.divider }]}
                   >
-                    <ShoppingBag size={18} strokeWidth={1.7} color={colors.bg} />
+                    <ShoppingBag size={18} strokeWidth={1.7} color={colors.text} />
                     {itemCount > 0 ? (
                       <View style={styles.cartCount}>
                         <Badge label={String(itemCount)} tone="accent" size="sm" />

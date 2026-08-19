@@ -1,4 +1,9 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Env } from '../../config/env';
@@ -12,6 +17,24 @@ import type {
 
 const INITIATE_URL = 'https://www.paynow.co.zw/interface/initiatetransaction';
 const MOBILE_INITIATE_URL = 'https://www.paynow.co.zw/interface/remotetransaction';
+
+/**
+ * Paynow refused the payment itself, rather than the method.
+ *
+ * Surfaced to the caller as a 400 so the booking or order is never written:
+ * there is no point creating one, and no second route worth trying — the
+ * customer's wallet said no. Distinct from the gateway being unreachable or
+ * refusing this *number*, both of which are worth falling back for.
+ */
+export class PaynowDeclinedError extends BadRequestException {}
+
+/**
+ * Paynow returns free text, so this matches on the phrases it actually sends
+ * for a refused payment rather than a code it does not give us.
+ */
+function isDecline(error: string): boolean {
+  return /insufficient|balance|declin|not enough|limit exceeded/i.test(error);
+}
 
 @Injectable()
 export class PaynowAdapter implements PaymentGatewayPort {
@@ -40,6 +63,12 @@ export class PaynowAdapter implements PaymentGatewayPort {
           { integrationId, integrationKey, returnUrl, resultUrl },
         );
       } catch (error) {
+        // A DECLINE is not a reason to fall back. "Insufficient balance" means
+        // Paynow looked at this payment and refused it — quietly opening a
+        // card page instead hides that answer and lets the booking proceed as
+        // though nothing was wrong. Only a refusal of the *method* (an
+        // unregistered line, a test-mode number) earns the hosted page.
+        if (error instanceof PaynowDeclinedError) throw error;
         this.logger.warn(
           `Paynow mobile checkout for ${input.reference} failed, falling back to hosted checkout: ${
             error instanceof Error ? error.message : String(error)
@@ -121,9 +150,9 @@ export class PaynowAdapter implements PaymentGatewayPort {
 
     const reply = await this.post(MOBILE_INITIATE_URL, body);
     if (reply.status?.toLowerCase() !== 'ok' || !reply.pollurl) {
-      throw new ServiceUnavailableException(
-        reply.error ?? 'Paynow did not accept the mobile checkout',
-      );
+      const error = reply.error ?? 'Paynow did not accept the mobile checkout';
+      if (isDecline(error)) throw new PaynowDeclinedError(error);
+      throw new ServiceUnavailableException(error);
     }
     if (!this.verifyCallback(reply)) {
       throw new ServiceUnavailableException('Paynow returned an invalid checkout signature');

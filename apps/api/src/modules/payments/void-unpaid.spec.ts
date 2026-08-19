@@ -64,7 +64,7 @@ describe('voidUnpaidSubject', () => {
       data: { phone: uniquePhone(), displayName: 'Seller', cityId },
     });
     const category = await prisma.category.create({
-      data: { name: `void-cat-${String(Date.now())}`, slug: `void-cat-${String(Date.now())}` },
+      data: { name: `void-cat-${String(Date.now())}` },
     });
     const profile = await prisma.providerProfile.create({
       data: {
@@ -98,6 +98,7 @@ describe('voidUnpaidSubject', () => {
         data: {
           providerId: providerProfileId,
           name: 'Wig',
+          description: 'Test inventory',
           priceUsdCents: 1000,
           stockQty: 10,
           active: true,
