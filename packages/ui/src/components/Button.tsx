@@ -93,7 +93,11 @@ export function Button({
 }: ButtonProps) {
   const { colors } = useTheme();
   const v: VariantStyle = {
-    primary: { container: { backgroundColor: colors.accent }, textColor: colors.bg, onDark: true },
+    primary: {
+      container: { backgroundColor: colors.accent },
+      textColor: colors.onAccent.text,
+      onDark: true,
+    },
     secondary: {
       container: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider },
       textColor: colors.text,
