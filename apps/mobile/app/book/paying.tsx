@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
+import { Check } from 'lucide-react-native';
 import { Screen, Text, Button, useTheme } from '@sc/ui';
 import { space } from '@sc/tokens';
 import { useBookingPaymentStatus } from '../../src/api/hooks/useBookings.js';
@@ -11,6 +12,15 @@ const POLL_TIMEOUT_MS = 90_000;
 const styles = StyleSheet.create({
   body: { alignItems: 'center', paddingTop: space.xxl },
   spinner: { marginBottom: space.xl },
+  tick: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: space.xl,
+  },
   title: { marginBottom: space.s, textAlign: 'center' },
   instructions: { marginBottom: space.xxl, textAlign: 'center' },
 });
@@ -60,8 +70,17 @@ export default function Paying() {
     return () => clearTimeout(timer);
   }, [status]);
 
-  useEffect(() => {
-    if (!status || !SUCCESS_STATUSES.has(status)) return;
+  if (!params.bookingId || !params.providerId || !params.reference) return null;
+
+  const paid = status ? SUCCESS_STATUSES.has(status) : false;
+  const failed = status ? FAILURE_STATUSES.has(status) : false;
+  const viaBrowser = Boolean(params.checkoutUrl);
+
+  // Confirmed payments are NOT auto-forwarded. The whole point of this screen
+  // is that the person sees Paynow's actual answer — bouncing straight to
+  // "Booked." on success would hide the one moment that proves the money
+  // moved, and reads exactly like the auto-complete this replaced.
+  const goDone = () => {
     router.replace({
       pathname: '/book/done',
       params: {
@@ -74,42 +93,50 @@ export default function Paying() {
         paymentLabel: 'Paynow — EcoCash, paid',
       },
     });
-  }, [status, params]);
-
-  if (!params.bookingId || !params.providerId || !params.reference) return null;
-
-  const failed = status ? FAILURE_STATUSES.has(status) : false;
-  const viaBrowser = Boolean(params.checkoutUrl);
-
+  };
   const goBookings = () => router.replace('/(tabs)/bookings');
   const showExit = failed || timedOut;
 
   return (
     <Screen
-      footer={showExit ? <Button label="My bookings" block onPress={goBookings} /> : undefined}
+      footer={
+        paid ? (
+          <Button label="Continue" block size="lg" arrow onPress={goDone} />
+        ) : showExit ? (
+          <Button label="My bookings" block onPress={goBookings} />
+        ) : undefined
+      }
     >
       <View style={styles.body}>
-        {showExit ? null : (
+        {paid ? (
+          <View style={[styles.tick, { borderColor: colors.accent }]}>
+            <Check size={30} strokeWidth={2.4} color={colors.accent} />
+          </View>
+        ) : showExit ? null : (
           <ActivityIndicator size="large" color={colors.accent} style={styles.spinner} />
         )}
         <Text variant="h3" style={styles.title}>
-          {failed
-            ? "Payment wasn't completed"
-            : timedOut
-              ? 'Still waiting on Paynow'
-              : viaBrowser
-                ? 'Finish paying in Paynow'
-                : 'Check your phone'}
+          {paid
+            ? 'Payment confirmed'
+            : failed
+              ? "Payment wasn't completed"
+              : timedOut
+                ? 'Still waiting on Paynow'
+                : viaBrowser
+                  ? 'Finish paying in Paynow'
+                  : 'Check your phone'}
         </Text>
         <Text variant="body" color="neutral700" style={styles.instructions}>
-          {failed
-            ? "Paynow reported this payment didn't go through. Your booking request is still on file, but unpaid — check My bookings for its status."
-            : timedOut
-              ? "This is taking longer than expected. Your booking request is on file — we'll update it as soon as Paynow confirms, or check My bookings for the latest status."
-              : (params.instructions ??
-                (viaBrowser
-                  ? 'Complete the payment in the Paynow window. This screen updates on its own once it clears.'
-                  : 'Approve the EcoCash prompt on your phone to confirm this booking.'))}
+          {paid
+            ? `Paynow confirmed your payment for ${params.reference}. Your booking request is with ${params.providerName ?? 'the stylist'} now.`
+            : failed
+              ? "Paynow reported this payment didn't go through. Your booking request is still on file, but unpaid — check My bookings for its status."
+              : timedOut
+                ? "This is taking longer than expected. Your booking request is on file — we'll update it as soon as Paynow confirms, or check My bookings for the latest status."
+                : (params.instructions ??
+                  (viaBrowser
+                    ? 'Complete the payment in the Paynow window. This screen updates on its own once it clears.'
+                    : 'Approve the EcoCash prompt on your phone to confirm this booking.'))}
         </Text>
       </View>
     </Screen>

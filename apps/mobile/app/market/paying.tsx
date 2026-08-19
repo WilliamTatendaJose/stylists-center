@@ -116,8 +116,13 @@ export default function MarketPaying() {
     orders.length > 0 && orders.every((o) => isTerminalOrderPayment(statuses[o.id]));
   const allPaid = orders.length > 0 && orders.every((o) => SUCCESS.has(statuses[o.id] ?? ''));
 
-  useEffect(() => {
-    if (!allPaid) return;
+  if (orders.length === 0) return null;
+
+  const done = timedOut || allSettled;
+  const goOrders = () => router.replace('/market/orders');
+  // Not auto-forwarded on success — see the note in book/paying.tsx: the
+  // confirmed result is the thing worth showing, so it takes a deliberate tap.
+  const goDone = () => {
     router.replace({
       pathname: '/market/done',
       params: {
@@ -130,33 +135,40 @@ export default function MarketPaying() {
         ),
       },
     });
-  }, [allPaid, orders]);
-
-  if (orders.length === 0) return null;
-
-  const done = timedOut || allSettled;
-  const goOrders = () => router.replace('/market/orders');
+  };
 
   return (
-    <Screen footer={done ? <Button label="See my orders" block onPress={goOrders} /> : undefined}>
+    <Screen
+      footer={
+        allPaid ? (
+          <Button label="Continue" block size="lg" arrow onPress={goDone} />
+        ) : done ? (
+          <Button label="See my orders" block onPress={goOrders} />
+        ) : undefined
+      }
+    >
       <View style={styles.head}>
         {done ? null : (
           <ActivityIndicator size="large" color={colors.accent} style={styles.spinner} />
         )}
         <Text variant="h3" style={styles.title}>
-          {allSettled
-            ? 'Some payments did not go through'
-            : timedOut
-              ? 'Still waiting on EcoCash'
-              : 'Check your phone'}
+          {allPaid
+            ? 'Payment confirmed'
+            : allSettled
+              ? 'Some payments did not go through'
+              : timedOut
+                ? 'Still waiting on EcoCash'
+                : 'Check your phone'}
         </Text>
         <Text variant="body" color="neutral700" style={styles.intro}>
-          {allSettled
-            ? "Anything marked 'Not paid' is still reserved but unpaid — you can settle it on collection, or cancel it from My orders."
-            : timedOut
-              ? "This is taking longer than expected. Your orders are on file — we'll update them as soon as Paynow confirms."
-              : (params.instructions ??
-                'Approve the EcoCash prompt on your phone to pay for these orders.')}
+          {allPaid
+            ? `Paynow confirmed ${orders.length > 1 ? 'these payments' : 'this payment'}. Bring the order number when you collect.`
+            : allSettled
+              ? "Anything marked 'Not paid' is still reserved but unpaid — you can settle it on collection, or cancel it from My orders."
+              : timedOut
+                ? "This is taking longer than expected. Your orders are on file — we'll update them as soon as Paynow confirms."
+                : (params.instructions ??
+                  'Approve the EcoCash prompt on your phone to pay for these orders.')}
         </Text>
       </View>
 

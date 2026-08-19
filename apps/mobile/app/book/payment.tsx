@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { space } from '@sc/tokens';
@@ -20,6 +20,7 @@ import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { formatSlotLabel, isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
 import { describeError } from '../../src/api/errorMessage.js';
+import { TimeoutError } from '../../src/api/errors.js';
 
 const styles = StyleSheet.create({
   footer: { gap: space.s },
@@ -57,9 +58,21 @@ export default function Payment() {
   const { data: provider } = useProvider(providerId ?? undefined);
   const service = provider?.services.find((s) => s.id === serviceId) ?? null;
 
+  /**
+   * Set the moment a booking succeeds and this screen starts navigating on.
+   *
+   * Confirming clears the draft, which empties exactly the values the
+   * cold-start guard below watches — so without this the guard fired on the
+   * next render and `replace`d the route we had just navigated to, dumping
+   * the user on the home tab instead of the payment-status screen. The guard
+   * is for arriving here with no draft, not for leaving here having used it.
+   */
+  const leavingRef = useRef(false);
+
   // Cold-start / deep-link guard — this screen only makes sense with a
   // provider, service, and slot already chosen.
   useEffect(() => {
+    if (leavingRef.current) return;
     if (!providerId || !serviceId || !date || !time) {
       router.replace('/(tabs)');
     }
@@ -89,6 +102,7 @@ export default function Payment() {
       },
       {
         onSuccess: (created) => {
+          leavingRef.current = true;
           const doneParams = {
             reference: created.reference,
             providerId: provider.id,
@@ -125,6 +139,22 @@ export default function Payment() {
           });
         },
         onError: (error) => {
+          /**
+           * A timeout is not a failure — the request may well have been
+           * applied. It routinely is: the API answers this in ~1s, but a
+           * response lost on a mobile network still trips the client
+           * deadline, and the booking exists server-side with an EcoCash
+           * prompt already sent. Leaving the user here invites them to tap
+           * again and double-book, and strands the payment with nothing
+           * watching it. Send them to Bookings, which re-fetches from the
+           * server and shows whichever bookings actually exist.
+           */
+          if (error instanceof TimeoutError) {
+            leavingRef.current = true;
+            resetDraft();
+            router.replace('/(tabs)/bookings');
+            return;
+          }
           setBookingError(describeError(error, "Couldn't confirm that booking. Try again."));
         },
       },
