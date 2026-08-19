@@ -5,6 +5,7 @@ import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { ledgerStatus } from './ledger-status';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from './payment-gateway.port';
+import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 import { Inject } from '@nestjs/common';
 
 @Injectable()
@@ -95,6 +96,12 @@ export class PaymentsService {
 
     if (subjectWhere.subscriptionProviderId && status === 'paid') {
       await applySubscriptionPayment(this.prisma, subjectWhere.subscriptionProviderId);
+    }
+
+    // Paynow refused it. This is the path that matters when nobody is
+    // watching — the customer closed the app, so no poll will ever run.
+    if (FAILURE_STATUSES.has(status)) {
+      await voidUnpaidSubject(this.prisma, subjectWhere);
     }
   }
 }

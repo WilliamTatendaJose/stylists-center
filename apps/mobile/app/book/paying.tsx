@@ -39,8 +39,6 @@ export default function Paying() {
 
   // Only reachable with a payment in flight — otherwise this is a cold start
   // or a stale back-navigation and there is nothing to wait for.
-  // Only reachable with a payment in flight — otherwise this is a cold start
-  // or a stale back-navigation and there is nothing to wait for.
   useEffect(() => {
     if (!pending) router.replace('/(tabs)');
   }, [pending]);
@@ -57,6 +55,10 @@ export default function Paying() {
 
   const { data } = useBookingPaymentStatus(pending?.bookingId, !timedOut);
   const status = data?.status;
+
+  // The booking is cancelled server-side the moment the payment is refused
+  // (see void-unpaid.ts) — the app only has to report it, and does not need to
+  // stay open for it to happen.
 
   useEffect(() => {
     if (!status || SUCCESS_STATUSES.has(status)) return;
@@ -126,7 +128,7 @@ export default function Paying() {
           {paid
             ? `Paynow confirmed your payment for ${pending.reference}. Your booking request is with ${pending.providerName} now.`
             : failed
-              ? "Paynow reported this payment didn't go through. Your booking request is still on file, but unpaid — check My bookings for its status."
+              ? "Paynow reported this payment didn't go through, so this booking has been cancelled and the stylist won't be holding the slot. Nothing was charged — you can book again whenever you're ready."
               : timedOut
                 ? "This is taking longer than expected. Your booking request is on file — we'll update it as soon as Paynow confirms, or check My bookings for the latest status."
                 : (pending.instructions ??

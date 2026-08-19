@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { space } from '@sc/tokens';
 import { formatUsd, isValidMobileMoneyPhone } from '@sc/shared';
 import {
@@ -44,11 +44,14 @@ export default function Payment() {
   const setPaymentMethod = useBookingDraftStore((s) => s.setPaymentMethod);
   const resetDraft = useBookingDraftStore((s) => s.reset);
   const setPendingPayment = usePendingPaymentStore((s) => s.setPending);
+  const clearPendingPayment = usePendingPaymentStore((s) => s.clearPending);
+  const pendingPayment = usePendingPaymentStore((s) => s.pending);
   const createBooking = useCreateBooking();
   const [bookingError, setBookingError] = useState<string | null>(null);
   const { data: me } = useMe();
   const [payerPhone, setPayerPhone] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [doneParams, setDoneParams] = useState<Record<string, string> | null>(null);
 
   // Prefilled with the account number as the common case, still editable —
   // the line someone pays from is not necessarily the one they log in with.
@@ -79,6 +82,29 @@ export default function Payment() {
     }
   }, [providerId, serviceId, date, time]);
 
+  /**
+   * Hand off to the payment-status screen once a checkout exists.
+   *
+   * Driven by state rather than called inside the mutation callback: a
+   * `router.replace` issued from within `onSuccess` was being dropped
+   * outright — the booking was created and the prompt sent, but the app
+   * stayed put and the user was left on the home tab with nothing polling.
+   * An effect runs after the commit, when the navigator is settled.
+   */
+  useEffect(() => {
+    if (!pendingPayment && !doneParams) return;
+    leavingRef.current = true;
+    resetDraft();
+  }, [pendingPayment, doneParams, resetDraft]);
+
+  // Declarative, not imperative. `router.replace`/`router.push` called from
+  // here were dispatched and then silently dropped — the screen never
+  // mounted, no error was raised, and the user was left on the home tab with
+  // a booking made, a prompt sent, and nothing polling the payment.
+  // <Redirect> hands the navigation to the mounted navigator instead.
+  if (pendingPayment) return <Redirect href="/book/paying" />;
+  if (doneParams) return <Redirect href={{ pathname: '/book/done', params: doneParams }} />;
+
   if (!providerId || !serviceId || !date || !time || !provider || !service) return null;
 
   const whenLabel = formatSlotLabel(date, time);
@@ -92,6 +118,9 @@ export default function Payment() {
       return;
     }
     setPhoneError(null);
+    // A previous attempt's payment must not make the effect below fire on the
+    // stale one the moment this screen mounts.
+    clearPendingPayment();
     createBooking.mutate(
       {
         providerId: provider.id,
@@ -133,18 +162,17 @@ export default function Payment() {
               ...(created.instructions ? { instructions: created.instructions } : {}),
               ...(created.checkoutUrl ? { checkoutUrl: created.checkoutUrl } : {}),
             });
-            resetDraft();
-            router.replace('/book/paying');
+            // Navigation is handled by the effect watching `pendingPayment`.
+            // The draft is cleared there too, once the handoff has happened.
             return;
           }
-          resetDraft();
-          router.replace({
-            pathname: '/book/done',
-            params: {
-              ...doneParams,
-              paymentLabel:
-                paymentMethod === 'ecocash' ? 'Paynow — EcoCash' : 'Cash — pay in person',
-            },
+          // Cash: nothing to wait on, but the handoff still goes through a
+          // <Redirect> below rather than router.replace — imperative
+          // navigation from this screen is dropped, which left a confirmed
+          // cash booking dumping the user on the home tab.
+          setDoneParams({
+            ...doneParams,
+            paymentLabel: 'Cash — pay in person',
           });
         },
         onError: (error) => {

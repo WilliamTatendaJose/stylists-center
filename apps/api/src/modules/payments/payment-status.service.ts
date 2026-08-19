@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from './payment-gateway.port';
+import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 
 /**
  * Statuses that will never change on their own. Anything else is still in
@@ -77,6 +78,11 @@ export class PaymentStatusService {
         reference: payment.reference,
       },
     });
+
+    // The gateway has refused it: release whatever the payment was holding.
+    if (FAILURE_STATUSES.has(polled)) {
+      await voidUnpaidSubject(this.prisma, subject);
+    }
     return { status: polled, changed: true };
   }
 }
