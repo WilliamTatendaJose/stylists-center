@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { paymentMethodSchema } from './bookings.js';
+import { payerPhoneSchema, paymentMethodSchema } from './bookings.js';
 import { imageUrlSchema } from './uploads.js';
 
 export const productRowSchema = z.object({
@@ -85,6 +85,8 @@ export const createOrderSchema = z.object({
     )
     .min(1)
     .max(20),
+  /** Required in practice for EcoCash — the number the prompt is sent to. Falls back to the account phone when absent. */
+  payerPhone: payerPhoneSchema.optional(),
 });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 

@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
-import { formatUsd, type CreateOrderResponse, type PaymentMethod } from '@sc/shared';
+import {
+  formatUsd,
+  isValidMobileMoneyPhone,
+  type CreateOrderResponse,
+  type PaymentMethod,
+} from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
   Screen,
@@ -15,9 +20,11 @@ import {
   RadioCard,
   RuleList,
   EmptyPanel,
+  TextField,
   useTheme,
 } from '@sc/ui';
 import { useCreateOrder } from '../../src/api/hooks/useMarket.js';
+import { useMe } from '../../src/api/hooks/useMe.js';
 import {
   cartTotalUsdCents,
   groupCartBySeller,
@@ -48,6 +55,8 @@ const styles = StyleSheet.create({
   section: { marginTop: space.xl, marginBottom: space.l },
   sectionLabel: { marginBottom: space.m },
   radioGap: { marginBottom: space.s },
+  phoneField: { marginTop: space.l },
+  phoneHelp: { marginTop: space.s },
   footer: { gap: space.s },
 });
 
@@ -71,9 +80,18 @@ export default function Cart() {
   const clear = useCartStore((s) => s.clear);
 
   const createOrder = useCreateOrder();
+  const { data: me } = useMe();
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ecocash');
   const [submitting, setSubmitting] = useState(false);
   const [sellerErrors, setSellerErrors] = useState<Record<string, string>>({});
+  const [payerPhone, setPayerPhone] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Prefilled with the account number as the common case, still editable —
+  // the line someone pays from is not necessarily the one they log in with.
+  useEffect(() => {
+    if (me?.phone) setPayerPhone((current) => current || me.phone);
+  }, [me?.phone]);
 
   const groups = groupCartBySeller(lines);
   const total = cartTotalUsdCents(lines);
@@ -96,6 +114,13 @@ export default function Cart() {
    * Only groups that failed stay in the cart afterwards, ready to retry.
    */
   const placeOrders = async () => {
+    // Catch a bad number before placing anything: these orders consume stock,
+    // and a rejected phone would otherwise fail them one seller at a time.
+    if (paymentMethod === 'ecocash' && !isValidMobileMoneyPhone(payerPhone.trim())) {
+      setPhoneError('Enter a valid mobile number, for example 077 000 0000.');
+      return;
+    }
+    setPhoneError(null);
     setSellerErrors({});
     setSubmitting(true);
 
@@ -106,6 +131,7 @@ export default function Cart() {
             providerId: group.providerId,
             paymentMethod,
             items: group.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+            ...(paymentMethod === 'ecocash' ? { payerPhone: payerPhone.trim() } : {}),
           })
           .then((created) => ({ group, created })),
       ),
@@ -319,6 +345,30 @@ export default function Cart() {
             setPaymentMethod('cash');
           }}
         />
+
+        {paymentMethod === 'ecocash' ? (
+          <View style={styles.phoneField}>
+            <TextField
+              label="EcoCash number"
+              value={payerPhone}
+              onChangeText={(value) => {
+                setPayerPhone(value);
+                setPhoneError(null);
+              }}
+              placeholder="077 000 0000"
+              keyboardType="phone-pad"
+            />
+            <Text
+              variant="metaSmall"
+              color={phoneError ? colors.accent700 : 'neutral600'}
+              style={styles.phoneHelp}
+              {...(phoneError ? { accessibilityLiveRegion: 'polite' as const } : {})}
+            >
+              {phoneError ??
+                "We'll send the payment prompt here. It doesn't have to be your login number."}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       <RuleList

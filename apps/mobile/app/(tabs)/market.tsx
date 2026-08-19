@@ -64,7 +64,11 @@ export default function Market() {
                 onPress={() => {
                   router.push('/market/cart');
                 }}
-                style={[styles.cartButton, { backgroundColor: colors.neutral900 }]}
+                // `text`, not `neutral900`: the dark palette inherits
+                // neutral900 unchanged from the light one, so on dark it
+                // matched both the icon and the screen behind it and the
+                // button disappeared. `text`/`bg` invert together.
+                style={[styles.cartButton, { backgroundColor: colors.text }]}
               >
                 <ShoppingBag size={18} strokeWidth={1.7} color={colors.bg} />
                 {itemCount > 0 ? (

@@ -7,6 +7,7 @@ import {
   deriveInitials,
   formatInHarare,
   formatUsd,
+  isValidMobileMoneyPhone,
   type PaymentMethod,
   type ServiceDto,
 } from '@sc/shared';
@@ -139,6 +140,13 @@ export default function ProviderProfile() {
   const [payMethod, setPayMethod] = useState<PaymentMethod>('ecocash');
   const [subSheetOpen, setSubSheetOpen] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
+  const [payerPhone, setPayerPhone] = useState('');
+
+  // Prefilled with the account number, still editable — the line a stylist
+  // pays the subscription from need not be the one they log in with.
+  useEffect(() => {
+    if (me?.phone) setPayerPhone((current) => current || me.phone);
+  }, [me?.phone]);
 
   useEffect(() => {
     if (!data) return;
@@ -264,9 +272,16 @@ export default function ProviderProfile() {
   };
 
   const paySub = () => {
+    if (payMethod === 'ecocash' && !isValidMobileMoneyPhone(payerPhone.trim())) {
+      setSubError('Enter a valid mobile number, for example 077 000 0000.');
+      return;
+    }
     setSubError(null);
     paySubscription.mutate(
-      { paymentMethod: payMethod },
+      {
+        paymentMethod: payMethod,
+        ...(payMethod === 'ecocash' ? { payerPhone: payerPhone.trim() } : {}),
+      },
       {
         onSuccess: (result) => {
           setSubSheetOpen(false);
@@ -760,6 +775,20 @@ export default function ProviderProfile() {
           selected={payMethod === 'cash'}
           onPress={() => setPayMethod('cash')}
         />
+        {payMethod === 'ecocash' ? (
+          <View style={styles.cardAction}>
+            <TextField
+              label="EcoCash number"
+              value={payerPhone}
+              onChangeText={(value) => {
+                setPayerPhone(value);
+                setSubError(null);
+              }}
+              placeholder="077 000 0000"
+              keyboardType="phone-pad"
+            />
+          </View>
+        ) : null}
         <Button
           label={paySubscription.isPending ? 'Paying…' : 'Pay'}
           block

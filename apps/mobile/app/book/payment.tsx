@@ -2,10 +2,20 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { space } from '@sc/tokens';
-import { formatUsd } from '@sc/shared';
-import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button, useTheme } from '@sc/ui';
+import { formatUsd, isValidMobileMoneyPhone } from '@sc/shared';
+import {
+  Screen,
+  ScreenHeader,
+  Text,
+  RadioCard,
+  RuleList,
+  Button,
+  TextField,
+  useTheme,
+} from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateBooking } from '../../src/api/hooks/useBookings.js';
+import { useMe } from '../../src/api/hooks/useMe.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { formatSlotLabel, isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
@@ -16,12 +26,8 @@ const styles = StyleSheet.create({
   section: { marginBottom: space.xxl },
   sectionLabel: { marginBottom: space.m },
   radioGap: { marginBottom: space.s },
-  ecocashPanel: {
-    marginTop: space.s,
-    padding: space.l,
-    borderRadius: 20,
-    gap: 2,
-  },
+  phoneField: { marginTop: space.l },
+  phoneHelp: { marginTop: space.s },
 });
 
 /** Payment (handoff screen 7, Step 2/2). */
@@ -38,6 +44,15 @@ export default function Payment() {
   const resetDraft = useBookingDraftStore((s) => s.reset);
   const createBooking = useCreateBooking();
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const { data: me } = useMe();
+  const [payerPhone, setPayerPhone] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
+  // Prefilled with the account number as the common case, still editable —
+  // the line someone pays from is not necessarily the one they log in with.
+  useEffect(() => {
+    if (me?.phone) setPayerPhone((current) => current || me.phone);
+  }, [me?.phone]);
 
   const { data: provider } = useProvider(providerId ?? undefined);
   const service = provider?.services.find((s) => s.id === serviceId) ?? null;
@@ -56,6 +71,13 @@ export default function Payment() {
 
   const confirmBooking = () => {
     setBookingError(null);
+    // Catch a bad number here rather than letting the server reject the whole
+    // booking for it — the slot and service are fine, only this field isn't.
+    if (paymentMethod === 'ecocash' && !isValidMobileMoneyPhone(payerPhone.trim())) {
+      setPhoneError('Enter a valid mobile number, for example 077 000 0000.');
+      return;
+    }
+    setPhoneError(null);
     createBooking.mutate(
       {
         providerId: provider.id,
@@ -63,6 +85,7 @@ export default function Payment() {
         startsAt: isoFromHarareSlot(date, time),
         paymentMethod,
         ...(matchId ? { matchId } : {}),
+        ...(paymentMethod === 'ecocash' ? { payerPhone: payerPhone.trim() } : {}),
       },
       {
         onSuccess: (created) => {
@@ -194,12 +217,25 @@ export default function Payment() {
         />
 
         {paymentMethod === 'ecocash' ? (
-          <View style={[styles.ecocashPanel, { backgroundColor: colors.surface }]}>
-            <Text variant="meta" color="neutral600">
-              +263 77 000 0000 (read-only for now — Phase 3 wires this to your account)
-            </Text>
-            <Text variant="meta" color="neutral700">
-              You&apos;ll get a prompt on your phone.
+          <View style={styles.phoneField}>
+            <TextField
+              label="EcoCash number"
+              value={payerPhone}
+              onChangeText={(value) => {
+                setPayerPhone(value);
+                setPhoneError(null);
+              }}
+              placeholder="077 000 0000"
+              keyboardType="phone-pad"
+            />
+            <Text
+              variant="metaSmall"
+              color={phoneError ? colors.accent700 : 'neutral600'}
+              style={styles.phoneHelp}
+              {...(phoneError ? { accessibilityLiveRegion: 'polite' as const } : {})}
+            >
+              {phoneError ??
+                "We'll send the payment prompt here. It doesn't have to be your login number."}
             </Text>
           </View>
         ) : null}

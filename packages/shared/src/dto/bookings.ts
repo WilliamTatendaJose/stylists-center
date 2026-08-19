@@ -1,7 +1,19 @@
 import { z } from 'zod';
+import { isValidMobileMoneyPhone } from '../domain/phone.js';
 import { imageUrlSchema } from './uploads.js';
 
 export const paymentMethodSchema = z.enum(['ecocash', 'cash']);
+
+/**
+ * The mobile money number to bill, when it differs from the account's login
+ * number — someone may pay from a different line than the one they signed up
+ * with, and the checkout has no business assuming they are the same. Accepts
+ * local ("0771234567") or E.164; the API normalises before calling the gateway.
+ */
+export const payerPhoneSchema = z
+  .string()
+  .trim()
+  .refine(isValidMobileMoneyPhone, { message: 'Enter a valid mobile number' });
 export const bookingStatusSchema = z.enum([
   'awaiting_provider',
   'confirmed',
@@ -17,6 +29,8 @@ export const createBookingSchema = z.object({
   startsAt: z.iso.datetime(),
   paymentMethod: paymentMethodSchema,
   matchId: z.uuid().optional(),
+  /** Required in practice for EcoCash — the number the prompt is sent to. Falls back to the account phone when absent. */
+  payerPhone: payerPhoneSchema.optional(),
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 

@@ -19,6 +19,7 @@ import {
   isLateCancellation,
   isSubscriptionActive,
   needsCashReconciliation,
+  normalizePhone,
   REFERRAL_REWARD_COINS,
   coinsToUsdCents,
 } from '@sc/shared';
@@ -90,11 +91,14 @@ export class BookingsService {
         where: { id: clientId },
         select: { phone: true },
       });
+      // The number the client typed at checkout, which need not be the line
+      // they log in with. Normalised here so the adapter always receives E.164.
+      const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
       checkoutIntent = await this.paymentGateway.createCheckout({
         reference,
         amountUsdCents: service.priceUsdCents,
         description: `Booking ${reference}: ${service.name}`,
-        phone: client.phone,
+        phone: payerPhone ?? client.phone,
       });
     }
 

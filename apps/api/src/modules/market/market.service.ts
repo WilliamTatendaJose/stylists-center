@@ -8,6 +8,7 @@ import {
   canCancelOrder,
   canCollectOrder,
   formatOrderReference,
+  normalizePhone,
   orderTotalUsdCents,
   type CreateOrderInput,
   type CreateOrderResponse,
@@ -204,11 +205,14 @@ export class MarketService {
           where: { id: buyerId },
           select: { phone: true },
         });
+        // The number the buyer typed at checkout, which need not be the line
+        // they log in with. Normalised so the adapter always receives E.164.
+        const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
         const intent = await this.paymentGateway.createCheckout({
           reference: order.reference,
           amountUsdCents: totalUsdCents,
           description: `Market order ${order.reference}`,
-          phone: buyer.phone,
+          phone: payerPhone ?? buyer.phone,
         });
         await tx.payment.create({
           data: {

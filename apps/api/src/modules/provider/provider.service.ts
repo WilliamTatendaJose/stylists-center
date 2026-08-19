@@ -12,6 +12,7 @@ import {
   formatBookingWhen,
   isSubscriptionActive,
   needsCashReconciliation,
+  normalizePhone,
   REFERRAL_REWARD_COINS,
   coinsToUsdCents,
   nextSubscriptionPaidUntil,
@@ -533,12 +534,14 @@ export class ProviderService {
         where: { providerProfile: { id: providerProfileId } },
         select: { phone: true },
       });
+      // The number the stylist typed, which need not be their login line.
+      const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
       const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
       const intent = await this.paymentGateway.createCheckout({
         reference,
         amountUsdCents,
         description: 'Stylists Center monthly subscription',
-        phone: user.phone,
+        phone: payerPhone ?? user.phone,
       });
       await this.prisma.payment.create({
         data: {
