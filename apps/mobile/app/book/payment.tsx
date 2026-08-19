@@ -16,7 +16,7 @@ import {
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateBooking } from '../../src/api/hooks/useBookings.js';
 import { useMe } from '../../src/api/hooks/useMe.js';
-import { useBookingDraftStore } from '../../src/state/index.js';
+import { useBookingDraftStore, usePendingPaymentStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { formatSlotLabel, isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
 import { describeError } from '../../src/api/errorMessage.js';
@@ -43,6 +43,7 @@ export default function Payment() {
   const paymentMethod = useBookingDraftStore((s) => s.paymentMethod);
   const setPaymentMethod = useBookingDraftStore((s) => s.setPaymentMethod);
   const resetDraft = useBookingDraftStore((s) => s.reset);
+  const setPendingPayment = usePendingPaymentStore((s) => s.setPending);
   const createBooking = useCreateBooking();
   const [bookingError, setBookingError] = useState<string | null>(null);
   const { data: me } = useMe();
@@ -115,17 +116,25 @@ export default function Payment() {
           // or its hosted page. Both hand off to the waiting screen, which owns
           // the verdict: a closed browser is not a confirmed payment, and this
           // screen must never declare the booking done before Paynow has said so.
+          //
+          // The context goes through a store rather than route params: as URL
+          // params it was arriving empty, and the waiting screen's guard then
+          // sent the user to the home tab with the booking unpaid and nothing
+          // polling it.
           if (created.instructions || created.checkoutUrl) {
-            resetDraft();
-            router.replace({
-              pathname: '/book/paying',
-              params: {
-                ...doneParams,
-                bookingId: created.id,
-                ...(created.instructions ? { instructions: created.instructions } : {}),
-                ...(created.checkoutUrl ? { checkoutUrl: created.checkoutUrl } : {}),
-              },
+            setPendingPayment({
+              bookingId: created.id,
+              reference: created.reference,
+              providerId: provider.id,
+              providerName: provider.displayName,
+              serviceName: service.name,
+              whenLabel,
+              areaName: provider.areaName,
+              ...(created.instructions ? { instructions: created.instructions } : {}),
+              ...(created.checkoutUrl ? { checkoutUrl: created.checkoutUrl } : {}),
             });
+            resetDraft();
+            router.replace('/book/paying');
             return;
           }
           resetDraft();

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Check } from 'lucide-react-native';
 import { Screen, Text, Button, useTheme } from '@sc/ui';
 import { space } from '@sc/tokens';
 import { useBookingPaymentStatus } from '../../src/api/hooks/useBookings.js';
+import { usePendingPaymentStore } from '../../src/state/index.js';
 
 const POLL_TIMEOUT_MS = 90_000;
 
@@ -31,37 +32,30 @@ const FAILURE_STATUSES = new Set(['failed', 'refunded', 'disputed']);
 /** Shown after Paynow pushes an EcoCash prompt to the client's phone — waits for and reflects the real outcome instead of assuming success. */
 export default function Paying() {
   const { colors } = useTheme();
-  const params = useLocalSearchParams<{
-    bookingId?: string;
-    instructions?: string;
-    checkoutUrl?: string;
-    reference?: string;
-    providerId?: string;
-    providerName?: string;
-    serviceName?: string;
-    whenLabel?: string;
-    areaName?: string;
-  }>();
+  const pending = usePendingPaymentStore((s) => s.pending);
+  const clearPending = usePendingPaymentStore((s) => s.clearPending);
   const [timedOut, setTimedOut] = useState(false);
   const openedCheckout = useRef(false);
 
+  // Only reachable with a payment in flight — otherwise this is a cold start
+  // or a stale back-navigation and there is nothing to wait for.
+  // Only reachable with a payment in flight — otherwise this is a cold start
+  // or a stale back-navigation and there is nothing to wait for.
   useEffect(() => {
-    if (!params.bookingId || !params.providerId || !params.reference) {
-      router.replace('/(tabs)');
-    }
-  }, [params.bookingId, params.providerId, params.reference]);
+    if (!pending) router.replace('/(tabs)');
+  }, [pending]);
 
   // Paynow fell back to its hosted page (no EcoCash prompt for this number).
   // The browser is how they pay; this screen still owns the verdict, so it
   // opens the page once and keeps polling behind it — closing the browser is
   // not an answer about whether the payment happened.
   useEffect(() => {
-    if (!params.checkoutUrl || openedCheckout.current) return;
+    if (!pending?.checkoutUrl || openedCheckout.current) return;
     openedCheckout.current = true;
-    void WebBrowser.openBrowserAsync(params.checkoutUrl);
-  }, [params.checkoutUrl]);
+    void WebBrowser.openBrowserAsync(pending.checkoutUrl);
+  }, [pending?.checkoutUrl]);
 
-  const { data } = useBookingPaymentStatus(params.bookingId, !timedOut);
+  const { data } = useBookingPaymentStatus(pending?.bookingId, !timedOut);
   const status = data?.status;
 
   useEffect(() => {
@@ -70,31 +64,33 @@ export default function Paying() {
     return () => clearTimeout(timer);
   }, [status]);
 
-  if (!params.bookingId || !params.providerId || !params.reference) return null;
+  if (!pending) return null;
 
   const paid = status ? SUCCESS_STATUSES.has(status) : false;
   const failed = status ? FAILURE_STATUSES.has(status) : false;
-  const viaBrowser = Boolean(params.checkoutUrl);
+  const viaBrowser = Boolean(pending.checkoutUrl);
 
   // Confirmed payments are NOT auto-forwarded. The whole point of this screen
   // is that the person sees Paynow's actual answer — bouncing straight to
   // "Booked." on success would hide the one moment that proves the money
   // moved, and reads exactly like the auto-complete this replaced.
   const goDone = () => {
-    router.replace({
-      pathname: '/book/done',
-      params: {
-        reference: params.reference,
-        providerId: params.providerId,
-        providerName: params.providerName,
-        serviceName: params.serviceName,
-        whenLabel: params.whenLabel,
-        areaName: params.areaName,
-        paymentLabel: 'Paynow — EcoCash, paid',
-      },
-    });
+    const done = {
+      reference: pending.reference,
+      providerId: pending.providerId,
+      providerName: pending.providerName,
+      serviceName: pending.serviceName,
+      whenLabel: pending.whenLabel,
+      areaName: pending.areaName,
+      paymentLabel: 'Paynow — EcoCash, paid',
+    };
+    clearPending();
+    router.replace({ pathname: '/book/done', params: done });
   };
-  const goBookings = () => router.replace('/(tabs)/bookings');
+  const goBookings = () => {
+    clearPending();
+    router.replace('/(tabs)/bookings');
+  };
   const showExit = failed || timedOut;
 
   return (
@@ -128,12 +124,12 @@ export default function Paying() {
         </Text>
         <Text variant="body" color="neutral700" style={styles.instructions}>
           {paid
-            ? `Paynow confirmed your payment for ${params.reference}. Your booking request is with ${params.providerName ?? 'the stylist'} now.`
+            ? `Paynow confirmed your payment for ${pending.reference}. Your booking request is with ${pending.providerName} now.`
             : failed
               ? "Paynow reported this payment didn't go through. Your booking request is still on file, but unpaid — check My bookings for its status."
               : timedOut
                 ? "This is taking longer than expected. Your booking request is on file — we'll update it as soon as Paynow confirms, or check My bookings for the latest status."
-                : (params.instructions ??
+                : (pending.instructions ??
                   (viaBrowser
                     ? 'Complete the payment in the Paynow window. This screen updates on its own once it clears.'
                     : 'Approve the EcoCash prompt on your phone to confirm this booking.'))}
