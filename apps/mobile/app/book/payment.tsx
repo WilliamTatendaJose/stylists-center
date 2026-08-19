@@ -74,17 +74,19 @@ export default function Payment() {
             whenLabel,
             areaName: provider.areaName,
           };
-          // An EcoCash prompt was pushed to the client's phone — wait for and
-          // show the real outcome instead of declaring the booking done the
-          // instant this screen hands off, before Paynow has confirmed anything.
-          if (created.instructions) {
+          // Paynow is in play — either an EcoCash prompt on the client's phone
+          // or its hosted page. Both hand off to the waiting screen, which owns
+          // the verdict: a closed browser is not a confirmed payment, and this
+          // screen must never declare the booking done before Paynow has said so.
+          if (created.instructions || created.checkoutUrl) {
             resetDraft();
             router.replace({
               pathname: '/book/paying',
               params: {
                 ...doneParams,
                 bookingId: created.id,
-                instructions: created.instructions,
+                ...(created.instructions ? { instructions: created.instructions } : {}),
+                ...(created.checkoutUrl ? { checkoutUrl: created.checkoutUrl } : {}),
               },
             });
             return;

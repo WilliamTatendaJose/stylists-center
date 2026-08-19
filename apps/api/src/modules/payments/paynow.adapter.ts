@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { Env } from '../../config/env';
@@ -15,6 +15,8 @@ const MOBILE_INITIATE_URL = 'https://www.paynow.co.zw/interface/remotetransactio
 
 @Injectable()
 export class PaynowAdapter implements PaymentGatewayPort {
+  private readonly logger = new Logger(PaynowAdapter.name);
+
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   async createCheckout(input: PaymentCheckoutInput): Promise<PaymentIntentResult> {
@@ -26,11 +28,24 @@ export class PaynowAdapter implements PaymentGatewayPort {
       throw new ServiceUnavailableException('Paynow is not configured');
     }
 
+    // Express Checkout only reaches a number registered for the chosen mobile
+    // money network. A customer paying by card, or whose login number is not
+    // an EcoCash line, gets rejected here — so fall back to the hosted page
+    // rather than leaving them unable to pay at all. Both routes return a
+    // pollurl, so the caller still learns the real outcome either way.
     if (input.phone) {
-      return this.createMobileCheckout(
-        { ...input, phone: input.phone },
-        { integrationId, integrationKey, returnUrl, resultUrl },
-      );
+      try {
+        return await this.createMobileCheckout(
+          { ...input, phone: input.phone },
+          { integrationId, integrationKey, returnUrl, resultUrl },
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Paynow mobile checkout for ${input.reference} failed, falling back to hosted checkout: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
     }
 
     const fields: [string, string][] = [

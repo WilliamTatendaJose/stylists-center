@@ -143,10 +143,21 @@ export default function Cart() {
 
     clear();
 
-    // Paynow pushed an EcoCash prompt per order — wait for the real outcome
-    // rather than calling the checkout done the moment the request returned.
-    const awaitingPayment = succeeded.some(({ created }) => created.instructions);
+    // Paynow is in play — an EcoCash prompt per order, its hosted page, or a
+    // mix if one buyer's number takes the prompt and another falls back. All
+    // of them wait on the real result rather than calling the checkout done
+    // the moment the request returned.
+    const awaitingPayment = succeeded.some(
+      ({ created }) => created.instructions ?? created.checkoutUrl,
+    );
     if (awaitingPayment) {
+      // The hosted page can only be opened one at a time, so a multi-seller
+      // cart that fell back opens them in turn before the wait begins.
+      for (const { created } of succeeded) {
+        if (created.checkoutUrl) await WebBrowser.openBrowserAsync(created.checkoutUrl);
+      }
+      const firstInstructions = succeeded.find(({ created }) => created.instructions)?.created
+        .instructions;
       router.replace({
         pathname: '/market/paying',
         params: {
@@ -158,21 +169,10 @@ export default function Cart() {
               totalUsdCents: created.totalUsdCents,
             })),
           ),
-          ...(succeeded.find(({ created }) => created.instructions)?.created.instructions
-            ? {
-                instructions: succeeded.find(({ created }) => created.instructions)?.created
-                  .instructions,
-              }
-            : {}),
+          ...(firstInstructions ? { instructions: firstInstructions } : {}),
         },
       });
       return;
-    }
-
-    // A hosted checkout page (no phone prompt) still needs the browser; the
-    // orders screen is where its result will show up.
-    for (const { created } of succeeded) {
-      if (created.checkoutUrl) await WebBrowser.openBrowserAsync(created.checkoutUrl);
     }
 
     router.replace({

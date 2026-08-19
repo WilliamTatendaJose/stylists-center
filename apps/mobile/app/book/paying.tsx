@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { Screen, Text, Button, useTheme } from '@sc/ui';
 import { space } from '@sc/tokens';
 import { useBookingPaymentStatus } from '../../src/api/hooks/useBookings.js';
@@ -23,6 +24,7 @@ export default function Paying() {
   const params = useLocalSearchParams<{
     bookingId?: string;
     instructions?: string;
+    checkoutUrl?: string;
     reference?: string;
     providerId?: string;
     providerName?: string;
@@ -31,12 +33,23 @@ export default function Paying() {
     areaName?: string;
   }>();
   const [timedOut, setTimedOut] = useState(false);
+  const openedCheckout = useRef(false);
 
   useEffect(() => {
     if (!params.bookingId || !params.providerId || !params.reference) {
       router.replace('/(tabs)');
     }
   }, [params.bookingId, params.providerId, params.reference]);
+
+  // Paynow fell back to its hosted page (no EcoCash prompt for this number).
+  // The browser is how they pay; this screen still owns the verdict, so it
+  // opens the page once and keeps polling behind it — closing the browser is
+  // not an answer about whether the payment happened.
+  useEffect(() => {
+    if (!params.checkoutUrl || openedCheckout.current) return;
+    openedCheckout.current = true;
+    void WebBrowser.openBrowserAsync(params.checkoutUrl);
+  }, [params.checkoutUrl]);
 
   const { data } = useBookingPaymentStatus(params.bookingId, !timedOut);
   const status = data?.status;
@@ -66,6 +79,7 @@ export default function Paying() {
   if (!params.bookingId || !params.providerId || !params.reference) return null;
 
   const failed = status ? FAILURE_STATUSES.has(status) : false;
+  const viaBrowser = Boolean(params.checkoutUrl);
 
   const goBookings = () => router.replace('/(tabs)/bookings');
   const showExit = failed || timedOut;
@@ -82,8 +96,10 @@ export default function Paying() {
           {failed
             ? "Payment wasn't completed"
             : timedOut
-              ? 'Still waiting on EcoCash'
-              : 'Check your phone'}
+              ? 'Still waiting on Paynow'
+              : viaBrowser
+                ? 'Finish paying in Paynow'
+                : 'Check your phone'}
         </Text>
         <Text variant="body" color="neutral700" style={styles.instructions}>
           {failed
@@ -91,7 +107,9 @@ export default function Paying() {
             : timedOut
               ? "This is taking longer than expected. Your booking request is on file — we'll update it as soon as Paynow confirms, or check My bookings for the latest status."
               : (params.instructions ??
-                'Approve the EcoCash prompt on your phone to confirm this booking.')}
+                (viaBrowser
+                  ? 'Complete the payment in the Paynow window. This screen updates on its own once it clears.'
+                  : 'Approve the EcoCash prompt on your phone to confirm this booking.'))}
         </Text>
       </View>
     </Screen>

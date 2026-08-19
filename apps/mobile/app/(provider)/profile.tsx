@@ -270,13 +270,15 @@ export default function ProviderProfile() {
       {
         onSuccess: (result) => {
           setSubSheetOpen(false);
-          // A pending EcoCash payment has NOT extended the subscription yet —
-          // the month is credited only once Paynow confirms, so start polling
-          // and say so rather than showing a renewed card straight away.
+          // A pending payment has NOT extended the subscription yet — the month
+          // is credited only once Paynow confirms, so start polling and say so
+          // rather than showing a renewed card straight away.
           if (result.pending) {
             setSubPendingNote(
               result.instructions ??
-                'Approve the EcoCash prompt on your phone to finish this payment.',
+                (result.checkoutUrl
+                  ? 'Finish the payment in the Paynow window. This updates on its own once it clears.'
+                  : 'Approve the EcoCash prompt on your phone to finish this payment.'),
             );
           }
           if (result.checkoutUrl) void WebBrowser.openBrowserAsync(result.checkoutUrl);
