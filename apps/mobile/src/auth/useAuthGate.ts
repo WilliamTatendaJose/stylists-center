@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { router, useSegments } from 'expo-router';
 import { useAuthStore } from '../state/useAuthStore.js';
+import { useSessionStore } from '../state/useSessionStore.js';
 import { useMe } from '../api/hooks/useMe.js';
 
 /**
@@ -17,6 +18,8 @@ import { useMe } from '../api/hooks/useMe.js';
  */
 export function useAuthGate(): boolean {
   const isHydrated = useAuthStore((s) => s.isHydrated);
+  const isSessionHydrated = useSessionStore((s) => s.isHydrated);
+  const hasSeenOnboarding = useSessionStore((s) => s.hasSeenOnboarding);
   const accessToken = useAuthStore((s) => s.accessToken);
   const hydrate = useAuthStore((s) => s.hydrate);
   const segments = useSegments();
@@ -27,15 +30,21 @@ export function useAuthGate(): boolean {
   }, [hydrate]);
 
   useEffect(() => {
-    if (!isHydrated) return;
+    if (!isHydrated || !isSessionHydrated) return;
     const inAuthGroup = segments[0] === '(auth)';
     const inInviteRoute = String(segments[0]) === 'invite';
+    const inOnboarding = String(segments[0]) === 'onboarding';
 
-    if (!accessToken && !inAuthGroup && !inInviteRoute) {
+    if (!accessToken && !hasSeenOnboarding && !inOnboarding && !inInviteRoute) {
+      router.replace('/onboarding');
+      return;
+    }
+
+    if (!accessToken && hasSeenOnboarding && !inAuthGroup && !inInviteRoute) {
       router.replace('/(auth)');
       return;
     }
-    if (accessToken && inAuthGroup) {
+    if (accessToken && (inAuthGroup || inOnboarding)) {
       router.replace('/(tabs)');
       return;
     }
@@ -69,7 +78,7 @@ export function useAuthGate(): boolean {
     ) {
       router.replace(wantsProvider ? '/(provider)/jobs' : '/(tabs)');
     }
-  }, [isHydrated, accessToken, segments, me]);
+  }, [isHydrated, isSessionHydrated, hasSeenOnboarding, accessToken, segments, me]);
 
-  return isHydrated;
+  return isHydrated && isSessionHydrated;
 }

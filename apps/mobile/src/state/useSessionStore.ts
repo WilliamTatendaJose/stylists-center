@@ -27,6 +27,10 @@ export type LocationSource =
   | 'unavailable';
 
 export interface SessionState {
+  /** False only while AsyncStorage is restoring the persisted first-run and appearance choices. */
+  isHydrated: boolean;
+  /** Keeps onboarding a first-run experience instead of a recurring launch obstacle. */
+  hasSeenOnboarding: boolean;
   themeMode: ThemeMode;
   activeRole: ActiveRole;
   hasProviderProfile: boolean;
@@ -48,6 +52,8 @@ export interface SessionState {
   /** Gates the one-time offline map-tile download (plan §5/§9 item 18) — stands in for "first login" until auth exists. */
   hasDownloadedOfflinePack: boolean;
   setActiveRole: (role: ActiveRole) => void;
+  setHasSeenOnboarding: (value: boolean) => void;
+  setHydrated: (value: boolean) => void;
   setThemeMode: (themeMode: ThemeMode) => void;
   setLocation: (location: LatLng, source: LocationSource) => void;
   setLocationSource: (source: LocationSource) => void;
@@ -71,6 +77,8 @@ const HARARE_CENTRE: LatLng = { lat: -17.8252, lng: 31.0335 };
 export const useSessionStore = create<SessionState>()(
   persist(
     (set) => ({
+      isHydrated: false,
+      hasSeenOnboarding: false,
       // Follow the device appearance until the user explicitly chooses a
       // fixed light or dark mode from Profile.
       themeMode: 'system',
@@ -87,6 +95,8 @@ export const useSessionStore = create<SessionState>()(
       maxDistanceKm: DEFAULT_BROWSE_RADIUS_KM,
       hasDownloadedOfflinePack: false,
       setActiveRole: (activeRole) => set({ activeRole }),
+      setHasSeenOnboarding: (hasSeenOnboarding) => set({ hasSeenOnboarding }),
+      setHydrated: (isHydrated) => set({ isHydrated }),
       setThemeMode: (themeMode) => set({ themeMode }),
       setLocation: (location, locationSource) => set({ location, locationSource }),
       setLocationSource: (locationSource) => set({ locationSource }),
@@ -101,11 +111,18 @@ export const useSessionStore = create<SessionState>()(
       // v0 defaulted to light before system-aware appearance existed. Move
       // those existing sessions to the new system default; explicit choices
       // made after this version are kept as dark/light overrides.
-      version: 1,
-      migrate: (persisted) => ({
-        ...(persisted as Partial<SessionState>),
-        themeMode: 'system',
-      }),
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = persisted as Partial<SessionState>;
+        return {
+          ...state,
+          ...(version < 1 ? { themeMode: 'system' as const } : {}),
+          ...(version < 2 ? { hasSeenOnboarding: false } : {}),
+        };
+      },
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
+      },
       /**
        * `locationSource` is deliberately NOT persisted. A coordinate cached
        * from last week is a reasonable starting guess, but "the device is
@@ -113,6 +130,7 @@ export const useSessionStore = create<SessionState>()(
        * — rehydrating it would let a stale fix present itself as live.
        */
       partialize: (state) => ({
+        hasSeenOnboarding: state.hasSeenOnboarding,
         activeRole: state.activeRole,
         themeMode: state.themeMode,
         hasProviderProfile: state.hasProviderProfile,

@@ -106,6 +106,19 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    [
+      'expo-splash-screen',
+      {
+        image: './assets/splash-mark.png',
+        imageWidth: 144,
+        resizeMode: 'contain',
+        backgroundColor: '#ffffff',
+        dark: {
+          image: './assets/splash-mark.png',
+          backgroundColor: '#0b0b0b',
+        },
+      },
+    ],
     '@react-native-google-signin/google-signin',
     'expo-secure-store',
     'expo-notifications',

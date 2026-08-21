@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
@@ -24,6 +25,11 @@ import { ApiError } from '../src/api/errors.js';
 // expo-router renders a route's exported `ErrorBoundary` when that segment
 // throws. Exported from the root layout so it covers every screen.
 export { AppErrorBoundary as ErrorBoundary };
+
+// Called at module scope so the native launch screen cannot auto-hide before
+// fonts and the persisted auth/session state have finished loading.
+void SplashScreen.preventAutoHideAsync();
+SplashScreen.setOptions({ duration: 350, fade: true });
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
@@ -137,6 +143,11 @@ function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
   // screen before <Stack> exists throws — and a cold start from a notification
   // tap is precisely when that ordering matters.
   useNotificationRouting(fontsReady && isAuthHydrated);
+
+  useEffect(() => {
+    if (!fontsReady || !isAuthHydrated) return;
+    void SplashScreen.hideAsync();
+  }, [fontsReady, isAuthHydrated]);
 
   if (!fontsReady || !isAuthHydrated) return null;
   return <Stack screenOptions={{ headerShown: false }} />;

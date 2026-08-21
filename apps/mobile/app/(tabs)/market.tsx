@@ -13,6 +13,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -64,9 +65,9 @@ export default function Market() {
                 onPress={() => {
                   router.push('/market/cart');
                 }}
-                style={[styles.cartButton, { backgroundColor: colors.accent }]}
+                style={[styles.cartButton, { borderColor: colors.divider }]}
               >
-                <ShoppingBag size={18} strokeWidth={1.7} color={colors.neutral900} />
+                <ShoppingBag size={18} strokeWidth={1.7} color={colors.text} />
                 {itemCount > 0 ? (
                   <View style={styles.cartCount}>
                     <Badge label={String(itemCount)} tone="accent" size="sm" />
