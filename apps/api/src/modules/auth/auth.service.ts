@@ -1,49 +1,31 @@
-import { randomBytes, randomInt, randomUUID, createHash } from 'node:crypto';
+import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import {
   BadRequestException,
   ForbiddenException,
-  HttpException,
-  HttpStatus,
-  Inject,
   Injectable,
-  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import type Redis from 'ioredis';
 import {
   deriveInitials,
   deriveTint,
   isProfileComplete,
-  normalizePhone,
   type ActiveRole,
   type AuthTokens,
   type Me,
-  type RequestOtpResponse,
   type RegisterPushTokenInput,
   type UpdateProfileInput,
   type VerificationDto,
   type VerificationSubmissionInput,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { REDIS_CLIENT } from '../redis/redis.module';
 import { TrustService } from '../trust/trust.service';
 import type { Env } from '../../config/env';
+import { FirebaseIdentityService, type FirebaseIdentity } from './firebase-identity.service';
 
-const OTP_TTL_SECONDS = 300;
-const OTP_MAX_ATTEMPTS = 5;
-const PHONE_RATE_LIMIT_PER_HOUR = 5;
-const IP_RATE_LIMIT_PER_HOUR = 20;
-const RATE_WINDOW_SECONDS = 3600;
 const ACCESS_TOKEN_TTL = '15m';
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-interface OtpChallenge {
-  phone: string;
-  codeHash: string;
-  attempts: number;
-}
 
 function sha256Hex(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -53,18 +35,7 @@ function generateRefreshTokenRaw(): string {
   return randomBytes(32).toString('base64url');
 }
 
-function generateOtpCode(): string {
-  return randomInt(0, 1_000_000).toString().padStart(6, '0');
-}
-
-/**
- * Phone + OTP auth (plan §6). No email/password — the phone number IS the
- * identity. `AUTH_DEV_OTP` (env-validated to never exist in production, see
- * config/env.ts) makes every challenge's real code equal to that fixed
- * value, so dev/demo never needs a working SMS/WhatsApp provider (plan risk
- * R4) — the code is never actually "sent" anywhere in that mode, since dev
- * already knows it.
- */
+/** Firebase proves identity; this service keeps app sessions and authorization. */
 @Injectable()
 export class AuthService {
   constructor(
@@ -72,177 +43,16 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
     private readonly trust: TrustService,
-    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+    private readonly firebaseIdentity: FirebaseIdentityService,
   ) {}
 
-  async requestOtp(
-    phoneInput: string,
-    ip: string,
-    requestedChannel?: 'whatsapp' | 'sms',
-  ): Promise<RequestOtpResponse> {
-    const phone = normalizePhone(phoneInput);
-    if (!phone) {
-      throw new BadRequestException('Invalid phone number');
+  async exchangeFirebaseToken(idToken: string): Promise<AuthTokens> {
+    const identity = await this.firebaseIdentity.verifyIdToken(idToken);
+    if (!identity.email || !identity.emailVerified) {
+      throw new UnauthorizedException('Verify your email before continuing');
     }
 
-    await this.checkRateLimit(`otp:rate:phone:${phone}`, PHONE_RATE_LIMIT_PER_HOUR);
-    await this.checkRateLimit(`otp:rate:ip:${ip}`, IP_RATE_LIMIT_PER_HOUR);
-
-    const devOtp = this.config.get('AUTH_DEV_OTP', { infer: true });
-    const code = devOtp ?? generateOtpCode();
-    if (!devOtp) {
-      await this.sendInfobipOtp(phone, code, requestedChannel);
-    }
-
-    const challengeId = randomUUID();
-    const expiresAt = new Date(Date.now() + OTP_TTL_SECONDS * 1000);
-    // Infobip only delivers the code — it never sees or checks it — so the
-    // hash (dev or real) is always what verifyOtp compares against.
-    const challenge: OtpChallenge = {
-      phone,
-      codeHash: sha256Hex(code),
-      attempts: 0,
-    };
-    await this.redis.setex(
-      `otp:challenge:${challengeId}`,
-      OTP_TTL_SECONDS,
-      JSON.stringify(challenge),
-    );
-
-    return { challengeId, expiresAt: expiresAt.toISOString() };
-  }
-
-  /** WhatsApp is primary; a delivery failure retries once via SMS. */
-  private async sendInfobipOtp(
-    phone: string,
-    code: string,
-    requestedChannel?: 'whatsapp' | 'sms',
-  ): Promise<void> {
-    const channel =
-      requestedChannel ?? this.config.get('INFOBIP_DEFAULT_CHANNEL', { infer: true }) ?? 'whatsapp';
-    try {
-      if (channel === 'whatsapp') {
-        await this.sendInfobipWhatsApp(phone, code);
-      } else {
-        await this.sendInfobipSms(phone, code);
-      }
-    } catch (error) {
-      if (channel !== 'whatsapp') throw error;
-      await this.sendInfobipSms(phone, code);
-    }
-  }
-
-  /** WhatsApp business-initiated messages must use a pre-approved template. */
-  private async sendInfobipWhatsApp(phone: string, code: string): Promise<void> {
-    const sender = this.config.get('INFOBIP_WHATSAPP_SENDER', { infer: true });
-    const template = this.config.get('INFOBIP_WHATSAPP_TEMPLATE_NAME', { infer: true });
-    if (!sender || !template) {
-      throw new ServiceUnavailableException('WhatsApp verification is not configured');
-    }
-
-    await this.infobipRequest('/whatsapp/1/message/template', {
-      messages: [
-        {
-          from: sender,
-          to: phone.replace('+', ''),
-          messageId: randomUUID(),
-          content: {
-            templateName: template,
-            templateData: {
-              body: { placeholders: [code] },
-              // The "authentication" template's approved "Copy Code" button
-              // is a dynamic-URL button under the hood, so WhatsApp requires
-              // the same OTP passed again here — omitting it fails delivery
-              // with "Failed to match template parameters" (Infobip code 7008).
-              buttons: [{ type: 'URL', parameter: code }],
-            },
-            language: 'en',
-          },
-        },
-      ],
-    });
-  }
-
-  private async sendInfobipSms(phone: string, code: string): Promise<void> {
-    const sender = this.config.get('INFOBIP_SMS_SENDER', { infer: true });
-    await this.infobipRequest('/sms/2/text/advanced', {
-      messages: [
-        {
-          ...(sender ? { from: sender } : {}),
-          destinations: [{ to: phone.replace('+', '') }],
-          text: `Your Stylists Center verification code is ${code}`,
-        },
-      ],
-    });
-  }
-
-  private async infobipRequest(path: string, body: unknown): Promise<void> {
-    const apiKey = this.config.get('INFOBIP_API_KEY', { infer: true });
-    const baseUrl = this.config.get('INFOBIP_BASE_URL', { infer: true });
-    if (!apiKey || !baseUrl) {
-      throw new ServiceUnavailableException('Phone verification is not configured');
-    }
-
-    const origin = baseUrl.startsWith('http') ? baseUrl : `https://${baseUrl}`;
-    const response = await fetch(`${origin}${path}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `App ${apiKey}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => ({}))) as {
-        requestError?: { serviceException?: { text?: string } };
-      };
-      throw new ServiceUnavailableException(
-        payload.requestError?.serviceException?.text ?? 'Phone verification is unavailable',
-      );
-    }
-  }
-
-  private async checkRateLimit(key: string, limit: number): Promise<void> {
-    const count = await this.redis.incr(key);
-    if (count === 1) {
-      await this.redis.expire(key, RATE_WINDOW_SECONDS);
-    }
-    if (count > limit) {
-      throw new HttpException('Too many requests — try again later', HttpStatus.TOO_MANY_REQUESTS);
-    }
-  }
-
-  async verifyOtp(challengeId: string, code: string): Promise<AuthTokens> {
-    const key = `otp:challenge:${challengeId}`;
-    const raw = await this.redis.get(key);
-    if (!raw) {
-      throw new UnauthorizedException('Challenge expired or not found');
-    }
-
-    const challenge = JSON.parse(raw) as OtpChallenge;
-    const matches = sha256Hex(code) === challenge.codeHash;
-
-    if (!matches) {
-      challenge.attempts += 1;
-      if (challenge.attempts >= OTP_MAX_ATTEMPTS) {
-        await this.redis.del(key);
-        throw new UnauthorizedException('Too many incorrect attempts — request a new code');
-      }
-      await this.redis.setex(key, OTP_TTL_SECONDS, JSON.stringify(challenge));
-      throw new UnauthorizedException('Incorrect code');
-    }
-
-    await this.redis.del(key);
-
-    const user = await this.findOrCreateUser(challenge.phone);
-
-    /**
-     * Bumping `tokenVersion` kills a banned user's live sessions, but nothing
-     * stopped them signing in again a second later — the ban would have been
-     * a speed bump. The message carries the stated reason, because a user who
-     * cannot tell why they were removed cannot appeal.
-     */
+    const user = await this.findOrCreateFirebaseUser(identity);
     const ban = await this.trust.findActiveBan(user.id);
     if (ban) {
       throw new ForbiddenException(`Your account has been removed: ${ban.reason}`);
@@ -251,13 +61,38 @@ export class AuthService {
     return this.issueTokens(user.id, user.tokenVersion);
   }
 
-  private async findOrCreateUser(phone: string) {
-    const existing = await this.prisma.user.findUnique({ where: { phone } });
-    if (existing) return existing;
+  private async findOrCreateFirebaseUser(identity: FirebaseIdentity) {
+    if (!identity.email) {
+      throw new UnauthorizedException('Firebase account does not have an email address');
+    }
+    const email = identity.email.trim().toLowerCase();
+    let firebaseDisplayName = identity.displayName?.trim();
+    if (firebaseDisplayName === '') firebaseDisplayName = undefined;
+    firebaseDisplayName ??= email;
+    const byUid = await this.prisma.user.findUnique({ where: { firebaseUid: identity.uid } });
+    if (byUid) return byUid;
+
+    const byEmail = await this.prisma.user.findUnique({ where: { email } });
+    if (byEmail) {
+      if (byEmail.firebaseUid && byEmail.firebaseUid !== identity.uid) {
+        throw new UnauthorizedException('This email is linked to another sign-in');
+      }
+      return this.prisma.user.update({
+        where: { id: byEmail.id },
+        data: { firebaseUid: identity.uid },
+      });
+    }
 
     const city = await this.prisma.city.findFirstOrThrow();
     return this.prisma.user.create({
-      data: { phone, displayName: phone, cityId: city.id },
+      data: {
+        firebaseUid: identity.uid,
+        email,
+        phone: identity.phoneNumber,
+        displayName: firebaseDisplayName,
+        avatarImageUrl: identity.photoUrl,
+        cityId: city.id,
+      },
     });
   }
 
@@ -344,13 +179,14 @@ export class AuthService {
 
     return {
       id: user.id,
+      email: user.email,
       phone: user.phone,
       displayName: user.displayName,
       avatarImageUrl: user.avatarImageUrl,
       activeRole: user.activeRole,
       hasProviderProfile: !!user.providerProfile,
       verificationStatus: user.verificationStatus,
-      profileComplete: isProfileComplete(user.displayName, user.phone),
+      profileComplete: isProfileComplete(user.displayName, user.email ?? user.phone ?? ''),
     };
   }
 

@@ -118,12 +118,14 @@ model City {
   @@index([name])
 }
 
-/// Base identity. Phone-first, no email/password (plan §6 auth). `tokenVersion`
+/// Base identity. Firebase owns credentials; this row owns app authorization. `tokenVersion`
 /// is bumped on a ban so every live session's JWT is invalidated instantly
 /// without needing a revocation list lookup per request.
 model User {
   id                 String             @id @default(uuid())
-  phone              String             @unique
+  firebaseUid        String?            @unique
+  email              String?            @unique
+  phone              String?            @unique
   displayName        String
   /// Client-controlled photo used for their identity in stylist jobs and messages.
   avatarImageUrl     String?

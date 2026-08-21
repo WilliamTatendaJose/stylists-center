@@ -1,23 +1,15 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import Redis from 'ioredis';
-import { describe, expect, it, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth.service';
+import type { FirebaseIdentityService } from './firebase-identity.service';
 import { TrustService } from '../trust/trust.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
 
-/**
- * Integration-style, against a real Postgres (sc_test) and real Redis — no
- * Testcontainers daemon in this sandbox, so this runs the same way the
- * matching module's Phase-3 tests will (plan §8's "integration, must have"
- * tier). `sc_test` is migrated separately from `sc_dev` (see prisma
- * migrate deploy against DATABASE_URL=.../sc_test), never seeded, so a test
- * run never touches demo data.
- */
 const TEST_DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://sc:sc@localhost:5433/sc_test';
-const TEST_PHONE = '+263779999001';
+const TEST_EMAIL = 'firebase-auth-spec@example.com';
 
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
@@ -30,8 +22,6 @@ const BASE_ENV: Env = {
   ADMIN_JWT_ACCESS_SECRET: 'test-admin-access-secret-at-least-32-characters-long',
   ADMIN_JWT_REFRESH_PEPPER: 'test-admin-refresh-pepper-at-least-32-characters-long',
   ADMIN_WEB_ORIGIN: 'http://localhost:5173',
-  AUTH_DEV_OTP: undefined,
-  INFOBIP_DEFAULT_CHANNEL: 'whatsapp',
   PAYMENT_PROVIDER: 'fake',
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,
@@ -39,47 +29,35 @@ const BASE_ENV: Env = {
   EXPO_PUSH_API_URL: 'https://push.invalid/send',
 };
 
-// Two configs: `plainConfig` has no AUTH_DEV_OTP (exercises the real
-// hash-comparison path), `devConfig` mirrors how every other test in the
-// suite actually authenticates (the AUTH_DEV_OTP bypass), since manufacturing
-// a real 6-digit code would mean reading Redis internals from the test.
-// plainConfig's requestOtp always tries to actually deliver the code via
-// Infobip — these fake-but-present credentials satisfy `infobipRequest`'s
-// "is this configured at all" guard; the request itself is mocked per-test,
-// since actually reaching Infobip is neither necessary nor possible in CI.
-const plainConfig = new ConfigService<Env, true>({
-  ...BASE_ENV,
-  INFOBIP_API_KEY: 'test-infobip-key-not-real-000000000',
-  INFOBIP_BASE_URL: 'https://infobip.invalid',
-});
-const devConfig = new ConfigService<Env, true>({ ...BASE_ENV, AUTH_DEV_OTP: '000000' });
+const config = new ConfigService<Env, true>(BASE_ENV);
 
-describe('AuthService', () => {
+describe('AuthService Firebase exchange', () => {
   let prisma: PrismaService;
-  let redis: Redis;
-  let plainAuth: AuthService;
   let auth: AuthService;
   let cityId: string;
   let categoryId: string;
+  const verifiedIdentity = {
+    uid: 'firebase-auth-spec-uid',
+    email: TEST_EMAIL,
+    emailVerified: true,
+    displayName: 'Firebase Auth Spec',
+    photoUrl: null,
+    phoneNumber: null,
+  };
+  const verifyIdToken = vi.fn(() => Promise.resolve(verifiedIdentity));
 
   beforeAll(async () => {
-    prisma = new PrismaService(plainConfig);
+    prisma = new PrismaService(config);
     await prisma.onModuleInit();
-    redis = new Redis('redis://localhost:6380');
-    const trust = new TrustService(prisma);
-    plainAuth = new AuthService(prisma, new JwtService(), plainConfig, trust, redis);
-    auth = new AuthService(prisma, new JwtService(), devConfig, trust, redis);
+    const firebaseIdentity = { verifyIdToken } as unknown as FirebaseIdentityService;
+    auth = new AuthService(
+      prisma,
+      new JwtService(),
+      config,
+      new TrustService(prisma),
+      firebaseIdentity,
+    );
 
-    // `findOrCreateUser` picks a city via an unscoped `findFirstOrThrow()` —
-    // correct for this single-market app, but it means this spec's own city
-    // must never be one shared with (or adoptable from) another spec file.
-    // This used to opportunistically reuse *any* existing city, which under
-    // vitest's parallel file execution meant it could adopt a city that
-    // belonged to a different spec file — one whose own `afterAll` deletes it
-    // by id with no idea this file's OTP verification now depends on it too,
-    // so a well-timed cleanup elsewhere made `findOrCreateUser` throw
-    // (P2025) here. Every other *.spec.ts already creates its own uniquely-
-    // named city instead of adopting one; this one now does the same.
     const city = await prisma.city.create({
       data: {
         name: `auth-spec-${String(Date.now())}`,
@@ -93,9 +71,19 @@ describe('AuthService', () => {
       },
     });
     cityId = city.id;
+    categoryId = (await prisma.category.create({ data: { name: 'auth-spec-category' } })).id;
+  });
 
-    const category = await prisma.category.create({ data: { name: 'auth-spec-category' } });
-    categoryId = category.id;
+  async function cleanup() {
+    await prisma.service.deleteMany({ where: { provider: { user: { email: TEST_EMAIL } } } });
+    await prisma.providerProfile.deleteMany({ where: { user: { email: TEST_EMAIL } } });
+    await prisma.refreshToken.deleteMany({ where: { user: { email: TEST_EMAIL } } });
+    await prisma.user.deleteMany({ where: { email: TEST_EMAIL } });
+  }
+
+  beforeEach(async () => {
+    await cleanup();
+    verifyIdToken.mockClear();
   });
 
   afterAll(async () => {
@@ -103,104 +91,51 @@ describe('AuthService', () => {
     await prisma.category.delete({ where: { id: categoryId } });
     await prisma.city.delete({ where: { id: cityId } });
     await prisma.onModuleDestroy();
-    redis.disconnect();
   });
 
-  async function cleanup() {
-    await prisma.service.deleteMany({
-      where: { provider: { user: { phone: { startsWith: '+26377999' } } } },
-    });
-    await prisma.providerProfile.deleteMany({
-      where: { user: { phone: { startsWith: '+26377999' } } },
-    });
-    await prisma.refreshToken.deleteMany({
-      where: { user: { phone: { startsWith: '+26377999' } } },
-    });
-    await prisma.user.deleteMany({ where: { phone: { startsWith: '+26377999' } } });
-    const keys = await redis.keys('otp:*');
-    if (keys.length) await redis.del(...keys);
-  }
-
-  beforeEach(cleanup);
-
-  it('creates a new user on first verified OTP and returns tokens', async () => {
-    const { challengeId } = await auth.requestOtp(TEST_PHONE, '127.0.0.1');
-    const tokens = await auth.verifyOtp(challengeId, '000000');
-
+  it('creates an app user from a verified Firebase identity and returns tokens', async () => {
+    const tokens = await auth.exchangeFirebaseToken('firebase-id-token');
     expect(tokens.accessToken).toEqual(expect.any(String));
     expect(tokens.refreshToken).toEqual(expect.any(String));
+    expect(verifyIdToken).toHaveBeenCalledWith('firebase-id-token');
 
-    const user = await prisma.user.findUnique({ where: { phone: TEST_PHONE } });
-    expect(user).not.toBeNull();
-    expect(user?.activeRole).toBe('client');
+    expect(
+      await prisma.user.findUnique({ where: { firebaseUid: verifiedIdentity.uid } }),
+    ).toMatchObject({
+      email: TEST_EMAIL,
+      displayName: verifiedIdentity.displayName,
+      activeRole: 'client',
+    });
   });
 
-  it('rejects the wrong code against a real (non-dev-bypass) challenge', async () => {
-    // No dev bypass means requestOtp really does try to deliver the code —
-    // Infobip itself is neither reachable nor real here, so the delivery
-    // attempt is faked at the network boundary. What's under test is the
-    // hash comparison in verifyOtp, not delivery.
-    const fetchSpy = vi
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response('{}', { status: 200 }));
-    try {
-      const { challengeId } = await plainAuth.requestOtp(TEST_PHONE, '127.0.0.1');
-      await expect(plainAuth.verifyOtp(challengeId, '111111')).rejects.toThrow('Incorrect code');
-    } finally {
-      fetchSpy.mockRestore();
-    }
-  });
-
-  it('locks a challenge out after 5 incorrect attempts', async () => {
-    const { challengeId } = await auth.requestOtp(TEST_PHONE, '127.0.0.1');
-
-    for (let i = 0; i < 4; i++) {
-      await expect(auth.verifyOtp(challengeId, '111111')).rejects.toThrow('Incorrect code');
-    }
-    await expect(auth.verifyOtp(challengeId, '111111')).rejects.toThrow(
-      'Too many incorrect attempts',
+  it('rejects an unverified email before creating an app user', async () => {
+    verifyIdToken.mockResolvedValueOnce({ ...verifiedIdentity, emailVerified: false });
+    await expect(auth.exchangeFirebaseToken('unverified-token')).rejects.toThrow(
+      'Verify your email',
     );
-    // The challenge is now deleted — even the correct code no longer works.
-    await expect(auth.verifyOtp(challengeId, '000000')).rejects.toThrow(
-      'Challenge expired or not found',
-    );
+    expect(await prisma.user.findUnique({ where: { email: TEST_EMAIL } })).toBeNull();
   });
 
-  it('rate-limits OTP requests per phone number', async () => {
-    for (let i = 0; i < 5; i++) {
-      await auth.requestOtp(TEST_PHONE, '127.0.0.1');
-    }
-    await expect(auth.requestOtp(TEST_PHONE, '127.0.0.1')).rejects.toThrow('Too many requests');
-  });
-
-  it('rotates the refresh token on use and detects reuse of a stale token', async () => {
-    const { challengeId } = await auth.requestOtp(TEST_PHONE, '127.0.0.1');
-    const first = await auth.verifyOtp(challengeId, '000000');
-
+  it('rotates refresh tokens and detects replay', async () => {
+    const first = await auth.exchangeFirebaseToken('firebase-id-token');
     const second = await auth.refresh(first.refreshToken);
     expect(second.refreshToken).not.toBe(first.refreshToken);
-
-    // Replaying the now-rotated-away first token must fail AND revoke the family...
     await expect(auth.refresh(first.refreshToken)).rejects.toThrow('reuse detected');
-    // ...which means the second (legitimately rotated) token stops working too.
     await expect(auth.refresh(second.refreshToken)).rejects.toThrow('reuse detected');
   });
 
-  it('me() reflects hasProviderProfile, and setActiveRole() refuses provider without a stylist page', async () => {
-    const { challengeId } = await auth.requestOtp(TEST_PHONE, '127.0.0.1');
-    const tokens = await auth.verifyOtp(challengeId, '000000');
-
+  it('keeps role and provider authorization behavior after Firebase sign-in', async () => {
+    const tokens = await auth.exchangeFirebaseToken('firebase-id-token');
     const { id } = await auth.verifyAccessToken(tokens.accessToken);
-    const me = await auth.me(id);
-    expect(me.hasProviderProfile).toBe(false);
-    expect(me.activeRole).toBe('client');
+    expect(await auth.me(id)).toMatchObject({
+      email: TEST_EMAIL,
+      hasProviderProfile: false,
+      activeRole: 'client',
+    });
 
-    // No stylist page yet — the switch must be refused, not silently allowed
-    // into a provider side of the app with nothing behind it.
     await expect(auth.setActiveRole(id, 'provider')).rejects.toThrow(
       'This account does not have a stylist page yet',
     );
-
     await prisma.providerProfile.create({
       data: {
         userId: id,
@@ -215,11 +150,6 @@ describe('AuthService', () => {
         workingHoursLabel: 'Mon-Sat, 8am-6pm',
       },
     });
-
-    const withProfile = await auth.me(id);
-    expect(withProfile.hasProviderProfile).toBe(true);
-
-    const updated = await auth.setActiveRole(id, 'provider');
-    expect(updated.activeRole).toBe('provider');
+    expect((await auth.setActiveRole(id, 'provider')).activeRole).toBe('provider');
   });
 });

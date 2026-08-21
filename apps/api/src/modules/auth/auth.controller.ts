@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  Ip,
   Patch,
   Post,
   UploadedFile,
@@ -19,8 +18,7 @@ import {
   type UploadedImageFile,
 } from '../provider/image-storage.service';
 import {
-  RequestOtpDto,
-  VerifyOtpDto,
+  FirebaseExchangeDto,
   RefreshDto,
   SetActiveRoleDto,
   UpdateProfileDto,
@@ -32,14 +30,9 @@ import {
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  @Post('otp/request')
-  requestOtp(@Body() dto: RequestOtpDto, @Ip() ip: string) {
-    return this.auth.requestOtp(dto.phone, ip, dto.channel);
-  }
-
-  @Post('otp/verify')
-  verifyOtp(@Body() dto: VerifyOtpDto) {
-    return this.auth.verifyOtp(dto.challengeId, dto.code);
+  @Post('firebase/exchange')
+  exchangeFirebaseToken(@Body() dto: FirebaseExchangeDto) {
+    return this.auth.exchangeFirebaseToken(dto.idToken);
   }
 
   @Post('refresh')

@@ -208,11 +208,15 @@ export class MarketService {
         // The number the buyer typed at checkout, which need not be the line
         // they log in with. Normalised so the adapter always receives E.164.
         const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
+        const paymentPhone = payerPhone ?? buyer.phone;
+        if (!paymentPhone) {
+          throw new BadRequestException('Enter the EcoCash phone number for this payment');
+        }
         const intent = await this.paymentGateway.createCheckout({
           reference: order.reference,
           amountUsdCents: totalUsdCents,
           description: `Market order ${order.reference}`,
-          phone: payerPhone ?? buyer.phone,
+          phone: paymentPhone,
         });
         await tx.payment.create({
           data: {

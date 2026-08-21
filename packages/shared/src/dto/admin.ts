@@ -43,7 +43,7 @@ export const reportStatusSchema = z.enum(['open', 'reviewing', 'resolved']);
 export const adminUserSummarySchema = z.object({
   id: z.uuid(),
   displayName: z.string(),
-  phone: z.string(),
+  phone: z.string().nullable(),
 });
 export type AdminUserSummary = z.infer<typeof adminUserSummarySchema>;
 
@@ -101,7 +101,7 @@ export const adminProviderRowSchema = z.object({
   id: z.uuid(),
   userId: z.uuid(),
   displayName: z.string(),
-  phone: z.string(),
+  phone: z.string().nullable(),
   areaName: z.string(),
   categoryName: z.string(),
   verified: z.boolean(),
@@ -148,7 +148,7 @@ export type UpdateProviderAdminInput = z.infer<typeof updateProviderAdminSchema>
 export const adminVerificationRowSchema = z.object({
   id: z.uuid(),
   displayName: z.string(),
-  phone: z.string(),
+  phone: z.string().nullable(),
   activeRole: activeRoleSchema,
   hasProviderProfile: z.boolean(),
   verificationStatus: verificationStatusSchema,
@@ -217,7 +217,7 @@ export type AdminPaymentsOverviewDto = z.infer<typeof adminPaymentsOverviewSchem
 export const adminProviderPayoutRowSchema = z.object({
   providerId: z.uuid(),
   displayName: z.string(),
-  phone: z.string(),
+  phone: z.string().nullable(),
   releasedUsdCents: z.number().int(),
   paidOutUsdCents: z.number().int(),
   owedUsdCents: z.number().int(),
@@ -252,7 +252,7 @@ export const adminCashOutRowSchema = z.object({
   transactionId: z.uuid(),
   userId: z.uuid(),
   displayName: z.string(),
-  phone: z.string(),
+  phone: z.string().nullable(),
   amountUsdCents: z.number().int(),
   coins: z.number().int(),
   requestedAt: z.iso.datetime(),

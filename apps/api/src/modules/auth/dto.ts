@@ -1,7 +1,6 @@
 import { createZodDto } from 'nestjs-zod';
 import {
-  requestOtpSchema,
-  verifyOtpSchema,
+  firebaseExchangeSchema,
   refreshSchema,
   setActiveRoleSchema,
   updateProfileSchema,
@@ -15,8 +14,7 @@ import {
  * these, which is what makes these the SAME schemas the mobile client
  * validates against (plan §6).
  */
-export class RequestOtpDto extends createZodDto(requestOtpSchema) {}
-export class VerifyOtpDto extends createZodDto(verifyOtpSchema) {}
+export class FirebaseExchangeDto extends createZodDto(firebaseExchangeSchema) {}
 export class RefreshDto extends createZodDto(refreshSchema) {}
 export class SetActiveRoleDto extends createZodDto(setActiveRoleSchema) {}
 export class UpdateProfileDto extends createZodDto(updateProfileSchema) {}

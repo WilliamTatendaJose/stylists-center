@@ -65,7 +65,10 @@ export default function Payment() {
   // Prefilled with the account number as the common case, still editable —
   // the line someone pays from is not necessarily the one they log in with.
   useEffect(() => {
-    if (me?.phone) setPayerPhone((current) => current || me.phone);
+    if (me?.phone) {
+      const phone = me.phone;
+      setPayerPhone((current) => current || phone);
+    }
   }, [me?.phone]);
 
   const { data: provider } = useProvider(providerId ?? undefined);

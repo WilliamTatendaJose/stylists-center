@@ -106,11 +106,9 @@ ADMIN_JWT_REFRESH_PEPPER=<openssl rand -base64 48>
 ADMIN_WEB_ORIGIN=https://<admin service's public domain>
 
 # Real values before going live — see apps/api/.env.example for what each does
-INFOBIP_API_KEY=...
-INFOBIP_BASE_URL=...
-INFOBIP_WHATSAPP_SENDER=...
-INFOBIP_WHATSAPP_TEMPLATE_NAME=...
-INFOBIP_DEFAULT_CHANNEL=whatsapp
+FIREBASE_PROJECT_ID=style-center-5162a
+FIREBASE_CLIENT_EMAIL=...iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY=...   # keep the JSON key's escaped \\n sequences
 PAYMENT_PROVIDER=paynow   # Paynow's test integration IDs reject transactions with an email field — never add one to the checkout request
 PAYNOW_INTEGRATION_ID=...
 PAYNOW_INTEGRATION_KEY=...
@@ -182,6 +180,33 @@ client now strips a trailing `/v1` defensively, so either form works once
   `apps/api/src/modules/admin-auth/cookies.ts`, needed specifically because
   `admin` and `api` sit on different `*.up.railway.app` subdomains, a
   cross-site relationship browsers treat strictly).
+
+## Firebase authentication
+
+The client now uses Firebase for Google and email/password credentials. The
+API verifies a Firebase ID token once, then issues the app's existing rotating
+session so API guards and realtime sockets keep the same authorization model.
+
+Before the first auth-enabled build:
+
+1. In Firebase Authentication, enable **Email/Password** and **Google**.
+2. Register a Firebase **Web app** and copy its public config into the mobile
+   EAS environment as `EXPO_PUBLIC_FIREBASE_API_KEY`,
+   `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN`, `EXPO_PUBLIC_FIREBASE_PROJECT_ID`, and
+   `EXPO_PUBLIC_FIREBASE_APP_ID`.
+3. Create an Android OAuth client with the release/debug SHA-1 and SHA-256
+   fingerprints. Put its Web client id in `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`,
+   then download a fresh `google-services.json`; its `oauth_client` list must
+   not be empty for native Google sign-in.
+4. Generate a Firebase Admin service-account JSON. Set its `project_id`,
+   `client_email`, and `private_key` on the API as `FIREBASE_PROJECT_ID`,
+   `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. Keep the private key's
+   newlines escaped as `\\n` in Railway.
+5. Deploy the `20260821120000_firebase_auth` migration before directing users
+   to the new build.
+
+These mobile values are public identifiers, but the Admin private key is an
+API-only secret and must never use an `EXPO_PUBLIC_` variable.
 
 ## Android push notifications (FCM)
 

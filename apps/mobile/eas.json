@@ -9,6 +9,13 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyD9myTkJMXTWBhIbrt4hQUdtxfxqI7S0NE",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "style-center-5162a.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "style-center-5162a",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:742235961910:web:b6f042b9ed47afe4f5f697",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "742235961910-r1b5lhshh7jus4dajhaeq1i842qucotp.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -18,7 +25,12 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api-production-2b23.up.railway.app",
-        "EXPO_PUBLIC_MAPTILER_KEY": "fUkIPu3tIroBK5OT6r7w"
+        "EXPO_PUBLIC_MAPTILER_KEY": "fUkIPu3tIroBK5OT6r7w",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyD9myTkJMXTWBhIbrt4hQUdtxfxqI7S0NE",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "style-center-5162a.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "style-center-5162a",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:742235961910:web:b6f042b9ed47afe4f5f697",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "742235961910-r1b5lhshh7jus4dajhaeq1i842qucotp.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -27,7 +39,12 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://api-production-2b23.up.railway.app",
-        "EXPO_PUBLIC_MAPTILER_KEY": "fUkIPu3tIroBK5OT6r7w"
+        "EXPO_PUBLIC_MAPTILER_KEY": "fUkIPu3tIroBK5OT6r7w",
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyD9myTkJMXTWBhIbrt4hQUdtxfxqI7S0NE",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "style-center-5162a.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "style-center-5162a",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:742235961910:web:b6f042b9ed47afe4f5f697",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "742235961910-r1b5lhshh7jus4dajhaeq1i842qucotp.apps.googleusercontent.com"
       }
     }
   },

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import type { AuthTokens } from '@sc/shared';
 import { clearStoredTokens, getStoredTokens, setStoredTokens } from '../auth/tokenStorage.js';
 import { queryClient } from '../api/queryClient.js';
+import { firebaseAuth } from '../auth/firebaseClient.js';
+import { signOut as signOutFirebase } from 'firebase/auth';
 
 export interface AuthState {
   accessToken: string | null;
@@ -24,7 +26,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ accessToken: tokens.accessToken });
   },
   signOut: async () => {
-    await clearStoredTokens();
+    await Promise.all([clearStoredTokens(), signOutFirebase(firebaseAuth).catch(() => undefined)]);
     set({ accessToken: null });
     // Clears the persisted cache too — otherwise a different account signing
     // in on the same device would see the previous user's cached bookings,

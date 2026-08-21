@@ -22,8 +22,6 @@ const BASE_ENV: Env = {
   ADMIN_JWT_ACCESS_SECRET: 'test-admin-access-secret-at-least-32-characters-long',
   ADMIN_JWT_REFRESH_PEPPER: 'test-admin-refresh-pepper-at-least-32-characters-long',
   ADMIN_WEB_ORIGIN: 'http://localhost:5173',
-  AUTH_DEV_OTP: '000000',
-  INFOBIP_DEFAULT_CHANNEL: 'whatsapp',
   PAYMENT_PROVIDER: 'fake',
   COIN_USD_CENTS: 50,
   CASH_OUT_MIN_USD_CENTS: 500,

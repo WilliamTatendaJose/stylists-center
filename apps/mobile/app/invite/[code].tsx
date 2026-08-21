@@ -13,18 +13,18 @@ export default function InviteLanding() {
 
   useEffect(() => {
     if (!referralCode?.trim()) {
-      router.replace('/(auth)/phone');
+      router.replace('/(auth)/index' as never);
       return;
     }
     setPendingReferralCode(referralCode);
-    router.replace(accessToken ? '/(tabs)' : '/(auth)/phone');
+    router.replace((accessToken ? '/(tabs)' : '/(auth)/index') as never);
   }, [accessToken, referralCode, setPendingReferralCode]);
 
   return (
     <Screen header={<ScreenHeader title="Invite" showBack={false} />}>
       <Text variant="h2Small">You&apos;ve been invited</Text>
       <Text variant="body" color="neutral700">
-        Continue with WhatsApp and we&apos;ll apply the invite to your account automatically.
+        Create an account or sign in and we&apos;ll apply the invite to your account automatically.
       </Text>
     </Screen>
   );

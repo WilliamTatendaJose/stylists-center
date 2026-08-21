@@ -175,7 +175,7 @@ export default function Profile() {
       >
         <ProfileHero
           name={me.displayName}
-          subtitle={me.phone}
+          subtitle={me.email ?? me.phone ?? 'Account'}
           note="This is the name stylists see on your bookings, messages, and reviews."
           roleLabel="Client"
         />
@@ -190,7 +190,7 @@ export default function Profile() {
             <ProfileInfoRow
               icon={<Phone size={20} color={colors.neutral700} />}
               label="WhatsApp number"
-              value={me.phone}
+              value={me.phone ?? 'Add a payment phone at checkout'}
               divided
             />
           </Card>

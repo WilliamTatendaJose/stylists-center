@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatchRequestSchema } from './matching.js';
 import { createBookingSchema } from './bookings.js';
-import { requestOtpSchema, verifyOtpSchema } from './auth.js';
+import { firebaseExchangeSchema } from './auth.js';
 import { imageUrlSchema } from './uploads.js';
 import {
   adminLoginSchema,
@@ -109,15 +109,9 @@ describe('createBookingSchema', () => {
 });
 
 describe('auth schemas', () => {
-  it('accepts a plausible phone string for OTP request', () => {
-    expect(requestOtpSchema.safeParse({ phone: '0771234567' }).success).toBe(true);
-  });
-
-  it('rejects a code that is not exactly 6 digits', () => {
-    const challengeId = PROVIDER_ID;
-    expect(verifyOtpSchema.safeParse({ challengeId, code: '12345' }).success).toBe(false);
-    expect(verifyOtpSchema.safeParse({ challengeId, code: 'abcdef' }).success).toBe(false);
-    expect(verifyOtpSchema.safeParse({ challengeId, code: '000000' }).success).toBe(true);
+  it('requires a Firebase ID token for session exchange', () => {
+    expect(firebaseExchangeSchema.safeParse({ idToken: 'firebase-token' }).success).toBe(true);
+    expect(firebaseExchangeSchema.safeParse({ idToken: '' }).success).toBe(false);
   });
 });
 

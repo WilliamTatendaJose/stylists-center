@@ -536,12 +536,16 @@ export class ProviderService {
       });
       // The number the stylist typed, which need not be their login line.
       const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
+      const paymentPhone = payerPhone ?? user.phone;
+      if (!paymentPhone) {
+        throw new BadRequestException('Enter the EcoCash phone number for this payment');
+      }
       const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
       const intent = await this.paymentGateway.createCheckout({
         reference,
         amountUsdCents,
         description: 'Stylists Center monthly subscription',
-        phone: payerPhone ?? user.phone,
+        phone: paymentPhone,
       });
       await this.prisma.payment.create({
         data: {

@@ -94,11 +94,15 @@ export class BookingsService {
       // The number the client typed at checkout, which need not be the line
       // they log in with. Normalised here so the adapter always receives E.164.
       const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
+      const paymentPhone = payerPhone ?? client.phone;
+      if (!paymentPhone) {
+        throw new BadRequestException('Enter the EcoCash phone number for this payment');
+      }
       checkoutIntent = await this.paymentGateway.createCheckout({
         reference,
         amountUsdCents: service.priceUsdCents,
         description: `Booking ${reference}: ${service.name}`,
-        phone: payerPhone ?? client.phone,
+        phone: paymentPhone,
       });
     }
 

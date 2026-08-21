@@ -24,6 +24,12 @@ if (isReleaseProfile && !process.env.EXPO_PUBLIC_MAPTILER_KEY?.trim()) {
   );
 }
 
+if (isReleaseProfile && !process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim()) {
+  throw new Error(
+    `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID must be set for the "${process.env.EAS_BUILD_PROFILE ?? ''}" build profile.`,
+  );
+}
+
 /**
  * Android push needs google-services.json for Firebase to initialise on the
  * device; without it expo-notifications cannot mint a token at all, so the
@@ -100,6 +106,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    '@react-native-google-signin/google-signin',
     'expo-secure-store',
     'expo-notifications',
     'expo-web-browser',

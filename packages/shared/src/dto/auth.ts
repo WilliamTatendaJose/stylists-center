@@ -7,28 +7,10 @@ import { imageUrlSchema } from './uploads.js';
  * single source that keeps the two surfaces from drifting.
  */
 
-export const requestOtpSchema = z.object({
-  /** Any format libphonenumber-js can parse against the ZW default region. */
-  phone: z.string().min(6).max(20),
-  /** WhatsApp is the default; the OTP screen can explicitly retry over SMS. */
-  channel: z.enum(['whatsapp', 'sms']).optional(),
+export const firebaseExchangeSchema = z.object({
+  idToken: z.string().min(1),
 });
-export type RequestOtpInput = z.infer<typeof requestOtpSchema>;
-
-export const requestOtpResponseSchema = z.object({
-  challengeId: z.uuid(),
-  expiresAt: z.iso.datetime(),
-});
-export type RequestOtpResponse = z.infer<typeof requestOtpResponseSchema>;
-
-export const verifyOtpSchema = z.object({
-  challengeId: z.uuid(),
-  code: z
-    .string()
-    .length(6)
-    .regex(/^\d{6}$/),
-});
-export type VerifyOtpInput = z.infer<typeof verifyOtpSchema>;
+export type FirebaseExchangeInput = z.infer<typeof firebaseExchangeSchema>;
 
 export const authTokensSchema = z.object({
   accessToken: z.string(),
@@ -51,7 +33,8 @@ export type SetActiveRoleInput = z.infer<typeof setActiveRoleSchema>;
 
 export const meSchema = z.object({
   id: z.uuid(),
-  phone: z.string(),
+  email: z.email().nullable(),
+  phone: z.string().nullable(),
   displayName: z.string(),
   avatarImageUrl: imageUrlSchema.nullable(),
   activeRole: activeRoleSchema,

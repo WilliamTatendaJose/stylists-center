@@ -145,7 +145,10 @@ export default function ProviderProfile() {
   // Prefilled with the account number, still editable — the line a stylist
   // pays the subscription from need not be the one they log in with.
   useEffect(() => {
-    if (me?.phone) setPayerPhone((current) => current || me.phone);
+    if (me?.phone) {
+      const phone = me.phone;
+      setPayerPhone((current) => current || phone);
+    }
   }, [me?.phone]);
 
   useEffect(() => {

@@ -54,7 +54,7 @@ export class AdminWalletService {
 function toCashOutRow(transaction: {
   id: string;
   userId: string;
-  user: { displayName: string; phone: string };
+  user: { displayName: string; phone: string | null };
   coins: number;
   usdCents: number;
   createdAt: Date;

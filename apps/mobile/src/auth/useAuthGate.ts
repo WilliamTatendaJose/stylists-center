@@ -32,7 +32,7 @@ export function useAuthGate(): boolean {
     const inInviteRoute = String(segments[0]) === 'invite';
 
     if (!accessToken && !inAuthGroup && !inInviteRoute) {
-      router.replace('/(auth)/phone');
+      router.replace('/(auth)/index' as never);
       return;
     }
     if (accessToken && inAuthGroup) {

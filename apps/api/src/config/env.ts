@@ -5,11 +5,8 @@ import { z } from 'zod';
  * the app starting and failing mysteriously later (a missing JWT secret
  * surfacing as a cryptic 500 on the first login attempt, say).
  *
- * `AUTH_DEV_OTP` is the one field with a real safety rule attached: it lets
- * every OTP verify against a fixed code so screens can be built and demoed
- * without an SMS/WhatsApp bill (plan §6, §11 R4). The `.superRefine` below
- * makes it impossible for that shortcut to exist in a production config —
- * not just a convention, an enforced boot failure.
+ * Firebase owns end-user credentials. These values initialise the Admin SDK
+ * used to verify short-lived ID tokens before an app session is issued.
  */
 export const envSchema = z
   .object({
@@ -37,30 +34,9 @@ export const envSchema = z
     // client needs the admin refresh cookie at all.
     ADMIN_WEB_ORIGIN: z.url().default('http://localhost:5173'),
 
-    AUTH_DEV_OTP: z
-      .string()
-      .length(6)
-      .regex(/^\d{6}$/)
-      .optional(),
-    // Infobip delivers OTP codes in production: a WhatsApp template message
-    // first (preferred in Zimbabwe), SMS as the automatic fallback when
-    // WhatsApp cannot deliver to a particular number. Infobip does not host
-    // the code itself (unlike Twilio Verify) — AuthService generates it and
-    // only calls Infobip to deliver it, hashing+comparing locally.
-    INFOBIP_API_KEY: z.string().min(20).optional(),
-    // Bare host from the Infobip dashboard, e.g. "xxxxx.api.infobip.com" —
-    // no scheme; auth.service.ts prefixes https:// when building request URLs.
-    INFOBIP_BASE_URL: z.string().min(1).optional(),
-    // WhatsApp Business sender registered on the Infobip account.
-    INFOBIP_WHATSAPP_SENDER: z.string().min(1).optional(),
-    // Name of the pre-approved WhatsApp template used for the OTP message —
-    // WhatsApp requires business-initiated messages to use an approved
-    // template; free-form text is rejected.
-    INFOBIP_WHATSAPP_TEMPLATE_NAME: z.string().min(1).optional(),
-    // Optional alphanumeric sender ID for the SMS fallback; when unset,
-    // Infobip uses the account's default sender.
-    INFOBIP_SMS_SENDER: z.string().min(1).optional(),
-    INFOBIP_DEFAULT_CHANNEL: z.enum(['whatsapp', 'sms']).default('whatsapp'),
+    FIREBASE_PROJECT_ID: z.string().min(2).optional(),
+    FIREBASE_CLIENT_EMAIL: z.email().optional(),
+    FIREBASE_PRIVATE_KEY: z.string().min(20).optional(),
 
     // Paynow is the selected collection provider. It remains optional in
     // development so the fake adapter keeps local and integration tests free.
@@ -95,25 +71,17 @@ export const envSchema = z
     OSRM_BASE_URL: z.url().default('https://router.project-osrm.org'),
   })
   .superRefine((env, ctx) => {
-    if (env.NODE_ENV === 'production' && env.AUTH_DEV_OTP) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['AUTH_DEV_OTP'],
-        message: 'AUTH_DEV_OTP must not be set in production — it bypasses real OTP verification.',
-      });
-    }
     if (env.NODE_ENV === 'production') {
       for (const key of [
-        'INFOBIP_API_KEY',
-        'INFOBIP_BASE_URL',
-        'INFOBIP_WHATSAPP_SENDER',
-        'INFOBIP_WHATSAPP_TEMPLATE_NAME',
+        'FIREBASE_PROJECT_ID',
+        'FIREBASE_CLIENT_EMAIL',
+        'FIREBASE_PRIVATE_KEY',
       ] as const) {
         if (!env[key]) {
           ctx.addIssue({
             code: 'custom',
             path: [key],
-            message: `${key} is required in production for Infobip OTP delivery.`,
+            message: `${key} is required in production for Firebase authentication.`,
           });
         }
       }

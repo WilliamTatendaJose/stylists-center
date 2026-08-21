@@ -33,6 +33,7 @@
     "@socket.io/redis-adapter": "^8.3.0",
     "bullmq": "^5.81.2",
     "dotenv": "^17.4.2",
+    "firebase-admin": "^14.3.0",
     "pg": "^8.22.0",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
