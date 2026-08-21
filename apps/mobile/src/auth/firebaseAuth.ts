@@ -121,5 +121,8 @@ export function firebaseErrorMessage(error: unknown): string {
     'auth/operation-not-allowed': 'This sign-in method is not enabled yet.',
   };
   if (messages[code]) return messages[code];
+  if (error instanceof Error && error.message.includes('DEVELOPER_ERROR')) {
+    return 'Google sign-in is not available for this Android build yet.';
+  }
   return error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 }

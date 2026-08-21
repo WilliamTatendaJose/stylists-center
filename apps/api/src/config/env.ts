@@ -72,11 +72,7 @@ export const envSchema = z
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
-      for (const key of [
-        'FIREBASE_PROJECT_ID',
-        'FIREBASE_CLIENT_EMAIL',
-        'FIREBASE_PRIVATE_KEY',
-      ] as const) {
+      for (const key of ['FIREBASE_PROJECT_ID'] as const) {
         if (!env[key]) {
           ctx.addIssue({
             code: 'custom',
@@ -107,6 +103,14 @@ export const envSchema = z
           });
         }
       }
+    }
+    if (Boolean(env.FIREBASE_CLIENT_EMAIL) !== Boolean(env.FIREBASE_PRIVATE_KEY)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [env.FIREBASE_CLIENT_EMAIL ? 'FIREBASE_PRIVATE_KEY' : 'FIREBASE_CLIENT_EMAIL'],
+        message:
+          'FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY must either both be set or both be omitted.',
+      });
     }
   });
 

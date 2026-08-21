@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Check, Circle } from 'lucide-react-native';
-import { Button, Text } from '@sc/ui';
-import { color, space } from '@sc/tokens';
+import { Button, Text, useTheme } from '@sc/ui';
+import { space } from '@sc/tokens';
 import {
   AuthDivider,
   AuthField,
@@ -29,16 +29,18 @@ const styles = StyleSheet.create({
 });
 
 function PasswordRule({ label, passed }: { label: string; passed: boolean }) {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.rule}>
       <View style={styles.ruleIcon}>
         {passed ? (
-          <Check size={14} color={color.accent700} strokeWidth={2.4} />
+          <Check size={14} color={colors.accent700} strokeWidth={2.4} />
         ) : (
-          <Circle size={10} color={color.neutral600} strokeWidth={1.5} />
+          <Circle size={10} color={colors.neutral700} strokeWidth={1.5} />
         )}
       </View>
-      <Text variant="meta" color={passed ? 'accent700' : 'neutral600'}>
+      <Text variant="meta" color={passed ? 'accent700' : 'neutral700'}>
         {label}
       </Text>
     </View>
@@ -75,7 +77,7 @@ export default function SignUp() {
         return;
       }
       router.replace({
-        pathname: '/(auth)/verify-email' as never,
+        pathname: '/(auth)/verify-email',
         params: { email: email.trim() },
       });
     } catch (reason) {
@@ -93,7 +95,7 @@ export default function SignUp() {
       const result = await signInWithGoogle();
       if (!result) return;
       if (result.needsEmailVerification) {
-        router.replace('/(auth)/verify-email' as never);
+        router.replace('/(auth)/verify-email');
         return;
       }
       router.replace('/(tabs)');
@@ -171,9 +173,9 @@ export default function SignUp() {
           <Text variant="body" color="neutral700">
             Already have an account?
           </Text>
-          <AuthLink label="Sign in" onPress={() => router.replace('/(auth)/sign-in' as never)} />
+          <AuthLink label="Sign in" onPress={() => router.replace('/(auth)/sign-in')} />
         </View>
-        <Text variant="metaSmall" color="neutral600" style={styles.legal}>
+        <Text variant="metaSmall" color="neutral700" style={styles.legal}>
           By creating an account, you agree to our Terms and Privacy Policy.
         </Text>
       </AuthFooter>

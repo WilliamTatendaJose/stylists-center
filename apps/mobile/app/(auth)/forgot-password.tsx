@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { ArrowLeft, MailCheck } from 'lucide-react-native';
-import { Button, Pressable, Text } from '@sc/ui';
-import { color, radius, space } from '@sc/tokens';
+import { Button, Pressable, Text, useTheme } from '@sc/ui';
+import { radius, space } from '@sc/tokens';
 import {
   AuthField,
   AuthFooter,
@@ -17,7 +17,6 @@ const styles = StyleSheet.create({
   form: { gap: space.l },
   success: {
     borderRadius: radius.card,
-    backgroundColor: color.accent100,
     padding: space.l,
     gap: space.m,
   },
@@ -25,7 +24,6 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: radius.pill,
-    backgroundColor: color.bg,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -34,6 +32,7 @@ const styles = StyleSheet.create({
 });
 
 export default function ForgotPassword() {
+  const { colors } = useTheme();
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,9 +60,9 @@ export default function ForgotPassword() {
         subtitle="If an account exists for that email, we’ll send a secure link to reset your password."
         showHero={false}
       >
-        <View style={styles.success}>
-          <View style={styles.successIcon}>
-            <MailCheck size={21} color={color.accent700} strokeWidth={1.9} />
+        <View style={[styles.success, { backgroundColor: colors.accent100 }]}>
+          <View style={[styles.successIcon, { backgroundColor: colors.bg }]}>
+            <MailCheck size={21} color={colors.accent700} strokeWidth={1.9} />
           </View>
           <View>
             <Text variant="cardTitle" style={styles.successTitle}>
@@ -79,7 +78,7 @@ export default function ForgotPassword() {
             label="Back to sign in"
             block
             size="lg"
-            onPress={() => router.replace('/(auth)/sign-in' as never)}
+            onPress={() => router.replace('/(auth)/sign-in')}
           />
           <Pressable
             accessibilityRole="button"
@@ -133,11 +132,8 @@ export default function ForgotPassword() {
       <AuthFooter>
         <SecureNote>Password reset links expire for your safety.</SecureNote>
         <View style={styles.backRow}>
-          <ArrowLeft size={15} color={color.accent700} strokeWidth={2} />
-          <AuthLink
-            label="Back to sign in"
-            onPress={() => router.replace('/(auth)/sign-in' as never)}
-          />
+          <ArrowLeft size={15} color={colors.accent700} strokeWidth={2} />
+          <AuthLink label="Back to sign in" onPress={() => router.replace('/(auth)/sign-in')} />
         </View>
       </AuthFooter>
     </AuthShell>

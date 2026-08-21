@@ -35,7 +35,11 @@ interface VariantStyle {
 // colours are resolved from the active theme below.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const VARIANTS: Record<ButtonVariant, VariantStyle> = {
-  primary: { container: { backgroundColor: color.accent }, textColor: color.bg, onDark: true },
+  primary: {
+    container: { backgroundColor: color.accent },
+    textColor: color.neutral900,
+    onDark: false,
+  },
   secondary: {
     container: { backgroundColor: color.surface, borderWidth: 1, borderColor: color.divider },
     textColor: color.text,
@@ -72,7 +76,6 @@ const styles = StyleSheet.create({
     gap: space.xs,
   },
   block: { alignSelf: 'stretch' },
-  disabled: { opacity: 0.45 },
 });
 
 /**
@@ -95,8 +98,8 @@ export function Button({
   const v: VariantStyle = {
     primary: {
       container: { backgroundColor: colors.accent },
-      textColor: colors.onAccent.text,
-      onDark: true,
+      textColor: colors.neutral900,
+      onDark: false,
     },
     secondary: {
       container: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.divider },
@@ -130,6 +133,15 @@ export function Button({
     justifyContent: arrow ? 'space-between' : 'center',
   };
   const isDisabled = disabled || loading;
+  const disabledContainerStyle: ViewStyle | undefined = isDisabled
+    ? variant === 'ghost'
+      ? { backgroundColor: 'transparent' }
+      : {
+          backgroundColor: colors.neutral200,
+          borderColor: colors.divider,
+        }
+    : undefined;
+  const resolvedTextColor = isDisabled ? colors.neutral700 : v.textColor;
 
   return (
     <Pressable
@@ -143,20 +155,27 @@ export function Button({
         styles.base,
         containerStyle,
         block ? styles.block : null,
-        isDisabled ? styles.disabled : null,
+        disabledContainerStyle,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={v.textColor} size="small" />
+        <ActivityIndicator color={resolvedTextColor} size="small" />
       ) : (
         <>
-          <Text variant={size === 'lg' ? 'buttonLabelLarge' : 'buttonLabel'} color={v.textColor}>
+          <Text
+            variant={size === 'lg' ? 'buttonLabelLarge' : 'buttonLabel'}
+            color={resolvedTextColor}
+          >
             {label}
           </Text>
           {arrow ? (
             <View pointerEvents="none">
-              <ArrowRight size={size === 'lg' ? 15 : 14} strokeWidth={2} color={v.textColor} />
+              <ArrowRight
+                size={size === 'lg' ? 15 : 14}
+                strokeWidth={2}
+                color={resolvedTextColor}
+              />
             </View>
           ) : null}
         </>

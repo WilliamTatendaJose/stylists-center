@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Check, Mail, RefreshCw } from 'lucide-react-native';
-import { Button, Pressable, Text } from '@sc/ui';
-import { color, radius, space } from '@sc/tokens';
+import { Button, Pressable, Text, useTheme } from '@sc/ui';
+import { radius, space } from '@sc/tokens';
 import { AuthFooter, AuthLink, AuthShell, SecureNote } from '../../src/components/AuthChrome.js';
 import {
   currentFirebaseEmail,
@@ -15,7 +15,6 @@ import {
 const styles = StyleSheet.create({
   panel: {
     borderRadius: radius.card,
-    backgroundColor: color.surface,
     alignItems: 'center',
     padding: space.xl,
     gap: space.m,
@@ -24,20 +23,19 @@ const styles = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: color.accent100,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: space.s,
   },
   panelTitle: { textAlign: 'center', marginBottom: 2 },
   panelBody: { textAlign: 'center' },
-  address: { color: color.neutral900 },
   resend: { flexDirection: 'row', alignItems: 'center', gap: space.s, minHeight: 44 },
   success: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   change: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 4 },
 });
 
 export default function VerifyEmail() {
+  const { colors } = useTheme();
   const params = useLocalSearchParams<{ email?: string }>();
   const email = String(params.email ?? currentFirebaseEmail() ?? 'your email address');
   const [resent, setResent] = useState(false);
@@ -90,19 +88,16 @@ export default function VerifyEmail() {
       subtitle="Verify your email to keep your account secure and unlock every part of Stylists Center."
       showHero={false}
     >
-      <View style={styles.panel}>
-        <View style={styles.mailIcon}>
-          <Mail size={30} color={color.accent700} strokeWidth={1.7} />
+      <View style={[styles.panel, { backgroundColor: colors.surface }]}>
+        <View style={[styles.mailIcon, { backgroundColor: colors.accent100 }]}>
+          <Mail size={30} color={colors.accent700} strokeWidth={1.7} />
         </View>
         <View>
           <Text variant="h3" style={styles.panelTitle}>
             Check your inbox
           </Text>
           <Text variant="body" color="neutral700" style={styles.panelBody}>
-            We sent a verification link to{' '}
-            <Text variant="bodyStrong" style={styles.address}>
-              {maskedEmail}
-            </Text>
+            We sent a verification link to <Text variant="bodyStrong">{maskedEmail}</Text>
           </Text>
         </View>
       </View>
@@ -122,14 +117,14 @@ export default function VerifyEmail() {
           disabled={loading}
           style={styles.resend}
         >
-          <RefreshCw size={16} color={color.accent700} strokeWidth={1.9} />
+          <RefreshCw size={16} color={colors.accent700} strokeWidth={1.9} />
           <Text variant="bodyStrong" color="accent700">
             Send the link again
           </Text>
         </Pressable>
         {resent ? (
           <View style={styles.success}>
-            <Check size={16} color={color.accent700} strokeWidth={2.2} />
+            <Check size={16} color={colors.accent700} strokeWidth={2.2} />
             <Text variant="meta" color="accent700" accessibilityLiveRegion="polite">
               A fresh link is on its way.
             </Text>

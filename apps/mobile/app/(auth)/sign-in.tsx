@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Button, Pressable, Text } from '@sc/ui';
-import { color, space } from '@sc/tokens';
+import { space } from '@sc/tokens';
 import {
   AuthDivider,
   AuthField,
@@ -43,7 +43,7 @@ export default function SignIn() {
       const result = await signInWithEmail(email.trim(), password);
       if (result.needsEmailVerification) {
         router.replace({
-          pathname: '/(auth)/verify-email' as never,
+          pathname: '/(auth)/verify-email',
           params: { email: email.trim() },
         });
         return;
@@ -64,7 +64,7 @@ export default function SignIn() {
       const result = await signInWithGoogle();
       if (!result) return;
       if (result.needsEmailVerification) {
-        router.replace({ pathname: '/(auth)/verify-email' as never });
+        router.replace({ pathname: '/(auth)/verify-email' });
         return;
       }
       router.replace('/(tabs)');
@@ -117,7 +117,7 @@ export default function SignIn() {
           />
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/(auth)/forgot-password' as never)}
+            onPress={() => router.push('/(auth)/forgot-password')}
             style={styles.forgot}
           >
             <Text variant="meta" color="accent700">
@@ -126,12 +126,7 @@ export default function SignIn() {
           </Pressable>
         </View>
         {error ? (
-          <Text
-            variant="meta"
-            color={color.accent700}
-            style={styles.error}
-            accessibilityRole="alert"
-          >
+          <Text variant="meta" color="accent700" style={styles.error} accessibilityRole="alert">
             {error}
           </Text>
         ) : null}
@@ -152,12 +147,9 @@ export default function SignIn() {
           <Text variant="body" color="neutral700">
             New to Stylists Center?
           </Text>
-          <AuthLink
-            label="Create an account"
-            onPress={() => router.push('/(auth)/sign-up' as never)}
-          />
+          <AuthLink label="Create an account" onPress={() => router.push('/(auth)/sign-up')} />
         </View>
-        <Text variant="metaSmall" color="neutral600" style={styles.legal}>
+        <Text variant="metaSmall" color="neutral700" style={styles.legal}>
           By continuing, you agree to our Terms and Privacy Policy.
         </Text>
       </AuthFooter>

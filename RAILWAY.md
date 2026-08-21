@@ -107,8 +107,8 @@ ADMIN_WEB_ORIGIN=https://<admin service's public domain>
 
 # Real values before going live — see apps/api/.env.example for what each does
 FIREBASE_PROJECT_ID=style-center-5162a
-FIREBASE_CLIENT_EMAIL=...iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY=...   # keep the JSON key's escaped \\n sequences
+FIREBASE_CLIENT_EMAIL=...iam.gserviceaccount.com  # optional; set with private key
+FIREBASE_PRIVATE_KEY=...   # optional revocation checks; keep escaped \\n sequences
 PAYMENT_PROVIDER=paynow   # Paynow's test integration IDs reject transactions with an email field — never add one to the checkout request
 PAYNOW_INTEGRATION_ID=...
 PAYNOW_INTEGRATION_KEY=...

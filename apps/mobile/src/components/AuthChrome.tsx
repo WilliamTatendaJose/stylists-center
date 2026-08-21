@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
-import { ArrowRight, Eye, EyeOff, Globe2, ShieldCheck } from 'lucide-react-native';
-import { Pressable, Screen, Text } from '@sc/ui';
+import { ArrowRight, Eye, EyeOff, ShieldCheck } from 'lucide-react-native';
+import { Pressable, Screen, Text, useTheme } from '@sc/ui';
 import { color, layout, radius, space, type } from '@sc/tokens';
+import { GoogleGLogo } from './GoogleGLogo.js';
 
 const styles = StyleSheet.create({
   content: { paddingBottom: 32 },
@@ -54,46 +55,31 @@ const styles = StyleSheet.create({
   inputShell: {
     minHeight: 54,
     borderWidth: 1,
-    borderColor: color.divider,
     borderRadius: radius.tile,
     flexDirection: 'row',
     alignItems: 'center',
     paddingLeft: space.l,
     paddingRight: space.s,
-    backgroundColor: color.bg,
   },
-  inputShellError: { borderColor: color.accent700, backgroundColor: color.accent100 },
   input: {
     flex: 1,
     minHeight: 52,
     paddingVertical: 13,
     paddingHorizontal: 0,
     ...type.bodyLarge,
-    color: color.text,
   },
   eye: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   fieldError: { marginLeft: 2 },
   dividerRow: { flexDirection: 'row', alignItems: 'center', gap: space.m, marginVertical: 2 },
-  divider: { flex: 1, height: 1, backgroundColor: color.divider },
+  divider: { flex: 1, height: 1 },
   google: {
     minHeight: 54,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: color.divider,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: space.s,
-    backgroundColor: color.bg,
-  },
-  googleDisabled: { opacity: 0.5 },
-  googleIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: color.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   secure: {
     flexDirection: 'row',
@@ -101,7 +87,6 @@ const styles = StyleSheet.create({
     gap: space.s,
     padding: space.m,
     borderRadius: radius.tile,
-    backgroundColor: color.surface,
   },
   secureText: { flex: 1 },
   footer: { marginTop: space.xl, gap: space.s },
@@ -164,17 +149,28 @@ export function AuthField({
   secure?: boolean;
   onToggleSecure?: () => void;
 }) {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.field}>
-      <Text variant="sectionLabel" color="neutral600" style={styles.label}>
+      <Text variant="sectionLabel" color="neutral700" style={styles.label}>
         {label}
       </Text>
-      <View style={[styles.inputShell, error ? styles.inputShellError : null]}>
+      <View
+        style={[
+          styles.inputShell,
+          {
+            backgroundColor: error ? colors.accent100 : colors.surface,
+            borderColor: error ? colors.accent700 : colors.neutral600,
+          },
+        ]}
+      >
         <TextInput
           {...props}
           secureTextEntry={secure}
-          placeholderTextColor={color.neutral600}
-          style={styles.input}
+          placeholderTextColor={colors.neutral700}
+          selectionColor={colors.accent700}
+          style={[styles.input, { color: colors.text }]}
           accessibilityLabel={label}
         />
         {onToggleSecure ? (
@@ -187,9 +183,9 @@ export function AuthField({
             style={styles.eye}
           >
             {secure ? (
-              <Eye size={19} color={color.neutral700} strokeWidth={1.8} />
+              <Eye size={19} color={colors.neutral700} strokeWidth={1.8} />
             ) : (
-              <EyeOff size={19} color={color.neutral700} strokeWidth={1.8} />
+              <EyeOff size={19} color={colors.neutral700} strokeWidth={1.8} />
             )}
           </Pressable>
         ) : null}
@@ -210,18 +206,25 @@ export function AuthGoogleButton({
   onPress?: () => void;
   disabled?: boolean;
 }) {
+  const { colors, isDark } = useTheme();
+
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.google, disabled ? styles.googleDisabled : null]}
+      onDark={isDark}
+      style={[
+        styles.google,
+        {
+          backgroundColor: disabled ? colors.neutral200 : colors.surface,
+          borderColor: disabled ? colors.divider : isDark ? colors.neutral700 : colors.neutral600,
+        },
+      ]}
     >
-      <View style={styles.googleIcon}>
-        <Globe2 size={17} color={color.neutral900} strokeWidth={2} />
-      </View>
-      <Text variant="buttonLabel" color="neutral900">
+      <GoogleGLogo />
+      <Text variant="buttonLabel" color={disabled ? colors.neutral700 : colors.text}>
         Continue with Google
       </Text>
     </Pressable>
@@ -229,13 +232,15 @@ export function AuthGoogleButton({
 }
 
 export function AuthDivider() {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.dividerRow}>
-      <View style={styles.divider} />
-      <Text variant="metaSmall" color="neutral600">
+      <View style={[styles.divider, { backgroundColor: colors.divider }]} />
+      <Text variant="metaSmall" color="neutral700">
         OR CONTINUE WITH EMAIL
       </Text>
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: colors.divider }]} />
     </View>
   );
 }
@@ -259,9 +264,11 @@ export function SecureNote({
 }: {
   children?: string;
 }) {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.secure}>
-      <ShieldCheck size={17} color={color.accent700} strokeWidth={1.9} />
+    <View style={[styles.secure, { backgroundColor: colors.surface }]}>
+      <ShieldCheck size={17} color={colors.accent700} strokeWidth={1.9} />
       <Text variant="meta" color="neutral700" style={styles.secureText}>
         {children}
       </Text>
@@ -270,7 +277,8 @@ export function SecureNote({
 }
 
 export function AuthArrowIcon() {
-  return <ArrowRight size={17} color={color.accent700} strokeWidth={2} />;
+  const { colors } = useTheme();
+  return <ArrowRight size={17} color={colors.accent700} strokeWidth={2} />;
 }
 
 export const authStyles: { form: ViewStyle } = { form: styles.form };

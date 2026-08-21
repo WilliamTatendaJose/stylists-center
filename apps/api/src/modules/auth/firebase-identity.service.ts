@@ -17,6 +17,7 @@ export interface FirebaseIdentity {
 @Injectable()
 export class FirebaseIdentityService {
   private readonly app: App | null;
+  private readonly checkRevoked: boolean;
 
   constructor(private readonly config: ConfigService<Env, true>) {
     const projectId = this.config.get('FIREBASE_PROJECT_ID', { infer: true });
@@ -25,8 +26,15 @@ export class FirebaseIdentityService {
 
     if (!projectId) {
       this.app = null;
+      this.checkRevoked = false;
       return;
     }
+
+    // Signature, issuer, audience and expiry verification only needs the
+    // Firebase project ID; the Admin SDK downloads and caches Google's public
+    // signing certificates. A service account is optional and only needed for
+    // the additional per-login revocation/disabled-user lookup.
+    this.checkRevoked = Boolean(clientEmail && privateKey);
 
     this.app =
       getApps().find((candidate) => candidate.name === 'stylists-center-auth') ??
@@ -53,7 +61,7 @@ export class FirebaseIdentityService {
     }
 
     try {
-      const decoded = await getAuth(this.app).verifyIdToken(idToken, true);
+      const decoded = await getAuth(this.app).verifyIdToken(idToken, this.checkRevoked);
       return {
         uid: decoded.uid,
         email: decoded.email ?? null,
