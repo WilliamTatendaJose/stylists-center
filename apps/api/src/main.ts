@@ -18,9 +18,10 @@ async function bootstrap() {
   // orchestrator) expect a fixed /healthz path, not one that moves with the
   // API version. The two .well-known files are unprefixed because the
   // Apple/Google spec requires them at the domain root, full stop — they
-  // aren't found if they move. provider-share/:id rides along so a shared
-  // link's path is identical whether the OS opens the app directly or a
-  // browser falls through to this server (see app-links.controller.ts).
+  // aren't found if they move. provider-share/:id and invite/:code ride
+  // along so a shared link's path is identical whether the OS opens the app
+  // directly or a browser falls through to this server (see
+  // app-links.controller.ts).
   app.setGlobalPrefix('v1', {
     exclude: [
       'healthz',
@@ -28,6 +29,7 @@ async function bootstrap() {
       '.well-known/apple-app-site-association',
       '.well-known/assetlinks.json',
       { path: 'provider-share/:id', method: RequestMethod.GET },
+      { path: 'invite/:code', method: RequestMethod.GET },
     ],
   });
 

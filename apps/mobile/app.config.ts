@@ -133,15 +133,19 @@ const config: ExpoConfig = {
     // declares Play Store's background-location policy at all.
     permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
     // App Links counterpart to ios.associatedDomains above — same shared
-    // provider-profile link, verified against assetlinks.json instead of
-    // apple-app-site-association. autoVerify is what makes the OS actually
-    // check that file rather than just registering the app as one of
-    // several apps willing to handle the link (which would show a picker).
+    // links (a provider profile, a referral invite), verified against
+    // assetlinks.json instead of apple-app-site-association. autoVerify is
+    // what makes the OS actually check that file rather than just
+    // registering the app as one of several apps willing to handle the
+    // link (which would show a picker).
     intentFilters: [
       {
         action: 'VIEW',
         autoVerify: true,
-        data: [{ scheme: 'https', host: UNIVERSAL_LINK_HOST, pathPrefix: '/provider-share' }],
+        data: [
+          { scheme: 'https', host: UNIVERSAL_LINK_HOST, pathPrefix: '/provider-share' },
+          { scheme: 'https', host: UNIVERSAL_LINK_HOST, pathPrefix: '/invite' },
+        ],
         category: ['BROWSABLE', 'DEFAULT'],
       },
     ],

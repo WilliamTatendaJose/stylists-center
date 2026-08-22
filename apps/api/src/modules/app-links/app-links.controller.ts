@@ -10,22 +10,26 @@ import type { Env } from '../../config/env';
  */
 const BUNDLE_ID = 'zw.co.stylistscenter.app';
 
-/** The one path both stores' verification files grant this app control over. */
-const LINKED_PATH = '/provider-share/*';
+/**
+ * Every path both stores' verification files grant this app control over.
+ * Each one needs a matching fallback route below and a matching
+ * associatedDomains/intentFilters entry in app.config.ts.
+ */
+const LINKED_PATHS = ['/provider-share/*', '/invite/*'];
 
 /**
- * Universal Links (iOS) / App Links (Android) for shared provider-profile
- * links (mobile's provider-share/[id].tsx). Unprefixed and unauthenticated
- * on purpose:
+ * Universal Links (iOS) / App Links (Android) for links this app shares —
+ * a provider profile (mobile's provider-share/[id].tsx) or a referral invite
+ * (mobile's invite/[code].tsx). Unprefixed and unauthenticated on purpose:
  *  - the two .well-known files MUST live at the domain root per the Apple/
  *    Google spec, so main.ts excludes them from the global /v1 prefix;
  *  - both are fetched by the OS itself, never a signed-in client, to decide
  *    whether this app owns a path before a single link is ever tapped.
  *
- * /provider-share/:id is the same path the app's own screen uses — reusing
- * it means a verified device never reaches this controller at all (the OS
- * hands the tap straight to the app); this only runs for a browser that
- * doesn't have the app, or hasn't verified the domain yet.
+ * The fallback routes below reuse the exact paths the app's own screens use
+ * — reusing them means a verified device never reaches this controller at
+ * all (the OS hands the tap straight to the app); these only run for a
+ * browser that doesn't have the app, or hasn't verified the domain yet.
  *
  * APPLE_TEAM_ID / ANDROID_SHA256_CERT_FINGERPRINT are unset until supplied —
  * both well-known files still return a valid, spec-compliant "no app
@@ -44,7 +48,7 @@ export class AppLinksController {
     return {
       applinks: {
         apps: [],
-        details: teamId ? [{ appID: `${teamId}.${BUNDLE_ID}`, paths: [LINKED_PATH] }] : [],
+        details: teamId ? [{ appID: `${teamId}.${BUNDLE_ID}`, paths: LINKED_PATHS }] : [],
       },
     };
   }
@@ -75,7 +79,17 @@ export class AppLinksController {
    * with the app installed.
    */
   @Get('provider-share/:id')
-  redirectToStore(@Req() req: Request, @Res() res: Response) {
+  redirectProviderShare(@Req() req: Request, @Res() res: Response) {
+    this.redirectToStore(req, res);
+  }
+
+  /** Same fallback as above, for a shared referral invite link instead of a provider profile. */
+  @Get('invite/:code')
+  redirectInvite(@Req() req: Request, @Res() res: Response) {
+    this.redirectToStore(req, res);
+  }
+
+  private redirectToStore(req: Request, res: Response) {
     const userAgent = req.headers['user-agent'] ?? '';
     const isIOS = /iphone|ipad|ipod/i.test(userAgent);
     const iosUrl = this.config.get('IOS_APP_STORE_URL', { infer: true });
@@ -90,6 +104,6 @@ export class AppLinksController {
       return;
     }
     // iOS with no store listing yet — nothing sane to redirect to.
-    res.status(200).send('Style Center — get the app to view this stylist’s page.');
+    res.status(200).send('Style Center — get the app to view this page.');
   }
 }

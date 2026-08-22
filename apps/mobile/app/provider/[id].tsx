@@ -24,7 +24,7 @@ import { apiAssetUrl } from '../../src/api/client.js';
 import { useBookingDraftStore, usePendingPaymentStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { FullScreenImageViewer } from '../../src/components/FullScreenImageViewer.js';
-import { providerShareLink } from '../../src/sharing/providerShareLink.js';
+import { providerShareLink } from '../../src/sharing/shareLinks.js';
 
 const styles = StyleSheet.create({
   reportedNote: { marginBottom: space.m },

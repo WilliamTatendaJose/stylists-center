@@ -36,7 +36,7 @@ import {
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
-import { providerShareLink } from '../../src/sharing/providerShareLink.js';
+import { providerShareLink } from '../../src/sharing/shareLinks.js';
 import {
   ProfileHero,
   ProfileIconTile,

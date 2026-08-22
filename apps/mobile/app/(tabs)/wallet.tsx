@@ -25,6 +25,7 @@ import {
 } from '../../src/api/hooks/index.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
+import { inviteShareLink } from '../../src/sharing/shareLinks.js';
 
 const styles = StyleSheet.create({
   balanceBlock: { alignItems: 'flex-start', marginBottom: space.xxl },
@@ -228,9 +229,34 @@ export default function WalletScreen() {
     );
   }
 
+  /**
+   * `wallet.coins` is the server's ledger total. A legacy paid referral can
+   * occasionally be present in the Commission table before its matching
+   * credit reaches that ledger. Once both lists have loaded, include only that
+   * missing amount in the display total. This keeps the number on top aligned
+   * with paid commissions without treating pending rewards as available or
+   * re-adding a reward that was already cashed out.
+   */
+  const paidReferralCoins =
+    referrals?.reduce(
+      (total, referral) => total + (referral.status === 'paid' ? referral.coins : 0),
+      0,
+    ) ?? 0;
+  const creditedReferralCoins =
+    transactions?.reduce(
+      (total, transaction) =>
+        total +
+        (transaction.type === 'referral_coin' && transaction.coins > 0 ? transaction.coins : 0),
+      0,
+    ) ?? 0;
+  const missingReferralCoins =
+    referrals && transactions ? Math.max(0, paidReferralCoins - creditedReferralCoins) : 0;
+  const displayCoins = wallet.coins + missingReferralCoins;
+  const displayUsdCents = displayCoins * wallet.coinUsdCents;
+
   const shareCode = () => {
     void Share.share({
-      message: `Join Style Center with my invite link: stylistscenter://invite/${wallet.referralCode}\nI earn SC Coins when you complete your first booking.`,
+      message: `Join Style Center with my invite link: ${inviteShareLink(wallet.referralCode)}\nI earn SC Coins when you complete your first booking.`,
     });
   };
 
@@ -255,13 +281,13 @@ export default function WalletScreen() {
           Available balance
         </Text>
         <Text variant="balance" color={colors.accent}>
-          {wallet.coins} SC
+          {displayCoins} SC
         </Text>
         <Text variant="kicker" color={colors.accent} style={styles.coinsLabel}>
           Coins
         </Text>
         <Text variant="meta" color="neutral700" style={styles.conversion}>
-          = {formatUsd(wallet.usdCents)} Â· 1 coin = {formatUsd(wallet.coinUsdCents)}
+          = {formatUsd(displayUsdCents)} Â· 1 coin = {formatUsd(wallet.coinUsdCents)}
         </Text>
         <Button
           label={cashOut.isPending ? 'Submittingâ€¦' : `Cash out ${formatUsd(wallet.usdCents)}`}
