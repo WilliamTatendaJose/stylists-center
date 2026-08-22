@@ -31,7 +31,7 @@ describe('recordSubscriptionPaymentStatus', () => {
       update: vi.fn().mockResolvedValue({}),
     };
     const transaction = {
-      $queryRaw: vi.fn().mockResolvedValue([]),
+      $executeRaw: vi.fn().mockResolvedValue(0),
       payment,
       providerProfile,
     };
