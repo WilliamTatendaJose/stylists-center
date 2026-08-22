@@ -97,6 +97,7 @@ export default function Paying() {
 
   return (
     <Screen
+      hasTabBar={false}
       footer={
         paid ? (
           <Button label="Continue" block size="lg" arrow onPress={goDone} />

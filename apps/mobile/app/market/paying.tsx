@@ -154,6 +154,7 @@ export default function MarketPaying() {
 
   return (
     <Screen
+      hasTabBar={false}
       footer={
         allPaid ? (
           <Button label="Continue" block size="lg" arrow onPress={goDone} />
