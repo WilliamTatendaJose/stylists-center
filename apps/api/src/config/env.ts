@@ -52,6 +52,8 @@ export const envSchema = z
     PAYNOW_AUTH_EMAIL: z.email().optional(),
 
     COIN_USD_CENTS: z.coerce.number().int().positive().default(50),
+    /** Referral commission paid after a referred user's first completed booking. */
+    REFERRAL_REWARD_COINS: z.coerce.number().int().positive().optional(),
     CASH_OUT_MIN_USD_CENTS: z.coerce.number().int().positive().default(500),
 
     // Expo's push service accepts unauthenticated sends, so this is optional

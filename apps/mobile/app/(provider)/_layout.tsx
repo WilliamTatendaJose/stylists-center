@@ -16,11 +16,7 @@ export default function ProviderTabsLayout() {
       // Same assertion, and the same reason, as the client layout: @sc/ui's
       // FloatingTabBar is deliberately decoupled from expo-router's generic
       // navigation types.
-      tabBar={(props) =>
-        props.state.routes[props.state.index]?.name === 'subscription-paying' ? null : (
-          <FloatingTabBar {...(props as unknown as FloatingTabBarProps)} />
-        )
-      }
+      tabBar={(props) => <FloatingTabBar {...(props as unknown as FloatingTabBarProps)} />}
       screenOptions={{ headerShown: false }}
     >
       <Tabs.Screen
@@ -77,7 +73,6 @@ export default function ProviderTabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="subscription-paying" options={{ href: null }} />
     </Tabs>
   );
 }

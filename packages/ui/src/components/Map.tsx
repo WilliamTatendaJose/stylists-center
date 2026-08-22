@@ -33,6 +33,8 @@ export interface ScMapProps {
   radiusKm?: number;
   /** The route line — a real road-following polyline from the routing engine (see the API's geo module), in travel order. */
   routeCoordinates?: ScMapLngLat[];
+  /** Fires with the tapped point's coordinates — the location-picker screens' only way to read where the user tapped. */
+  onMapPress?: (coord: ScMapLngLat) => void;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -147,6 +149,7 @@ export function ScMap({
   markers = [],
   radiusKm,
   routeCoordinates,
+  onMapPress,
   style,
 }: ScMapProps) {
   const radiusFeature = useMemo(() => {
@@ -189,6 +192,13 @@ export function ScMap({
         attribution={false}
         logo={false}
         compass={false}
+        onPress={
+          onMapPress
+            ? (event) => {
+                onMapPress(event.nativeEvent.lngLat);
+              }
+            : undefined
+        }
       >
         {routeBounds ? (
           <Camera bounds={routeBounds} padding={{ top: 60, right: 50, bottom: 60, left: 50 }} />

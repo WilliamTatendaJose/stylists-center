@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { router, useSegments } from 'expo-router';
 import { useAuthStore } from '../state/useAuthStore.js';
 import { useSessionStore } from '../state/useSessionStore.js';
+import { usePendingProviderStore } from '../state/usePendingProviderStore.js';
 import { useMe } from '../api/hooks/useMe.js';
 
 /**
@@ -24,6 +25,8 @@ export function useAuthGate(): boolean {
   const hydrate = useAuthStore((s) => s.hydrate);
   const segments = useSegments();
   const { data: me } = useMe();
+  const pendingProviderId = usePendingProviderStore((s) => s.pendingProviderId);
+  const clearPendingProviderId = usePendingProviderStore((s) => s.clearPendingProviderId);
 
   useEffect(() => {
     void hydrate();
@@ -33,14 +36,27 @@ export function useAuthGate(): boolean {
     if (!isHydrated || !isSessionHydrated) return;
     const inAuthGroup = segments[0] === '(auth)';
     const inInviteRoute = String(segments[0]) === 'invite';
+    const inProviderShareRoute = String(segments[0]) === 'provider-share';
     const inOnboarding = String(segments[0]) === 'onboarding';
 
-    if (!accessToken && !hasSeenOnboarding && !inOnboarding && !inInviteRoute) {
+    if (
+      !accessToken &&
+      !hasSeenOnboarding &&
+      !inOnboarding &&
+      !inInviteRoute &&
+      !inProviderShareRoute
+    ) {
       router.replace('/onboarding');
       return;
     }
 
-    if (!accessToken && hasSeenOnboarding && !inAuthGroup && !inInviteRoute) {
+    if (
+      !accessToken &&
+      hasSeenOnboarding &&
+      !inAuthGroup &&
+      !inInviteRoute &&
+      !inProviderShareRoute
+    ) {
       router.replace('/(auth)');
       return;
     }
@@ -61,6 +77,16 @@ export function useAuthGate(): boolean {
       return;
     }
 
+    // A shared-profile link captured by provider-share/[id] before sign-in
+    // resolved — deliver it now, ahead of the ordinary role routing below,
+    // since /provider/[id] is a neutral route neither branch would otherwise
+    // send anyone to.
+    if (pendingProviderId && segments[0] !== 'provider') {
+      clearPendingProviderId();
+      router.replace({ pathname: '/provider/[id]', params: { id: pendingProviderId } });
+      return;
+    }
+
     const inProviderGroup = segments[0] === '(provider)';
     const inClientGroup = segments[0] === '(tabs)';
     const wantsProvider = me.activeRole === 'provider' && me.hasProviderProfile;
@@ -78,7 +104,16 @@ export function useAuthGate(): boolean {
     ) {
       router.replace(wantsProvider ? '/(provider)/jobs' : '/(tabs)');
     }
-  }, [isHydrated, isSessionHydrated, hasSeenOnboarding, accessToken, segments, me]);
+  }, [
+    isHydrated,
+    isSessionHydrated,
+    hasSeenOnboarding,
+    accessToken,
+    segments,
+    me,
+    pendingProviderId,
+    clearPendingProviderId,
+  ]);
 
   return isHydrated && isSessionHydrated;
 }

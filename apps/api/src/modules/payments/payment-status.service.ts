@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from './payment-gateway.port';
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
+import { recordSubscriptionPaymentStatus } from './subscription-payment';
 
 /**
  * Statuses that will never change on their own. Anything else is still in
@@ -66,6 +67,16 @@ export class PaymentStatusService {
     }
 
     if (polled === payment.status) return { status: payment.status, changed: false };
+
+    if (subject.subscriptionProviderId && payment.reference) {
+      const result = await recordSubscriptionPaymentStatus(this.prisma, {
+        providerProfileId: subject.subscriptionProviderId,
+        reference: payment.reference,
+        status: polled,
+        ...(payment.externalRef ? { externalRef: payment.externalRef } : {}),
+      });
+      return result;
+    }
 
     await this.prisma.payment.create({
       data: {

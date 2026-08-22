@@ -3,6 +3,7 @@ import { createMatchRequestSchema } from './matching.js';
 import { createBookingSchema } from './bookings.js';
 import { firebaseExchangeSchema } from './auth.js';
 import { imageUrlSchema } from './uploads.js';
+import { paySubscriptionSchema } from './subscription.js';
 import {
   adminLoginSchema,
   createManualBanSchema,
@@ -105,6 +106,18 @@ describe('createBookingSchema', () => {
       paymentMethod: 'cash',
     });
     expect(result.success).toBe(false);
+  });
+});
+
+describe('paySubscriptionSchema', () => {
+  it('accepts EcoCash and rejects unverified self-reported cash renewals', () => {
+    expect(
+      paySubscriptionSchema.safeParse({
+        paymentMethod: 'ecocash',
+        payerPhone: '077 000 0000',
+      }).success,
+    ).toBe(true);
+    expect(paySubscriptionSchema.safeParse({ paymentMethod: 'cash' }).success).toBe(false);
   });
 });
 

@@ -17,7 +17,7 @@ const ACCURACY = Location.Accuracy.Balanced;
  */
 const MAX_LAST_KNOWN_AGE_MS = 10 * 60 * 1000;
 
-function formatAreaLabel(address: Location.LocationGeocodedAddress): string | null {
+export function formatAreaLabel(address: Location.LocationGeocodedAddress): string | null {
   // Suburb-level first: "Avondale, Harare" is what the design shows and what a
   // user recognises. `city`/`region` alone ("Harare") is a weak fallback, and
   // the whole label is dropped rather than shown as a bare country.

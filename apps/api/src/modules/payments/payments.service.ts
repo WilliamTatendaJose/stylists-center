@@ -7,6 +7,7 @@ import { ledgerStatus } from './ledger-status';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from './payment-gateway.port';
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 import { Inject } from '@nestjs/common';
+import { recordSubscriptionPaymentStatus } from './subscription-payment';
 
 @Injectable()
 export class PaymentsService {
@@ -55,6 +56,17 @@ export class PaymentsService {
     if (expected === undefined) throw new NotFoundException('Unknown Paynow reference');
     if (expected !== amountUsdCents)
       throw new ForbiddenException('Paynow callback amount mismatch');
+
+    if (subscriptionPayment?.subscriptionProviderId && reference) {
+      await recordSubscriptionPaymentStatus(this.prisma, {
+        providerProfileId: subscriptionPayment.subscriptionProviderId,
+        reference,
+        status: ledgerStatus(fields.status),
+        ...(fields.paynowreference ? { externalRef: fields.paynowreference } : {}),
+      });
+      return;
+    }
+
     const subjectWhere = booking
       ? { bookingId: booking.id }
       : order
@@ -93,10 +105,6 @@ export class PaymentsService {
         reference,
       },
     });
-
-    if (subjectWhere.subscriptionProviderId && status === 'paid') {
-      await applySubscriptionPayment(this.prisma, subjectWhere.subscriptionProviderId);
-    }
 
     // Paynow refused it. This is the path that matters when nobody is
     // watching — the customer closed the app, so no poll will ever run.

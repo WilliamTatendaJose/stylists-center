@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { Share, StyleSheet, View, type ViewStyle } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { MapPin, ChevronRight } from 'lucide-react-native';
+import { MapPin, ChevronRight, Share2 } from 'lucide-react-native';
 import { space } from '@sc/tokens';
 import { deriveInitials, type ReportReason } from '@sc/shared';
 import {
@@ -58,6 +58,7 @@ const styles = StyleSheet.create({
   reviewRow: { marginBottom: space.l },
   reviewHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
   loadErrorNote: { marginBottom: space.m },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: space.l },
   directionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -128,6 +129,15 @@ export default function ProviderProfile() {
     router.push({ pathname: '/map/directions', params: { id } });
   };
 
+  const shareProfile = () => {
+    if (!provider) return;
+    void Share.share({
+      message:
+        `Check out ${provider.displayName} on Style Center!\n` +
+        `stylistscenter://provider-share/${provider.id}`,
+    });
+  };
+
   if (!provider) {
     // Same failure this screen used to share with directions.tsx: a request
     // that never resolves reads identically to "still loading" with no way
@@ -184,17 +194,26 @@ export default function ProviderProfile() {
             title={provider.displayName}
             onBack={onBack}
             right={
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Report a problem"
-                onPress={() => {
-                  setReportSheetOpen(true);
-                }}
-              >
-                <Text variant="meta" color="neutral700">
-                  Report
-                </Text>
-              </Pressable>
+              <View style={styles.headerActions}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Share this profile"
+                  onPress={shareProfile}
+                >
+                  <Share2 size={18} strokeWidth={1.8} color={colors.neutral700} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Report a problem"
+                  onPress={() => {
+                    setReportSheetOpen(true);
+                  }}
+                >
+                  <Text variant="meta" color="neutral700">
+                    Report
+                  </Text>
+                </Pressable>
+              </View>
             }
           />
         }

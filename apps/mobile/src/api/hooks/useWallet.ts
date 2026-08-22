@@ -14,6 +14,9 @@ export function useWallet() {
   return useQuery({
     queryKey: ['wallet'],
     queryFn: () => apiFetch<WalletDto>('/v1/wallet'),
+    // A completed booking can release a commission while this screen is
+    // cached; always refresh the header when Rewards opens.
+    refetchOnMount: 'always',
   });
 }
 

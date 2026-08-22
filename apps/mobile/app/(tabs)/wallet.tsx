@@ -110,7 +110,8 @@ export default function WalletScreen() {
           Have an invite code?
         </Text>
         <Text variant="body" color="neutral700" style={styles.inviteBody}>
-          Link it now. Your friend earns 6 SC Coins after your first completed booking.
+          Link it now. Your friend earns {wallet.referralRewardCoins} SC Coins after your first
+          completed booking.
         </Text>
         <View style={styles.inviteField}>
           <TextField
@@ -143,7 +144,7 @@ export default function WalletScreen() {
         <Text variant="body" color="neutral700">
           {wallet.referralStatus === 'paid'
             ? `Your first booking unlocked ${wallet.referredByName}'s reward.`
-            : `${wallet.referredByName} earns 6 SC Coins after your first completed booking.`}
+            : `${wallet.referredByName} earns ${String(wallet.referralRewardCoins)} SC Coins after your first completed booking.`}
         </Text>
       </Card>
     ) : null;
@@ -169,9 +170,10 @@ export default function WalletScreen() {
         {inviteCard}
         <Text variant="h3">Become an agent</Text>
         <Text variant="body" color="neutral700" style={styles.emptyBody}>
-          Submit identity verification to become an agent and start earning SC Coins — 6 coins for
-          every stylist and client you refer who completes a booking. We delete the uploaded
-          documents after review; the first completed booking releases the reward.
+          Submit identity verification to become an agent and start earning SC Coins —{' '}
+          {wallet.referralRewardCoins} coins for every stylist and client you refer who completes a
+          booking. We delete the uploaded documents after review; the first completed booking
+          releases the reward.
         </Text>
         {verification && verification.status !== 'unverified' ? (
           <View style={styles.verificationStatus}>

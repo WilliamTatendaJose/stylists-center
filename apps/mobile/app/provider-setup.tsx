@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
+import { MapPin } from 'lucide-react-native';
 import { color, space } from '@sc/tokens';
-import { Screen, ScreenHeader, Text, Chip, TextField, RangeInput, Button } from '@sc/ui';
+import { Screen, ScreenHeader, Text, Chip, TextField, RangeInput, Button, useTheme } from '@sc/ui';
 import { useCategories } from '../src/api/hooks/useCategories.js';
 import { useCreateProviderProfile } from '../src/api/hooks/useProviders.js';
 import { useClaimReferral } from '../src/api/hooks/useWallet.js';
-import { useInviteStore, useSessionStore } from '../src/state/index.js';
+import { useInviteStore, useLocationPickerStore, useSessionStore } from '../src/state/index.js';
 import { describeError } from '../src/api/errorMessage.js';
 import { useBack } from '../src/navigation/useBack.js';
 
@@ -30,6 +31,12 @@ const styles = StyleSheet.create({
   sectionLabelSpace: { marginBottom: space.s },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: space.xs },
   field: { marginBottom: space.l },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    marginTop: space.s,
+  },
   sliderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -48,8 +55,11 @@ const styles = StyleSheet.create({
  */
 export default function ProviderSetup() {
   const onBack = useBack('/(tabs)');
+  const { colors } = useTheme();
   const location = useSessionStore((s) => s.location);
   const areaLabel = useSessionStore((s) => s.areaLabel);
+  const pickedLocation = useLocationPickerStore((s) => s.result);
+  const clearPickedLocation = useLocationPickerStore((s) => s.clearResult);
   const pendingReferralCode = useInviteStore((s) => s.pendingReferralCode);
   const clearPendingReferralCode = useInviteStore((s) => s.clearPendingReferralCode);
   const { data: categories } = useCategories();
@@ -58,6 +68,8 @@ export default function ProviderSetup() {
 
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [areaName, setAreaName] = useState(areaLabel ?? '');
+  const [lat, setLat] = useState(location.lat);
+  const [lng, setLng] = useState(location.lng);
   const [workingHoursLabel, setWorkingHoursLabel] = useState('');
   const [yearsExperience, setYearsExperience] = useState(DEFAULT_YEARS);
   const [serviceName, setServiceName] = useState('');
@@ -77,6 +89,17 @@ export default function ProviderSetup() {
         serviceName.trim().length >= 2)) &&
     !createProfile.isPending &&
     !claimReferral.isPending;
+
+  // Consumed once, right after the map picker pops back to this screen (still
+  // mounted underneath it) — see useLocationPickerStore for why this goes
+  // through a store rather than route params.
+  useEffect(() => {
+    if (!pickedLocation) return;
+    setLat(pickedLocation.lat);
+    setLng(pickedLocation.lng);
+    if (pickedLocation.areaName) setAreaName(pickedLocation.areaName);
+    clearPickedLocation();
+  }, [pickedLocation, clearPickedLocation]);
 
   // Referral linking is independent of the stylist page itself (an Agent/Referral
   // row, not a ProviderProfile field) — it runs after the page is created so a
@@ -117,8 +140,8 @@ export default function ProviderSetup() {
         areaName: areaName.trim(),
         workingHoursLabel: workingHoursLabel.trim(),
         yearsExperience,
-        lat: location.lat,
-        lng: location.lng,
+        lat,
+        lng,
         services: [
           {
             name: serviceName.trim(),
@@ -215,13 +238,35 @@ export default function ProviderSetup() {
         </View>
       </View>
 
-      <View style={[styles.section, styles.field]}>
-        <TextField
-          label="Area"
-          value={areaName}
-          onChangeText={setAreaName}
-          placeholder="e.g. Avondale"
+      <View style={styles.section}>
+        <View style={styles.field}>
+          <TextField
+            label="Area"
+            value={areaName}
+            onChangeText={setAreaName}
+            placeholder="e.g. Avondale"
+          />
+        </View>
+        <Button
+          label="Choose on map"
+          variant="secondary"
+          block
+          onPress={() => {
+            // `as Href`: same reason as useBack.ts's own cast — the typed-route
+            // union only includes this new screen after `expo start` has
+            // regenerated .expo/types/router.d.ts.
+            router.push({
+              pathname: '/map/pick-location',
+              params: { lat: String(lat), lng: String(lng) },
+            } as unknown as Href);
+          }}
         />
+        <View style={styles.locationRow}>
+          <MapPin size={16} color={colors.neutral700} />
+          <Text variant="metaSmall" color="neutral600">
+            {lat.toFixed(5)}, {lng.toFixed(5)}
+          </Text>
+        </View>
       </View>
 
       <View style={[styles.section, styles.field]}>

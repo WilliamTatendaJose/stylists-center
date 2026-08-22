@@ -28,6 +28,8 @@ export interface FloatingTabRoute {
 }
 export interface FloatingTabDescriptor {
   options: {
+    /** Expo Router uses `href: null` for routes that must not appear as tabs. */
+    href?: string | null;
     title?: string;
     // React Navigation's real type also allows a render-function form with a
     // specific props shape; this component never calls that function (only
@@ -112,15 +114,16 @@ export function FloatingTabBar({ state, descriptors, navigation }: FloatingTabBa
         barStyle,
       ]}
     >
-      {state.routes.map((route, index) => {
+      {state.routes.map((route) => {
         const descriptor = descriptors[route.key];
         if (!descriptor) return null;
         const { options } = descriptor;
+        if (options.href === null) return null;
         const label =
           (typeof options.tabBarLabel === 'string' ? options.tabBarLabel : undefined) ??
           options.title ??
           route.name;
-        const focused = state.index === index;
+        const focused = state.routes[state.index]?.key === route.key;
 
         const onPress = () => {
           const event = navigation.emit({

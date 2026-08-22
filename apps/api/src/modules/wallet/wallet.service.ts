@@ -1,22 +1,27 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
 import {
   CASH_OUT_MIN_USD_CENTS,
   canCashOut,
-  COIN_USD_CENTS,
   type CashOutRequestResponse,
   type WalletTransactionDto,
   type ReferralRowDto,
   type WalletDto,
-  REFERRAL_REWARD_COINS,
 } from '@sc/shared';
+import type { Env } from '../../config/env';
+import { walletRates } from '../../config/wallet-rates';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class WalletService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly config?: ConfigService<Env, true>,
+  ) {}
 
   async getWallet(userId: string): Promise<WalletDto> {
+    const rates = walletRates(this.config);
     const [agent, user] = await Promise.all([
       this.prisma.agent.findUnique({ where: { userId } }),
       this.prisma.user.findUniqueOrThrow({
@@ -37,7 +42,8 @@ export class WalletService {
     return {
       coins: balance.coins,
       usdCents: balance.usdCents,
-      coinUsdCents: COIN_USD_CENTS,
+      coinUsdCents: rates.coinUsdCents,
+      referralRewardCoins: rates.referralRewardCoins,
       referralCode: agent?.referralCode ?? '',
       referredByName: user.referralRecord?.agent.user.displayName ?? null,
       referralStatus: user.referralRecord?.status ?? 'none',
@@ -102,7 +108,7 @@ export class WalletService {
             agentId: referrer.id,
             referredUserId: userId,
             referredName: user.displayName,
-            coinsAwarded: REFERRAL_REWARD_COINS,
+            coinsAwarded: walletRates(this.config).referralRewardCoins,
           },
         });
       }
@@ -149,7 +155,7 @@ export class WalletService {
           agentId: referrer.id,
           referredUserId: userId,
           referredName: user.displayName,
-          coinsAwarded: REFERRAL_REWARD_COINS,
+          coinsAwarded: walletRates(this.config).referralRewardCoins,
         },
       });
     });

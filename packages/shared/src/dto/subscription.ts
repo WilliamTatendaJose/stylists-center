@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { payerPhoneSchema, paymentMethodSchema } from './bookings.js';
+import { payerPhoneSchema } from './bookings.js';
 
 /** `GET /v1/provider/subscription` — the My page subscription card's only data source. */
 export const providerSubscriptionSchema = z.object({
@@ -11,9 +11,9 @@ export const providerSubscriptionSchema = z.object({
 });
 export type ProviderSubscriptionDto = z.infer<typeof providerSubscriptionSchema>;
 
-/** `POST /v1/provider/subscription/pay`. Cash is a self-report with no counterparty to double-confirm against — unlike a booking, this money is owed to the platform, not held for someone else. */
+/** `POST /v1/provider/subscription/pay`. Self-service renewals require verified EcoCash payment. */
 export const paySubscriptionSchema = z.object({
-  paymentMethod: paymentMethodSchema,
+  paymentMethod: z.literal('ecocash'),
   /** Required in practice for EcoCash — the number the prompt is sent to. Falls back to the account phone when absent. */
   payerPhone: payerPhoneSchema.optional(),
 });

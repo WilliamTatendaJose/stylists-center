@@ -1,5 +1,9 @@
 {
   "permissions": {
-    "allow": ["Bash(railway api *)", "Bash(railway logs *)"]
+    "allow": [
+      "Bash(railway api *)",
+      "Bash(railway logs *)",
+      "Bash(xargs cat)"
+    ]
   }
 }

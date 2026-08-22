@@ -20,9 +20,11 @@ import {
   isSubscriptionActive,
   needsCashReconciliation,
   normalizePhone,
-  REFERRAL_REWARD_COINS,
-  coinsToUsdCents,
 } from '@sc/shared';
+import { ConfigService } from '@nestjs/config';
+import { Optional } from '@nestjs/common';
+import type { Env } from '../../config/env';
+import { walletRates } from '../../config/wallet-rates';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
@@ -49,6 +51,7 @@ export class BookingsService {
     private readonly push: PushService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
     private readonly paymentStatus: PaymentStatusService,
+    @Optional() private readonly config?: ConfigService<Env, true>,
   ) {}
 
   async create(clientId: string, input: CreateBookingInput): Promise<CreateBookingResponse> {
@@ -307,12 +310,13 @@ export class BookingsService {
             data: { status: 'paid' },
           });
           if (claimed.count === 1) {
+            const rates = walletRates(this.config);
             await tx.walletTransaction.create({
               data: {
                 userId: referral.agent.userId,
                 type: 'referral_coin',
-                coins: REFERRAL_REWARD_COINS,
-                usdCents: coinsToUsdCents(REFERRAL_REWARD_COINS),
+                coins: rates.referralRewardCoins,
+                usdCents: rates.referralRewardCoins * rates.coinUsdCents,
                 reference: `First completed booking ${current.reference}`,
               },
             });

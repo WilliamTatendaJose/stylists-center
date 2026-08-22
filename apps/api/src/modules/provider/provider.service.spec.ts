@@ -225,35 +225,6 @@ describe('ProviderService management', () => {
       expect(subscription).toMatchObject({ priceUsdCents: 500, paidUntil: null, active: false });
     });
 
-    it('activates immediately on a cash payment and extends paidUntil ~30 days', async () => {
-      const before = Date.now();
-      const result = await provider.paySubscription(providerId, { paymentMethod: 'cash' });
-      expect(result.checkoutUrl).toBeUndefined();
-      expect(result.pending).toBe(false);
-
-      const paidUntilMs = new Date(result.paidUntil ?? '').getTime();
-      const thirtyDaysMs = 30 * 24 * 60 * 60_000;
-      // Allow a little slack either side for how long the test itself took to run.
-      expect(paidUntilMs).toBeGreaterThan(before + thirtyDaysMs - 5000);
-      expect(paidUntilMs).toBeLessThan(before + thirtyDaysMs + 5000);
-
-      const subscription = await provider.getSubscription(providerId);
-      expect(subscription.active).toBe(true);
-      expect(subscription.paidUntil).toBe(result.paidUntil);
-
-      const payment = await prisma.payment.findFirst({
-        where: { subscriptionProviderId: providerId },
-      });
-      expect(payment).toMatchObject({
-        provider: 'cash',
-        status: 'released',
-        amountUsdCents: 500,
-        feeUsdCents: 0,
-        bookingId: null,
-        orderId: null,
-      });
-    });
-
     it('creates a checkout intent for EcoCash and applies it on success, same as a fresh booking', async () => {
       const before = await provider.getSubscription(providerId);
       const result = await provider.paySubscription(providerId, { paymentMethod: 'ecocash' });

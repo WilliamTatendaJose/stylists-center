@@ -91,7 +91,18 @@ export function useDeclineBooking() {
 }
 
 export function useProviderConfirmCompletion() {
-  return useJobsMutation<string>((id) => `/v1/provider/bookings/${id}/confirm-completion`);
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/v1/provider/bookings/${id}/confirm-completion`, { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_JOBS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['provider', 'earnings'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'referrals'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
+    },
+  });
 }
 
 export function useAcceptOffer() {

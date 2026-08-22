@@ -11,6 +11,9 @@ export interface SearchFieldProps {
   placeholder: string;
   /** Home's search row is a button that opens the map, not an editable field — pass this instead of onChangeText. */
   onPress?: () => void;
+  /** Fires on the keyboard's return key — for a field backed by a real lookup (e.g. geocoding) rather than live filtering. */
+  onSubmitEditing?: () => void;
+  returnKeyType?: 'search' | 'done' | 'go' | 'send';
 }
 
 const styles = StyleSheet.create({
@@ -30,7 +33,14 @@ const styles = StyleSheet.create({
 });
 
 /** The pill search row — Home's tap-to-map version (onPress) or a real text field elsewhere. */
-export function SearchField({ value, onChangeText, placeholder, onPress }: SearchFieldProps) {
+export function SearchField({
+  value,
+  onChangeText,
+  placeholder,
+  onPress,
+  onSubmitEditing,
+  returnKeyType,
+}: SearchFieldProps) {
   const { colors } = useTheme();
   const baseStyle = [styles.base, { backgroundColor: colors.surface, borderColor: colors.divider }];
   const inputViewStyle = styles.input;
@@ -62,6 +72,8 @@ export function SearchField({ value, onChangeText, placeholder, onPress }: Searc
         placeholder={placeholder}
         placeholderTextColor={colors.neutral600}
         style={inputTextStyle}
+        onSubmitEditing={onSubmitEditing}
+        returnKeyType={returnKeyType}
       />
     </View>
   );

@@ -115,6 +115,9 @@ export function useConfirmCompletion() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: BOOKINGS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'referrals'] });
+      void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
     },
   });
 }

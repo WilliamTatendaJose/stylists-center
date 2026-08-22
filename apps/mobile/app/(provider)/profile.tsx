@@ -1,15 +1,8 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Switch, View } from 'react-native';
+import { Share, StyleSheet, Switch, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { Clock3, Gift, LogOut, MapPin, Moon, Sun, UserRound } from 'lucide-react-native';
-import {
-  deriveInitials,
-  formatInHarare,
-  formatUsd,
-  isValidMobileMoneyPhone,
-  type PaymentMethod,
-  type ServiceDto,
-} from '@sc/shared';
+import { deriveInitials, formatInHarare, formatUsd, type ServiceDto } from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
   Badge,
@@ -18,7 +11,6 @@ import {
   EmptyPanel,
   ListRow,
   Pressable,
-  RadioCard,
   Screen,
   ScreenHeader,
   Sheet,
@@ -28,7 +20,6 @@ import {
 } from '@sc/ui';
 import {
   useAddProviderService,
-  usePaySubscription,
   useProviderManagementProfile,
   useProviderSubscription,
   useUpdateProviderProfile,
@@ -37,7 +28,11 @@ import {
 import { useMe, useSetActiveRole } from '../../src/api/hooks/useMe.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useAuthStore } from '../../src/state/useAuthStore.js';
-import { useSessionStore, usePendingSubscriptionStore } from '../../src/state/index.js';
+import {
+  useSessionStore,
+  usePendingSubscriptionStore,
+  useLocationPickerStore,
+} from '../../src/state/index.js';
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
@@ -97,7 +92,6 @@ const styles = StyleSheet.create({
     marginTop: space.s,
     marginBottom: space.m,
   },
-  radioGap: { marginBottom: space.s },
 });
 
 export default function ProviderProfile() {
@@ -108,13 +102,13 @@ export default function ProviderProfile() {
   const addService = useAddProviderService();
   const updateService = useUpdateProviderService();
   const { data: subscription } = useProviderSubscription();
-  const paySubscription = usePaySubscription();
-  const setPendingSubscription = usePendingSubscriptionStore((s) => s.setPending);
   const pendingSubscription = usePendingSubscriptionStore((s) => s.pending);
   const subPaymentPending = pendingSubscription !== null;
   const setActiveRole = useSetActiveRole();
   const deviceLocation = useSessionStore((state) => state.location);
   const locationSource = useSessionStore((state) => state.locationSource);
+  const pickedLocation = useLocationPickerStore((s) => s.result);
+  const clearPickedLocation = useLocationPickerStore((s) => s.clearResult);
   const themeMode = useSessionStore((state) => state.themeMode);
   const setThemeMode = useSessionStore((state) => state.setThemeMode);
   const followsSystemTheme = themeMode === 'system';
@@ -135,19 +129,6 @@ export default function ProviderProfile() {
   const [error, setError] = useState<string | null>(null);
   const [detailsSheetOpen, setDetailsSheetOpen] = useState(false);
   const [serviceSheetOpen, setServiceSheetOpen] = useState(false);
-  const [payMethod, setPayMethod] = useState<PaymentMethod>('ecocash');
-  const [subSheetOpen, setSubSheetOpen] = useState(false);
-  const [subError, setSubError] = useState<string | null>(null);
-  const [payerPhone, setPayerPhone] = useState('');
-
-  // Prefilled with the account number, still editable — the line a stylist
-  // pays the subscription from need not be the one they log in with.
-  useEffect(() => {
-    if (me?.phone) {
-      const phone = me.phone;
-      setPayerPhone((current) => current || phone);
-    }
-  }, [me?.phone]);
 
   useEffect(() => {
     if (!data) return;
@@ -159,6 +140,17 @@ export default function ProviderProfile() {
     setLat(data.lat);
     setLng(data.lng);
   }, [data]);
+
+  // Consumed once, right after the map picker pops back to this screen (still
+  // mounted underneath it) — see useLocationPickerStore for why this goes
+  // through a store rather than route params.
+  useEffect(() => {
+    if (!pickedLocation) return;
+    setLat(pickedLocation.lat);
+    setLng(pickedLocation.lng);
+    if (pickedLocation.areaName) setAreaName(pickedLocation.areaName);
+    clearPickedLocation();
+  }, [pickedLocation, clearPickedLocation]);
 
   if (isError && !data) {
     return (
@@ -261,36 +253,13 @@ export default function ProviderProfile() {
     }
   };
 
-  const paySub = () => {
-    if (payMethod === 'ecocash' && !isValidMobileMoneyPhone(payerPhone.trim())) {
-      setSubError('Enter a valid mobile number, for example 077 000 0000.');
-      return;
-    }
-    setSubError(null);
-    paySubscription.mutate(
-      {
-        paymentMethod: payMethod,
-        ...(payMethod === 'ecocash' ? { payerPhone: payerPhone.trim() } : {}),
-      },
-      {
-        onSuccess: (result) => {
-          if (result.pending) {
-            setPendingSubscription({
-              priceUsdCents: subscription?.priceUsdCents ?? 0,
-              ...(result.instructions ? { instructions: result.instructions } : {}),
-              ...(result.checkoutUrl ? { checkoutUrl: result.checkoutUrl } : {}),
-            });
-            setSubSheetOpen(false);
-            router.push('/(provider)/subscription-paying' as Href);
-          } else {
-            setSubSheetOpen(false);
-            setSubError(null);
-          }
-        },
-        onError: (reason) =>
-          setSubError(describeError(reason, "Couldn't take that payment. Try again.")),
-      },
-    );
+  const shareProfile = () => {
+    if (!data) return;
+    void Share.share({
+      message:
+        `Check out ${data.displayName} on Style Center!\n` +
+        `stylistscenter://provider-share/${data.id}`,
+    });
   };
 
   const switchToClient = () => {
@@ -423,18 +392,24 @@ export default function ProviderProfile() {
               }}
             />
             {data ? (
-              <Button
-                label="View as a client"
-                variant="ghost"
-                block
-                style={styles.accountGap}
-                onPress={() =>
-                  router.push({
-                    pathname: '/provider/[id]',
-                    params: { id: data.id, back: '/(provider)/profile' },
-                  })
-                }
-              />
+              <View style={[styles.row, styles.accountGap]}>
+                <View style={styles.grow}>
+                  <Button label="Share my page" variant="ghost" block onPress={shareProfile} />
+                </View>
+                <View style={styles.grow}>
+                  <Button
+                    label="View as a client"
+                    variant="ghost"
+                    block
+                    onPress={() =>
+                      router.push({
+                        pathname: '/provider/[id]',
+                        params: { id: data.id, back: '/(provider)/profile' },
+                      })
+                    }
+                  />
+                </View>
+              </View>
             ) : null}
           </Card>
         </ProfileSection>
@@ -518,18 +493,18 @@ export default function ProviderProfile() {
               <Button
                 label={
                   subPaymentPending
-                    ? 'Waiting for EcoCash…'
+                    ? 'Continue payment'
                     : subscription.active
                       ? 'Renew early'
                       : `Pay ${formatUsd(subscription.priceUsdCents)}`
                 }
                 variant={subscription.active ? 'secondary' : 'primary'}
                 block
-                disabled={subPaymentPending}
                 style={styles.cardAction}
                 onPress={() => {
-                  setSubError(null);
-                  setSubSheetOpen(true);
+                  router.push(
+                    (subPaymentPending ? '/subscription/paying' : '/subscription/payment') as Href,
+                  );
                 }}
               />
             </Card>
@@ -638,18 +613,36 @@ export default function ProviderProfile() {
             onChangeText={setWorkingHoursLabel}
           />
         </View>
-        <Button
-          label={
-            locationSource === 'device' ? 'Use my current location' : 'Current location unavailable'
-          }
-          variant="secondary"
-          block
-          disabled={locationSource !== 'device'}
-          onPress={() => {
-            setLat(deviceLocation.lat);
-            setLng(deviceLocation.lng);
-          }}
-        />
+        <View style={styles.row}>
+          <View style={styles.grow}>
+            <Button
+              label="Choose on map"
+              variant="secondary"
+              block
+              onPress={() => {
+                // `as Href`: same reason as useBack.ts's own cast — the typed-route
+                // union only includes this new screen after `expo start` has
+                // regenerated .expo/types/router.d.ts.
+                router.push({
+                  pathname: '/map/pick-location',
+                  params: { lat: String(lat), lng: String(lng) },
+                } as unknown as Href);
+              }}
+            />
+          </View>
+          <View style={styles.grow}>
+            <Button
+              label={locationSource === 'device' ? 'Use current location' : 'Location unavailable'}
+              variant="secondary"
+              block
+              disabled={locationSource !== 'device'}
+              onPress={() => {
+                setLat(deviceLocation.lat);
+                setLng(deviceLocation.lng);
+              }}
+            />
+          </View>
+        </View>
         <View style={styles.locationRow}>
           <MapPin size={16} color={colors.neutral700} />
           <Text variant="meta" color="neutral700">
@@ -718,63 +711,6 @@ export default function ProviderProfile() {
           style={styles.cardAction}
           disabled={!serviceValid || serviceSaving}
           onPress={saveService}
-        />
-      </Sheet>
-
-      <Sheet open={subSheetOpen} onClose={() => setSubSheetOpen(false)}>
-        <Text variant="cardTitle" style={styles.sheetTitle}>
-          Pay {subscription ? formatUsd(subscription.priceUsdCents) : ''}
-        </Text>
-        <Text variant="body" color="neutral700" style={styles.sheetBody}>
-          Extends your subscription by 30 days from today, or from your current renewal date.
-        </Text>
-        {subError ? (
-          <Text
-            variant="meta"
-            color={colors.accent700}
-            style={styles.sheetError}
-            accessibilityLiveRegion="polite"
-            accessibilityRole="alert"
-          >
-            {subError}
-          </Text>
-        ) : null}
-        <View style={styles.radioGap}>
-          <RadioCard
-            title="Paynow — pay securely"
-            description="Choose EcoCash, card, or another supported Paynow method."
-            dot
-            selected={payMethod === 'ecocash'}
-            onPress={() => setPayMethod('ecocash')}
-          />
-        </View>
-        <RadioCard
-          title="Cash"
-          description="Confirm a platform payment made directly, for example in person or through an agent."
-          dot
-          selected={payMethod === 'cash'}
-          onPress={() => setPayMethod('cash')}
-        />
-        {payMethod === 'ecocash' ? (
-          <View style={styles.cardAction}>
-            <TextField
-              label="EcoCash number"
-              value={payerPhone}
-              onChangeText={(value) => {
-                setPayerPhone(value);
-                setSubError(null);
-              }}
-              placeholder="077 000 0000"
-              keyboardType="phone-pad"
-            />
-          </View>
-        ) : null}
-        <Button
-          label={paySubscription.isPending ? 'Paying…' : 'Pay'}
-          block
-          style={styles.cardAction}
-          disabled={paySubscription.isPending}
-          onPress={paySub}
         />
       </Sheet>
     </>

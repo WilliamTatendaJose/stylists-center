@@ -10,6 +10,8 @@ import { useSubscriptionPaymentStatus } from '../../src/api/hooks/useProviders.j
 import { usePendingSubscriptionStore } from '../../src/state/index.js';
 
 const POLL_TIMEOUT_MS = 90_000;
+const SUCCESS_STATUSES = new Set(['held', 'paid', 'released']);
+const FAILURE_STATUSES = new Set(['failed', 'refunded', 'disputed']);
 
 const styles = StyleSheet.create({
   body: { alignItems: 'center', paddingTop: space.xxl },
@@ -27,13 +29,11 @@ const styles = StyleSheet.create({
   instructions: { marginBottom: space.xxl, textAlign: 'center' },
 });
 
-const SUCCESS_STATUSES = new Set(['held', 'paid', 'released']);
-const FAILURE_STATUSES = new Set(['failed', 'refunded', 'disputed']);
-
+/** Mirrors `/book/paying`, but settles the provider's monthly partner subscription. */
 export default function SubscriptionPaying() {
   const { colors } = useTheme();
-  const pending = usePendingSubscriptionStore((s) => s.pending);
-  const clearPending = usePendingSubscriptionStore((s) => s.clearPending);
+  const pending = usePendingSubscriptionStore((state) => state.pending);
+  const clearPending = usePendingSubscriptionStore((state) => state.clearPending);
   const [timedOut, setTimedOut] = useState(false);
   const openedCheckout = useRef(false);
 
@@ -47,7 +47,7 @@ export default function SubscriptionPaying() {
     void WebBrowser.openBrowserAsync(pending.checkoutUrl);
   }, [pending?.checkoutUrl]);
 
-  const { data } = useSubscriptionPaymentStatus(!!pending && !timedOut);
+  const { data } = useSubscriptionPaymentStatus(Boolean(pending) && !timedOut);
   const status = data?.status;
 
   useEffect(() => {
@@ -61,27 +61,20 @@ export default function SubscriptionPaying() {
   const paid = status ? SUCCESS_STATUSES.has(status) : false;
   const failed = status ? FAILURE_STATUSES.has(status) : false;
   const viaBrowser = Boolean(pending.checkoutUrl);
-
-  const goDone = () => {
-    clearPending();
-    router.replace('/(provider)/profile');
-  };
-
-  const goProfile = () => {
-    clearPending();
-    router.replace('/(provider)/profile');
-  };
-
   const showExit = failed || timedOut;
+  const leave = () => {
+    clearPending();
+    router.replace('/(provider)/profile');
+  };
 
   return (
     <Screen
       hasTabBar={false}
       footer={
         paid ? (
-          <Button label="Continue" block size="lg" arrow onPress={goDone} />
+          <Button label="Continue" block size="lg" arrow onPress={leave} />
         ) : showExit ? (
-          <Button label="Back to profile" block onPress={goProfile} />
+          <Button label="Back to profile" block onPress={leave} />
         ) : undefined
       }
     >
@@ -106,11 +99,11 @@ export default function SubscriptionPaying() {
         </Text>
         <Text variant="body" color="neutral700" style={styles.instructions}>
           {paid
-            ? `Paynow confirmed your ${formatUsd(pending.priceUsdCents)} subscription payment. Your subscription has been extended.`
+            ? `Paynow confirmed your ${formatUsd(pending.priceUsdCents)} subscription payment. Your partner subscription has been extended.`
             : failed
               ? "Paynow reported this payment didn't go through, so your subscription hasn't been extended. Nothing was charged — you can try again whenever you're ready."
               : timedOut
-                ? "This is taking longer than expected. Your subscription request is on file — we'll update it as soon as Paynow confirms."
+                ? "This is taking longer than expected. Your payment request is on file — we'll update it as soon as Paynow confirms."
                 : (pending.instructions ??
                   (viaBrowser
                     ? 'Complete the payment in the Paynow window. This screen updates on its own once it clears.'

@@ -5,6 +5,7 @@ export const walletSchema = z.object({
   coins: z.number().int(),
   usdCents: z.number().int(),
   coinUsdCents: z.number().int(),
+  referralRewardCoins: z.number().int().positive(),
   referralCode: z.string(),
   referredByName: z.string().nullable(),
   referralStatus: z.enum(['none', 'pending', 'paid']),

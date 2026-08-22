@@ -13,9 +13,6 @@ import {
   isSubscriptionActive,
   needsCashReconciliation,
   normalizePhone,
-  REFERRAL_REWARD_COINS,
-  coinsToUsdCents,
-  nextSubscriptionPaidUntil,
   type BookingStatus,
   type CreateProviderProductInput,
   type UpdateProviderProductInput,
@@ -37,6 +34,10 @@ import {
   type UpdateProviderProfileInput,
   type UpdateProviderServiceInput,
 } from '@sc/shared';
+import { ConfigService } from '@nestjs/config';
+import { Optional } from '@nestjs/common';
+import type { Env } from '../../config/env';
+import { walletRates } from '../../config/wallet-rates';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
@@ -74,6 +75,7 @@ export class ProviderService {
     private readonly push: PushService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
     private readonly paymentStatus: PaymentStatusService,
+    @Optional() private readonly config?: ConfigService<Env, true>,
   ) {}
 
   /** One request for the whole Jobs screen — availability, live offers, and the work itself. */
@@ -465,12 +467,13 @@ export class ProviderService {
             data: { status: 'paid' },
           });
           if (claimed.count === 1) {
+            const rates = walletRates(this.config);
             await tx.walletTransaction.create({
               data: {
                 userId: referral.agent.userId,
                 type: 'referral_coin',
-                coins: REFERRAL_REWARD_COINS,
-                usdCents: coinsToUsdCents(REFERRAL_REWARD_COINS),
+                coins: rates.referralRewardCoins,
+                usdCents: rates.referralRewardCoins * rates.coinUsdCents,
                 reference: `First completed booking ${current.reference}`,
               },
             });
@@ -507,16 +510,9 @@ export class ProviderService {
   }
 
   /**
-   * Cash is a self-report — extends `subscriptionPaidUntil` immediately,
-   * since (unlike a booking) this money is owed to the platform, not held for
-   * a counterparty to double-confirm against.
-   *
-   * EcoCash does NOT. Extending the subscription when the checkout was merely
-   * *created* handed a free month to anyone who opened a Paynow checkout and
-   * never paid — the gateway call only proves a prompt was sent. The month is
-   * credited by `applySubscriptionPayment` once the payment reaches 'paid',
-   * via whichever confirmation arrives first: Paynow's callback, or the
-   * provider's own screen polling `subscription/payment-status`.
+   * Creating a checkout only proves that a prompt was sent. The month is
+   * credited atomically once Paynow reports `paid`, through either its
+   * callback or the provider screen's `subscription/payment-status` poll.
    */
   async paySubscription(
     providerProfileId: string,
@@ -529,61 +525,44 @@ export class ProviderService {
     const amountUsdCents = profile.subscriptionPriceUsdCents;
     const currentPaidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
 
-    if (input.paymentMethod === 'ecocash') {
-      const user = await this.prisma.user.findFirstOrThrow({
-        where: { providerProfile: { id: providerProfileId } },
-        select: { phone: true },
-      });
-      // The number the stylist typed, which need not be their login line.
-      const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
-      const paymentPhone = payerPhone ?? user.phone;
-      if (!paymentPhone) {
-        throw new BadRequestException('Enter the EcoCash phone number for this payment');
-      }
-      const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
-      const intent = await this.paymentGateway.createCheckout({
-        reference,
-        amountUsdCents,
-        description: 'Style Center monthly subscription',
-        phone: paymentPhone,
-      });
-      await this.prisma.payment.create({
-        data: {
-          subscriptionProviderId: providerProfileId,
-          provider: intent.provider,
-          status: intent.status,
-          amountUsdCents,
-          externalRef: intent.externalRef,
-          reference,
-        },
-      });
-      // The fake dev adapter settles instantly ('held'); Paynow returns
-      // 'pending' and is only credited once a poll or callback confirms it.
-      const paidNow = intent.status === 'held';
-      return {
-        paidUntil: paidNow
-          ? await applySubscriptionPayment(this.prisma, providerProfileId)
-          : currentPaidUntil,
-        pending: !paidNow,
-        ...(intent.checkoutUrl ? { checkoutUrl: intent.checkoutUrl } : {}),
-        ...(intent.instructions ? { instructions: intent.instructions } : {}),
-      };
+    const user = await this.prisma.user.findFirstOrThrow({
+      where: { providerProfile: { id: providerProfileId } },
+      select: { phone: true },
+    });
+    // The number the stylist typed, which need not be their login line.
+    const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
+    const paymentPhone = payerPhone ?? user.phone;
+    if (!paymentPhone) {
+      throw new BadRequestException('Enter the EcoCash phone number for this payment');
     }
-
+    const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
+    const intent = await this.paymentGateway.createCheckout({
+      reference,
+      amountUsdCents,
+      description: 'Style Center monthly subscription',
+      phone: paymentPhone,
+    });
     await this.prisma.payment.create({
       data: {
         subscriptionProviderId: providerProfileId,
-        provider: 'cash',
-        status: 'released',
+        provider: intent.provider,
+        status: intent.status,
         amountUsdCents,
+        externalRef: intent.externalRef,
+        reference,
       },
     });
-    const paidUntil = nextSubscriptionPaidUntil(currentPaidUntil);
-    await this.prisma.providerProfile.update({
-      where: { id: providerProfileId },
-      data: { subscriptionPaidUntil: paidUntil },
-    });
-    return { paidUntil, pending: false };
+    // The fake dev adapter settles instantly ('held'); Paynow returns
+    // 'pending' and is only credited once a poll or callback confirms it.
+    const paidNow = intent.status === 'held';
+    return {
+      paidUntil: paidNow
+        ? await applySubscriptionPayment(this.prisma, providerProfileId)
+        : currentPaidUntil,
+      pending: !paidNow,
+      ...(intent.checkoutUrl ? { checkoutUrl: intent.checkoutUrl } : {}),
+      ...(intent.instructions ? { instructions: intent.instructions } : {}),
+    };
   }
 
   /**
@@ -597,9 +576,6 @@ export class ProviderService {
     const result = await this.paymentStatus.resolve({
       subscriptionProviderId: providerProfileId,
     });
-    if (result.changed && result.status === 'paid') {
-      await applySubscriptionPayment(this.prisma, providerProfileId);
-    }
     const profile = await this.prisma.providerProfile.findUniqueOrThrow({
       where: { id: providerProfileId },
       select: { subscriptionPaidUntil: true },
