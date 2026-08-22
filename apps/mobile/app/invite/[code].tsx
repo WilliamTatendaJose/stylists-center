@@ -13,11 +13,11 @@ export default function InviteLanding() {
 
   useEffect(() => {
     if (!referralCode?.trim()) {
-      router.replace('/(auth)/index' as never);
+      router.replace('/(auth)/index');
       return;
     }
     setPendingReferralCode(referralCode);
-    router.replace((accessToken ? '/(tabs)' : '/(auth)/index') as never);
+    router.replace(accessToken ? '/(tabs)' : '/(auth)/index');
   }, [accessToken, referralCode, setPendingReferralCode]);
 
   return (

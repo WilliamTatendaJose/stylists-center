@@ -24,7 +24,7 @@ export function recordSubscriptionPaymentStatus(
   input: RecordSubscriptionStatusInput,
 ): Promise<{ status: string; changed: boolean }> {
   return prisma.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${input.reference}))`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.reference}))`;
 
     const prior = await tx.payment.findFirst({
       where: {

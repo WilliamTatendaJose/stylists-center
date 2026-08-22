@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Share, StyleSheet, Switch, View } from 'react-native';
-import { router, type Href } from 'expo-router';
+import { router } from 'expo-router';
 import { Clock3, Gift, LogOut, MapPin, Moon, Sun, UserRound } from 'lucide-react-native';
 import { deriveInitials, formatInHarare, formatUsd, type ServiceDto } from '@sc/shared';
 import { space } from '@sc/tokens';
@@ -501,9 +501,7 @@ export default function ProviderProfile() {
                 block
                 style={styles.cardAction}
                 onPress={() => {
-                  router.push(
-                    (subPaymentPending ? '/subscription/paying' : '/subscription/payment') as Href,
-                  );
+                  router.push(subPaymentPending ? '/subscription/paying' : '/subscription/payment');
                 }}
               />
             </Card>
@@ -619,13 +617,10 @@ export default function ProviderProfile() {
               variant="secondary"
               block
               onPress={() => {
-                // `as Href`: same reason as useBack.ts's own cast — the typed-route
-                // union only includes this new screen after `expo start` has
-                // regenerated .expo/types/router.d.ts.
                 router.push({
                   pathname: '/map/pick-location',
                   params: { lat: String(lat), lng: String(lng) },
-                } as unknown as Href);
+                });
               }}
             />
           </View>

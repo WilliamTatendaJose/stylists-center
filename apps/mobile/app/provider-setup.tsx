@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { router, type Href } from 'expo-router';
+import { router } from 'expo-router';
 import { MapPin } from 'lucide-react-native';
 import { color, space } from '@sc/tokens';
 import { Screen, ScreenHeader, Text, Chip, TextField, RangeInput, Button, useTheme } from '@sc/ui';
@@ -252,13 +252,10 @@ export default function ProviderSetup() {
           variant="secondary"
           block
           onPress={() => {
-            // `as Href`: same reason as useBack.ts's own cast — the typed-route
-            // union only includes this new screen after `expo start` has
-            // regenerated .expo/types/router.d.ts.
             router.push({
               pathname: '/map/pick-location',
               params: { lat: String(lat), lng: String(lng) },
-            } as unknown as Href);
+            });
           }}
         />
         <View style={styles.locationRow}>

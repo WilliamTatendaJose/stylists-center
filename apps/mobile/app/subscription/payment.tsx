@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Redirect, type Href } from 'expo-router';
+import { Redirect } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { formatUsd, isValidMobileMoneyPhone } from '@sc/shared';
 import { space } from '@sc/tokens';
@@ -47,7 +47,7 @@ export default function SubscriptionPayment() {
     if (me?.phone) setPayerPhone((current) => current || me.phone || '');
   }, [me?.phone]);
 
-  if (handingOff && pending) return <Redirect href={'/subscription/paying' as Href} />;
+  if (handingOff && pending) return <Redirect href="/subscription/paying" />;
   if (complete) return <Redirect href="/(provider)/profile" />;
 
   const startPayment = () => {
