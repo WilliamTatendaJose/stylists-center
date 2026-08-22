@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, View } from 'react-native';
+import {
+  Animated,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { color, radius, space } from '@sc/tokens';
 import { useTheme } from '../theme.js';
 
@@ -14,6 +23,7 @@ const ANIMATION_MS = 220;
 const OFFSCREEN_Y = 400;
 
 const styles = StyleSheet.create({
+  keyboardAvoiding: { flex: 1 },
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   scrim: {
     position: 'absolute',
@@ -27,10 +37,12 @@ const styles = StyleSheet.create({
     backgroundColor: color.bg,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
+    maxHeight: '90%',
     paddingHorizontal: space.xxl,
     paddingTop: space.s,
     paddingBottom: space.l + 20,
   },
+  sheetScroll: { flexGrow: 0, flexShrink: 1 },
   handle: {
     alignSelf: 'center',
     width: 38,
@@ -98,25 +110,46 @@ export function Sheet({ open, onClose, children }: SheetProps) {
 
   return (
     <Modal visible transparent animationType="none" onRequestClose={onClose}>
-      <Pressable
-        style={styles.backdrop}
-        onPress={onClose}
-        accessibilityRole="button"
-        accessibilityLabel="Close"
+      {/* Modal windows do not inherit the screen's keyboard-avoidance layout.
+          Keep the sheet anchored to the visible bottom of the modal so a
+          focused field (especially the review textarea) stays above Android
+          and iOS software keyboards. */}
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoiding}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Animated.View style={[styles.scrim, { opacity: backdropOpacity }]} />
-        {/* A no-op onPress claims the touch responder for taps inside the
-            sheet, which is what stops them from bubbling to the backdrop
-            Pressable behind it and closing the sheet on every interaction. */}
-        <Pressable onPress={() => undefined}>
-          <Animated.View
-            style={[styles.sheet, { backgroundColor: colors.bg }, { transform: [{ translateY }] }]}
-          >
-            <View style={[styles.handle, { backgroundColor: colors.divider }]} />
-            {children}
-          </Animated.View>
+        <Pressable
+          style={styles.backdrop}
+          onPress={onClose}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        >
+          <Animated.View style={[styles.scrim, { opacity: backdropOpacity }]} />
+          {/* A no-op onPress claims the touch responder for taps inside the
+              sheet, which is what stops them from bubbling to the backdrop
+              Pressable behind it and closing the sheet on every interaction. */}
+          <Pressable onPress={() => undefined}>
+            <Animated.View
+              style={[
+                styles.sheet,
+                { backgroundColor: colors.bg },
+                { transform: [{ translateY }] },
+              ]}
+            >
+              <View style={[styles.handle, { backgroundColor: colors.divider }]} />
+              <ScrollView
+                bounces={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+                style={styles.sheetScroll}
+              >
+                {children}
+              </ScrollView>
+            </Animated.View>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

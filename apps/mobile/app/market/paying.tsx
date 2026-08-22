@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { formatUsd } from '@sc/shared';
 import { space } from '@sc/tokens';
 import { Screen, Text, Button, Badge, Card, useTheme } from '@sc/ui';
@@ -25,6 +26,7 @@ interface PendingOrder {
   reference: string;
   providerName: string;
   totalUsdCents: number;
+  checkoutUrl?: string;
 }
 
 function parseOrders(raw: string | undefined): PendingOrder[] {
@@ -98,6 +100,7 @@ export default function MarketPaying() {
   const orders = useMemo(() => parseOrders(params.orders), [params.orders]);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [timedOut, setTimedOut] = useState(false);
+  const openedCheckouts = useRef(new Set<string>());
 
   const onStatus = useCallback((orderId: string, status: string) => {
     setStatuses((prev) => (prev[orderId] === status ? prev : { ...prev, [orderId]: status }));
@@ -106,6 +109,18 @@ export default function MarketPaying() {
   useEffect(() => {
     if (orders.length === 0) router.replace('/market/orders');
   }, [orders.length]);
+
+  useEffect(() => {
+    const openBrowsers = async () => {
+      for (const order of orders) {
+        if (order.checkoutUrl && !openedCheckouts.current.has(order.id)) {
+          openedCheckouts.current.add(order.id);
+          await WebBrowser.openBrowserAsync(order.checkoutUrl);
+        }
+      }
+    };
+    void openBrowsers();
+  }, [orders]);
 
   useEffect(() => {
     const timer = setTimeout(() => setTimedOut(true), POLL_TIMEOUT_MS);

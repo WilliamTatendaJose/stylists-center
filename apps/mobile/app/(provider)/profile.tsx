@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Switch, View } from 'react-native';
 import { router } from 'expo-router';
 import { Clock3, Gift, LogOut, MapPin, Moon, Sun, UserRound } from 'lucide-react-native';
-import * as WebBrowser from 'expo-web-browser';
 import {
   deriveInitials,
   formatInHarare,
@@ -32,14 +31,13 @@ import {
   usePaySubscription,
   useProviderManagementProfile,
   useProviderSubscription,
-  useSubscriptionPaymentStatus,
   useUpdateProviderProfile,
   useUpdateProviderService,
 } from '../../src/api/hooks/useProviders.js';
 import { useMe, useSetActiveRole } from '../../src/api/hooks/useMe.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useAuthStore } from '../../src/state/useAuthStore.js';
-import { useSessionStore } from '../../src/state/index.js';
+import { useSessionStore, usePendingSubscriptionStore } from '../../src/state/index.js';
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
@@ -111,9 +109,9 @@ export default function ProviderProfile() {
   const updateService = useUpdateProviderService();
   const { data: subscription } = useProviderSubscription();
   const paySubscription = usePaySubscription();
-  const [subPendingNote, setSubPendingNote] = useState<string | null>(null);
-  const { data: subPaymentStatus } = useSubscriptionPaymentStatus(subPendingNote !== null);
-  const subPaymentPending = subPendingNote !== null;
+  const setPendingSubscription = usePendingSubscriptionStore((s) => s.setPending);
+  const pendingSubscription = usePendingSubscriptionStore((s) => s.pending);
+  const subPaymentPending = pendingSubscription !== null;
   const setActiveRole = useSetActiveRole();
   const deviceLocation = useSessionStore((state) => state.location);
   const locationSource = useSessionStore((state) => state.locationSource);
@@ -161,17 +159,6 @@ export default function ProviderProfile() {
     setLat(data.lat);
     setLng(data.lng);
   }, [data]);
-
-  // The poll has reached a verdict: stop polling and say what happened. A
-  // failed payment must not leave the card sitting on "waiting" forever.
-  useEffect(() => {
-    const status = subPaymentStatus?.status;
-    if (!status || status === 'pending' || status === 'none') return;
-    setSubPendingNote(null);
-    if (!['held', 'paid', 'released'].includes(status)) {
-      setSubError("That payment didn't go through. Your subscription hasn't been extended.");
-    }
-  }, [subPaymentStatus?.status]);
 
   if (isError && !data) {
     return (
@@ -287,19 +274,18 @@ export default function ProviderProfile() {
       },
       {
         onSuccess: (result) => {
-          setSubSheetOpen(false);
-          // A pending payment has NOT extended the subscription yet — the month
-          // is credited only once Paynow confirms, so start polling and say so
-          // rather than showing a renewed card straight away.
           if (result.pending) {
-            setSubPendingNote(
-              result.instructions ??
-                (result.checkoutUrl
-                  ? 'Finish the payment in the Paynow window. This updates on its own once it clears.'
-                  : 'Approve the EcoCash prompt on your phone to finish this payment.'),
-            );
+            setPendingSubscription({
+              priceUsdCents: subscription?.priceUsdCents ?? 0,
+              ...(result.instructions ? { instructions: result.instructions } : {}),
+              ...(result.checkoutUrl ? { checkoutUrl: result.checkoutUrl } : {}),
+            });
+            setSubSheetOpen(false);
+            router.push('/(provider)/subscription-paying');
+          } else {
+            setSubSheetOpen(false);
+            setSubError(null);
           }
-          if (result.checkoutUrl) void WebBrowser.openBrowserAsync(result.checkoutUrl);
         },
         onError: (reason) =>
           setSubError(describeError(reason, "Couldn't take that payment. Try again.")),
@@ -524,16 +510,7 @@ export default function ProviderProfile() {
                   tone={subscription.active && !subPaymentPending ? 'accent100' : 'accent'}
                 />
               </View>
-              {subPendingNote ? (
-                <Text
-                  variant="meta"
-                  color="neutral700"
-                  style={styles.subscriptionMeta}
-                  accessibilityLiveRegion="polite"
-                >
-                  {subPendingNote}
-                </Text>
-              ) : !subscription.active ? (
+              {!subscription.active && !subPaymentPending ? (
                 <Text variant="meta" color="neutral700" style={styles.subscriptionMeta}>
                   Pay to appear in search and smart-match.
                 </Text>

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import {
   formatUsd,
@@ -180,24 +179,21 @@ export default function Cart() {
       ({ created }) => created.instructions ?? created.checkoutUrl,
     );
     if (awaitingPayment) {
-      // The hosted page can only be opened one at a time, so a multi-seller
-      // cart that fell back opens them in turn before the wait begins.
-      for (const { created } of succeeded) {
-        if (created.checkoutUrl) await WebBrowser.openBrowserAsync(created.checkoutUrl);
-      }
+      // Pass checkout URLs to the paying screen so it can open them
+      // while showing the waiting/polling UI.
+      const ordersWithCheckout = succeeded.map(({ group, created }) => ({
+        id: created.id,
+        reference: created.reference,
+        providerName: group.providerName,
+        totalUsdCents: created.totalUsdCents,
+        ...(created.checkoutUrl ? { checkoutUrl: created.checkoutUrl } : {}),
+      }));
       const firstInstructions = succeeded.find(({ created }) => created.instructions)?.created
         .instructions;
       router.replace({
         pathname: '/market/paying',
         params: {
-          orders: JSON.stringify(
-            succeeded.map(({ group, created }) => ({
-              id: created.id,
-              reference: created.reference,
-              providerName: group.providerName,
-              totalUsdCents: created.totalUsdCents,
-            })),
-          ),
+          orders: JSON.stringify(ordersWithCheckout),
           ...(firstInstructions ? { instructions: firstInstructions } : {}),
         },
       });
