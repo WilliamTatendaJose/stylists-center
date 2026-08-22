@@ -30,6 +30,7 @@ import { describeError } from '../../src/api/errorMessage.js';
 import { useRequestStore, useSessionStore } from '../../src/state/index.js';
 import { useDeviceLocation } from '../../src/location/useDeviceLocation.js';
 import { apiAssetUrl } from '../../src/api/client.js';
+import { BrandLogo } from '../../src/components/BrandLogo.js';
 
 const styles = StyleSheet.create({
   header: { gap: 8 },
@@ -224,9 +225,7 @@ export default function Find() {
   const header = (
     <View style={styles.header}>
       <View style={styles.headerTop}>
-        <Text variant="wordmark" style={styles.wordmark}>
-          STYLISTS CENTER
-        </Text>
+        <BrandLogo width={116} style={styles.wordmark} />
         <Pill
           label={isProvider ? 'Stylist' : 'Client'}
           showChevron

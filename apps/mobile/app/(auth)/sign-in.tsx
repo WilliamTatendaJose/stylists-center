@@ -145,7 +145,7 @@ export default function SignIn() {
         <SecureNote />
         <View style={styles.join}>
           <Text variant="body" color="neutral700">
-            New to Stylists Center?
+            New to Style Center?
           </Text>
           <AuthLink label="Create an account" onPress={() => router.push('/(auth)/sign-up')} />
         </View>

@@ -224,7 +224,7 @@ export default function WalletScreen() {
 
   const shareCode = () => {
     void Share.share({
-      message: `Join Stylists Center with my invite link: stylistscenter://invite/${wallet.referralCode}\nI earn SC Coins when you complete your first booking.`,
+      message: `Join Style Center with my invite link: stylistscenter://invite/${wallet.referralCode}\nI earn SC Coins when you complete your first booking.`,
     });
   };
 

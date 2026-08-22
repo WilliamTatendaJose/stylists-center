@@ -260,7 +260,7 @@ export default function Profile() {
           </Card>
         </ProfileSection>
 
-        <ProfileSection label="Work on Stylists Center">
+        <ProfileSection label="Work on Style Center">
           <Card bordered style={styles.professionalCard}>
             <View style={styles.professionalTop}>
               <ProfileIconTile>

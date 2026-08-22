@@ -29,7 +29,7 @@ export function ServerConnectionPanel({
   const unavailable = error instanceof NetworkError;
   const serverProblem = error instanceof ApiError && error.status >= 500;
   const title = unavailable
-    ? "Can't reach Stylists Center"
+    ? "Can't reach Style Center"
     : serverProblem
       ? 'Our service is taking a moment'
       : 'This information could not be loaded';

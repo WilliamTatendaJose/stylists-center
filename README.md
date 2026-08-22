@@ -1,4 +1,4 @@
-# Stylists Center
+# Style Center
 
 A location-based beauty-services marketplace for Harare, Zimbabwe: clients find a stylist by
 browsing or a smart-match request, book a slot, pay by EcoCash or cash, chat, and navigate to the

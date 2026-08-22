@@ -544,7 +544,7 @@ export class ProviderService {
       const intent = await this.paymentGateway.createCheckout({
         reference,
         amountUsdCents,
-        description: 'Stylists Center monthly subscription',
+        description: 'Style Center monthly subscription',
         phone: paymentPhone,
       });
       await this.prisma.payment.create({

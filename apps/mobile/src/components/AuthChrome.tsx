@@ -3,20 +3,12 @@ import { StyleSheet, TextInput, View, type TextInputProps, type ViewStyle } from
 import { ArrowRight, Eye, EyeOff, ShieldCheck } from 'lucide-react-native';
 import { Pressable, Screen, Text, useTheme } from '@sc/ui';
 import { color, layout, radius, space, type } from '@sc/tokens';
+import { BrandLogo } from './BrandLogo.js';
 import { GoogleGLogo } from './GoogleGLogo.js';
 
 const styles = StyleSheet.create({
   content: { paddingBottom: 32 },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginBottom: 28 },
-  brandMark: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: color.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandMarkInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.bg },
+  brandRow: { alignItems: 'flex-start', marginBottom: 28 },
   hero: {
     minHeight: 144,
     borderRadius: radius.hero,
@@ -107,10 +99,7 @@ export function AuthShell({
   return (
     <Screen contentStyle={styles.content}>
       <View style={styles.brandRow}>
-        <View style={styles.brandMark}>
-          <View style={styles.brandMarkInner} />
-        </View>
-        <Text variant="wordmark">STYLISTS CENTER</Text>
+        <BrandLogo width={176} />
       </View>
       {showHero ? (
         <View style={styles.hero}>

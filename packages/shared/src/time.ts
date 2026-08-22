@@ -1,7 +1,7 @@
 import { formatInTimeZone } from 'date-fns-tz';
 
 /**
- * The one place a Stylists Center timestamp is allowed to become display text.
+ * The one place a Style Center timestamp is allowed to become display text.
  *
  * Slot times, "expires in 5 minutes", and every "when" label in the design
  * must never be rendered from the device's locale or local timezone — a

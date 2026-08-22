@@ -18,6 +18,7 @@ import {
 import { useAuthStore } from '../state/authStore';
 import { useLogout } from '../api/auth';
 import { ThemeToggle } from '../components/ThemeToggle';
+import { BrandLogo } from '../components/BrandLogo';
 
 const NAV_ITEMS = [
   { to: '/overview', label: 'Overview', icon: LayoutDashboard },
@@ -42,11 +43,11 @@ export function Layout() {
   return (
     <div className="flex min-h-screen bg-neutral-50 dark:bg-dark-bg">
       <aside className="flex w-64 shrink-0 flex-col border-r border-neutral-200 bg-white dark:border-dark-border dark:bg-dark-surface">
-        <div className="px-6 py-6">
-          <p className="text-sm font-semibold text-neutral-500 dark:text-dark-muted">
-            Stylists Center
+        <div className="px-5 py-5">
+          <BrandLogo className="w-full rounded-lg" />
+          <p className="mt-2 px-1 text-xs font-semibold tracking-[0.18em] text-neutral-500 uppercase dark:text-dark-muted">
+            Admin console
           </p>
-          <p className="text-lg font-bold text-neutral-900 dark:text-dark-text">Admin</p>
         </div>
 
         <nav className="flex-1 space-y-1 px-3">

@@ -57,7 +57,7 @@ const googleServicesFile = (() => {
  * JSON file can't express.
  */
 const config: ExpoConfig = {
-  name: 'Stylists Center',
+  name: 'Style Center',
   slug: 'style-center',
   scheme: 'stylistscenter',
   version: '0.1.0',
@@ -88,7 +88,7 @@ const config: ExpoConfig = {
     // instead, which is the alternative if bumping this by hand ever gets missed.
     versionCode: 1,
     adaptiveIcon: {
-      backgroundColor: '#EC3013',
+      backgroundColor: '#000000',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
@@ -110,12 +110,12 @@ const config: ExpoConfig = {
       'expo-splash-screen',
       {
         image: './assets/splash-mark.png',
-        imageWidth: 144,
+        imageWidth: 280,
         resizeMode: 'contain',
-        backgroundColor: '#ffffff',
+        backgroundColor: '#000000',
         dark: {
           image: './assets/splash-mark.png',
-          backgroundColor: '#0b0b0b',
+          backgroundColor: '#000000',
         },
       },
     ],
@@ -126,7 +126,7 @@ const config: ExpoConfig = {
     [
       'expo-image-picker',
       {
-        photosPermission: 'Allow Stylists Center to choose photos for your profile and shop items.',
+        photosPermission: 'Allow Style Center to choose photos for your profile and shop items.',
       },
     ],
     [

@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { CalendarCheck2, MapPin, ShoppingBag } from 'lucide-react-native';
 import { Button, Pressable, Screen, Text, useTheme } from '@sc/ui';
 import { color, layout, radius, space } from '@sc/tokens';
+import { BrandLogo } from '../src/components/BrandLogo.js';
 import { useSessionStore } from '../src/state/useSessionStore.js';
 
 const SLIDES = [
@@ -45,16 +46,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     minHeight: 48,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: space.s },
-  brandMark: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: color.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: color.bg },
+  brandRow: { alignItems: 'flex-start' },
   skip: { minHeight: layout.minTouchTarget, justifyContent: 'center', paddingHorizontal: space.s },
   pager: { flex: 1 },
   slide: { flex: 1, justifyContent: 'center', paddingVertical: space.l },
@@ -113,7 +105,7 @@ const styles = StyleSheet.create({
 
 export default function Onboarding() {
   const { width } = useWindowDimensions();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const setHasSeenOnboarding = useSessionStore((state) => state.setHasSeenOnboarding);
   const pagerRef = useRef<ScrollView>(null);
   const [page, setPage] = useState(0);
@@ -144,10 +136,7 @@ export default function Onboarding() {
     <Screen scroll={false} contentStyle={styles.screen}>
       <View style={styles.topBar}>
         <View style={styles.brandRow}>
-          <View style={styles.brandMark}>
-            <View style={[styles.brandDot, isDark ? { backgroundColor: colors.bg } : null]} />
-          </View>
-          <Text variant="wordmark">STYLISTS CENTER</Text>
+          <BrandLogo width={130} />
         </View>
         <Pressable
           accessibilityRole="button"

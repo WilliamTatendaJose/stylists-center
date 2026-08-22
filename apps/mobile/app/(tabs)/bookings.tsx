@@ -443,8 +443,8 @@ export default function Bookings() {
         )}
 
         <Text variant="metaSmall" color="neutral600" style={styles.footerNote}>
-          Repeated no-shows — five, tracked by us — remove an account from Stylists Center. Every
-          ban states its reason and can be appealed.
+          Repeated no-shows — five, tracked by us — remove an account from Style Center. Every ban
+          states its reason and can be appealed.
         </Text>
       </Screen>
 

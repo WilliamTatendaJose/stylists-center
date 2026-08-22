@@ -85,7 +85,7 @@ export default function VerifyEmail() {
   return (
     <AuthShell
       title="One quick check."
-      subtitle="Verify your email to keep your account secure and unlock every part of Stylists Center."
+      subtitle="Verify your email to keep your account secure and unlock every part of Style Center."
       showHero={false}
     >
       <View style={[styles.panel, { backgroundColor: colors.surface }]}>

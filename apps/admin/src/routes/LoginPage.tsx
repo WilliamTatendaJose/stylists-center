@@ -6,6 +6,7 @@ import { ApiError } from '../api/client';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { TextField } from '../components/ui/Field';
+import { BrandLogo } from '../components/BrandLogo';
 
 export function LoginPage() {
   const admin = useAuthStore((s) => s.admin);
@@ -36,10 +37,10 @@ export function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-neutral-50 px-4 dark:bg-dark-bg">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <h1 className="text-xl font-bold text-neutral-900 dark:text-dark-text">
-            Stylists Center
-          </h1>
-          <p className="mt-1 text-sm text-neutral-600 dark:text-dark-muted">Admin console</p>
+          <BrandLogo className="mx-auto w-64 max-w-full rounded-xl" />
+          <p className="mt-3 text-sm font-medium tracking-wide text-neutral-600 uppercase dark:text-dark-muted">
+            Admin console
+          </p>
         </div>
 
         <Card>
