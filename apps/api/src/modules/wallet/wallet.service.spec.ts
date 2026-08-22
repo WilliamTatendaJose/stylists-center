@@ -131,7 +131,9 @@ describe('WalletService', () => {
 
     const referrals = await wallet.listReferrals(agentUserId);
     expect(referrals).toHaveLength(2);
-    expect(referrals[0]?.referredName).toBe('Referred Salon');
+    // listReferrals orders newest-first (createdAt desc) — 'Second Referral'
+    // was created after 'Referred Salon' in the fixture above.
+    expect(referrals[0]?.referredName).toBe('Second Referral');
   });
 
   it('cashOut zeroes the balance via a new ledger row, never mutating the held ones', async () => {

@@ -76,11 +76,17 @@ describe('AdminWalletService', () => {
     // Enough coins to clear CASH_OUT_MIN_USD_CENTS, then a real cash-out
     // request through WalletService so the row under test is produced the same
     // way production produces it, not hand-rolled to match the assertions.
+    //
+    // 30 coins, not 12: WalletService(prisma) below is built without a config,
+    // so cashOut() prices coins at @sc/shared's fallback COIN_USD_CENTS (20),
+    // not this file's own BASE_ENV.COIN_USD_CENTS (50) — 12 coins would only
+    // clear $2.40, short of the $5 minimum. 30 keeps the same $6.00 total the
+    // usdCents/amountUsdCents assertions below were already written against.
     const credit = await prisma.walletTransaction.create({
       data: {
         userId: agentUserId,
         type: 'referral_coin',
-        coins: 12,
+        coins: 30,
         usdCents: 600,
         reference: 'Referral credit',
       },
@@ -120,7 +126,7 @@ describe('AdminWalletService', () => {
     // The ledger row is stored negative (a debit); the admin queue shows what
     // is owed, so the sign is flipped on the way out.
     expect(row?.amountUsdCents).toBe(600);
-    expect(row?.coins).toBe(12);
+    expect(row?.coins).toBe(30);
     expect(row?.displayName).toBe('Cash Out Agent');
     expect(row?.settled).toBe(false);
     expect(row?.settledAt).toBeNull();
@@ -151,7 +157,7 @@ describe('AdminWalletService', () => {
     const ledgerRow = await prisma.walletTransaction.findUniqueOrThrow({
       where: { id: cashOutTxnId },
     });
-    expect(ledgerRow.coins).toBe(-12);
+    expect(ledgerRow.coins).toBe(-30);
     expect(ledgerRow.usdCents).toBe(-600);
     expect(ledgerRow.type).toBe('cash_out');
 
