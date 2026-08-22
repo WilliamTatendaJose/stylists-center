@@ -17,7 +17,7 @@ const prisma = new PrismaClient({
 
 const HARARE_CITY_ID = '33333333-3333-4333-8333-333333333333';
 const CLIENT_USER_ID = '11111111-1111-4111-8111-111111111111';
-const COIN_USD_CENTS = Number.parseInt(process.env.COIN_USD_CENTS ?? '50', 10);
+const COIN_USD_CENTS = Number.parseInt(process.env.COIN_USD_CENTS ?? '20', 10);
 
 const CATEGORY_IDS = {
   hairBraiding: '19d5bd66-1556-48de-b31f-2d800ae08fca',

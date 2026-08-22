@@ -9,14 +9,14 @@ import {
 } from './money.js';
 
 describe('SC Coins', () => {
-  it('converts coins to cents at the pegged $0.50 rate', () => {
-    expect(coinsToUsdCents(14)).toBe(700); // 14 coins = $7.00, the handoff's wallet example
-    expect(COIN_USD_CENTS).toBe(50);
+  it('converts coins to cents at the default $0.20 rate', () => {
+    expect(coinsToUsdCents(14)).toBe(280); // 14 coins = $2.80
+    expect(COIN_USD_CENTS).toBe(20);
   });
 
   it('converts cents to coins, rounding down so no fractional coin is ever awarded', () => {
-    expect(usdCentsToCoins(149)).toBe(2); // $1.49 -> 2 coins, not 2.98
-    expect(usdCentsToCoins(700)).toBe(14);
+    expect(usdCentsToCoins(149)).toBe(7); // $1.49 -> 7 whole coins
+    expect(usdCentsToCoins(700)).toBe(35);
   });
 });
 
@@ -26,8 +26,8 @@ describe('cash-out threshold', () => {
     expect(canCashOut(CASH_OUT_MIN_USD_CENTS + 1)).toBe(true); // $5.01 does
   });
 
-  it('allows the handoff wallet example ($7.00) to cash out', () => {
-    expect(canCashOut(coinsToUsdCents(14))).toBe(true);
+  it('allows a balance above $5.00 to cash out', () => {
+    expect(canCashOut(coinsToUsdCents(26))).toBe(true);
   });
 });
 

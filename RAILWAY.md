@@ -115,7 +115,7 @@ PAYNOW_INTEGRATION_KEY=...
 PAYNOW_RETURN_URL=https://<api public domain>/v1/payments/paynow/return
 PAYNOW_RESULT_URL=https://<api public domain>/v1/payments/paynow/callback
 PAYNOW_AUTH_EMAIL=<a login email on the Paynow merchant account>   # required for the EcoCash phone-prompt checkout
-COIN_USD_CENTS=50
+COIN_USD_CENTS=20
 CASH_OUT_MIN_USD_CENTS=500
 ```
 

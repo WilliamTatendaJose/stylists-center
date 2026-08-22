@@ -52,6 +52,35 @@ const googleServicesFile = (() => {
 })();
 
 /**
+ * The API's public domain — same one apps/api/src/modules/app-links serves
+ * the two Universal/App Link verification files from, and the domain a
+ * shared provider-profile link's `https://` form points at (see
+ * src/sharing/providerShareLink.ts, which derives the same host from
+ * EXPO_PUBLIC_API_URL at runtime — deriving it from the same env var here
+ * rather than hardcoding it a second time is what keeps the two incapable of
+ * drifting apart).
+ *
+ * The fallback below only matters for a build that somehow reaches this file
+ * with the env var unset — every real build profile already fails fast on a
+ * missing EXPO_PUBLIC_API_URL a few lines up. It's a Railway
+ * `*.up.railway.app` subdomain rather than a dedicated domain, which is fine
+ * to start with but not permanent: if that service is ever renamed or moved
+ * off Railway, both this and EXPO_PUBLIC_API_URL must change together, or
+ * previously shared links stop verifying (they'd fall back to opening as
+ * plain, non-tappable text, same as before Universal Links were wired up —
+ * nothing crashes, it just quietly stops being a real link).
+ */
+const UNIVERSAL_LINK_HOST = (() => {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (!apiUrl) return 'api-production-2b23.up.railway.app';
+  try {
+    return new URL(apiUrl).host;
+  } catch {
+    return 'api-production-2b23.up.railway.app';
+  }
+})();
+
+/**
  * app.config.ts instead of app.json: the MapLibre config plugin (§5 of the
  * plan) and future EAS build profiles need conditional logic that a static
  * JSON file can't express.
@@ -71,6 +100,10 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'zw.co.stylistscenter.app',
+    // Lets a tapped https://<host>/provider-share/<id> link open this app
+    // directly instead of Safari, once apple-app-site-association verifies
+    // (see UNIVERSAL_LINK_HOST above and app-links.controller.ts).
+    associatedDomains: [`applinks:${UNIVERSAL_LINK_HOST}`],
   },
   android: {
     package: 'zw.co.stylistscenter.app',
@@ -99,6 +132,19 @@ const config: ExpoConfig = {
     // (plan risk R8) — foreground-only, deliberately, so the app never
     // declares Play Store's background-location policy at all.
     permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
+    // App Links counterpart to ios.associatedDomains above — same shared
+    // provider-profile link, verified against assetlinks.json instead of
+    // apple-app-site-association. autoVerify is what makes the OS actually
+    // check that file rather than just registering the app as one of
+    // several apps willing to handle the link (which would show a picker).
+    intentFilters: [
+      {
+        action: 'VIEW',
+        autoVerify: true,
+        data: [{ scheme: 'https', host: UNIVERSAL_LINK_HOST, pathPrefix: '/provider-share' }],
+        category: ['BROWSABLE', 'DEFAULT'],
+      },
+    ],
   },
   web: {
     favicon: './assets/favicon.png',

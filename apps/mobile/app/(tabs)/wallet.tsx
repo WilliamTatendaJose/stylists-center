@@ -28,6 +28,7 @@ import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 const styles = StyleSheet.create({
   balanceBlock: { alignItems: 'flex-start', marginBottom: space.xxl },
+  balanceTitle: { marginBottom: space.s },
   coinsLabel: { marginTop: 2 },
   conversion: { marginTop: space.s, marginBottom: space.l },
   cashOutNote: { marginTop: space.s },
@@ -52,8 +53,11 @@ const styles = StyleSheet.create({
     paddingVertical: space.ml,
     borderBottomWidth: 1,
   },
-  colReferral: { flex: 2 },
-  colCoins: { flex: 1 },
+  colReferral: { flex: 1, minWidth: 0, paddingRight: space.s },
+  colReward: { width: 88, alignItems: 'flex-end' },
+  colStatus: { width: 78, alignItems: 'flex-end', marginLeft: space.s },
+  rewardValue: { marginTop: 2 },
+  commissionNote: { marginTop: space.s },
   emptyBody: { marginTop: space.s, marginBottom: space.xl },
   verificationStatus: { marginBottom: space.xl },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.s },
@@ -247,11 +251,14 @@ export default function WalletScreen() {
       }
     >
       <View style={styles.balanceBlock}>
+        <Text variant="sectionLabel" style={styles.balanceTitle}>
+          Available balance
+        </Text>
         <Text variant="balance" color={colors.accent}>
-          {wallet.coins}
+          {wallet.coins} SC
         </Text>
         <Text variant="kicker" color={colors.accent} style={styles.coinsLabel}>
-          SC Coins
+          Coins
         </Text>
         <Text variant="meta" color="neutral700" style={styles.conversion}>
           = {formatUsd(wallet.usdCents)} Â· 1 coin = {formatUsd(wallet.coinUsdCents)}
@@ -317,27 +324,43 @@ export default function WalletScreen() {
           <Text variant="metaSmall" color="neutral600" style={styles.colReferral}>
             Referral
           </Text>
-          <Text variant="metaSmall" color="neutral600" style={styles.colCoins}>
-            Coins
-          </Text>
-          <Text variant="metaSmall" color="neutral600">
-            Status
-          </Text>
+          <View style={styles.colReward}>
+            <Text variant="metaSmall" color="neutral600">
+              Reward
+            </Text>
+          </View>
+          <View style={styles.colStatus}>
+            <Text variant="metaSmall" color="neutral600">
+              Status
+            </Text>
+          </View>
         </View>
         {referrals?.map((referral) => (
           <View key={referral.id} style={[styles.tableRow, { borderBottomColor: colors.divider }]}>
             <Text variant="body" style={styles.colReferral}>
               {referral.referredName}
             </Text>
-            <Text variant="body" style={styles.colCoins}>
-              {referral.coins}
-            </Text>
-            <Badge
-              label={referral.status === 'paid' ? 'Paid' : 'Pending'}
-              tone={referral.status === 'paid' ? 'accent100' : 'neutral'}
-            />
+            <View style={styles.colReward}>
+              <Text variant="bodyStrong">
+                {referral.status === 'paid' ? '+' : ''}
+                {referral.coins} SC
+              </Text>
+              <Text variant="metaSmall" color="neutral600" style={styles.rewardValue}>
+                {formatUsd(referral.coins * wallet.coinUsdCents)}
+              </Text>
+            </View>
+            <View style={styles.colStatus}>
+              <Badge
+                label={referral.status === 'paid' ? 'Credited' : 'Pending'}
+                tone={referral.status === 'paid' ? 'accent100' : 'neutral'}
+              />
+            </View>
           </View>
         ))}
+        <Text variant="metaSmall" color="neutral600" style={styles.commissionNote}>
+          Credited rewards are added to your available balance. Pending rewards unlock after the
+          referral's first completed booking.
+        </Text>
       </View>
 
       <View style={styles.section}>

@@ -23,6 +23,7 @@ const BASE_ENV: Env = {
   OSRM_BASE_URL: 'https://router.project-osrm.org',
   // Never the real service: these tests must not send anything to a device.
   EXPO_PUSH_API_URL: 'https://push.invalid/send',
+  ANDROID_PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=zw.co.stylistscenter.app',
 };
 
 /**

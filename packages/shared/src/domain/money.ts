@@ -8,8 +8,8 @@
  */
 export type UsdCents = number;
 
-/** 1 SC Coin = $0.50. */
-export const COIN_USD_CENTS = 50;
+/** The current cash value of one SC Coin: $0.20. */
+export const COIN_USD_CENTS = 20;
 
 /** Coins released to the referring agent after a referred user's first completed booking. */
 export const REFERRAL_REWARD_COINS = 6;

@@ -37,7 +37,13 @@ export class WalletService {
         },
       }),
     ]);
-    const balance = await this.balance(userId);
+    // Paid referrals from older app versions can predate their corresponding
+    // ledger credit. Repair that one-way inconsistency before reporting the
+    // wallet so the balance and Commission table never disagree.
+    if (agent) {
+      await this.reconcileReferralCredits(userId, agent.id, rates.coinUsdCents);
+    }
+    const balance = await this.balance(userId, rates.coinUsdCents);
 
     return {
       coins: balance.coins,
@@ -214,15 +220,18 @@ export class WalletService {
    * not all exist yet at lock time.
    */
   async cashOut(userId: string): Promise<CashOutRequestResponse> {
+    const { coinUsdCents } = walletRates(this.config);
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
 
       const agg = await tx.walletTransaction.aggregate({
         where: { userId },
-        _sum: { coins: true, usdCents: true },
+        _sum: { coins: true },
       });
       const coins = agg._sum.coins ?? 0;
-      const usdCents = agg._sum.usdCents ?? 0;
+      // Coins are the durable balance. Their cash value is converted at the
+      // current server-configured rate rather than a historic reward rate.
+      const usdCents = coins * coinUsdCents;
 
       if (!canCashOut(usdCents)) {
         throw new BadRequestException(
@@ -239,11 +248,58 @@ export class WalletService {
   }
 
   /** The ledger is append-only (plan §6) — balance is always a live sum, never a stored counter. */
-  private async balance(userId: string): Promise<{ coins: number; usdCents: number }> {
+  private async balance(
+    userId: string,
+    coinUsdCents: number,
+  ): Promise<{ coins: number; usdCents: number }> {
     const agg = await this.prisma.walletTransaction.aggregate({
       where: { userId },
-      _sum: { coins: true, usdCents: true },
+      _sum: { coins: true },
     });
-    return { coins: agg._sum.coins ?? 0, usdCents: agg._sum.usdCents ?? 0 };
+    const coins = agg._sum.coins ?? 0;
+    return { coins, usdCents: coins * coinUsdCents };
+  }
+
+  /**
+   * Brings historic paid referrals into the append-only wallet ledger.
+   *
+   * Referral and ledger entries are written atomically today, but legacy rows
+   * may have a paid Commission entry without its matching wallet credit. The
+   * user-row lock makes this repair idempotent across concurrent wallet reads.
+   */
+  private async reconcileReferralCredits(
+    userId: string,
+    agentId: string,
+    coinUsdCents: number,
+  ): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+
+      const [paidReferrals, creditedRewards] = await Promise.all([
+        tx.referral.aggregate({
+          where: { agentId, status: 'paid' },
+          _sum: { coinsAwarded: true },
+        }),
+        tx.walletTransaction.aggregate({
+          where: { userId, type: 'referral_coin' },
+          _sum: { coins: true },
+        }),
+      ]);
+      const paidCoins = paidReferrals._sum.coinsAwarded ?? 0;
+      const creditedCoins = creditedRewards._sum.coins ?? 0;
+      const missingCoins = paidCoins - creditedCoins;
+
+      if (missingCoins <= 0) return;
+
+      await tx.walletTransaction.create({
+        data: {
+          userId,
+          type: 'referral_coin',
+          coins: missingCoins,
+          usdCents: missingCoins * coinUsdCents,
+          reference: 'Referral reward reconciliation',
+        },
+      });
+    });
   }
 }

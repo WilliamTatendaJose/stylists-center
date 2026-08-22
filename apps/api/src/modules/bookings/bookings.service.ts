@@ -315,8 +315,10 @@ export class BookingsService {
               data: {
                 userId: referral.agent.userId,
                 type: 'referral_coin',
-                coins: rates.referralRewardCoins,
-                usdCents: rates.referralRewardCoins * rates.coinUsdCents,
+                // The Commission table is the promise made when the invite
+                // was linked, so credit exactly that row's coin amount.
+                coins: referral.coinsAwarded,
+                usdCents: referral.coinsAwarded * rates.coinUsdCents,
                 reference: `First completed booking ${current.reference}`,
               },
             });

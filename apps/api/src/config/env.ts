@@ -51,7 +51,7 @@ export const envSchema = z
     // one of the merchant account's own login emails, not the customer's.
     PAYNOW_AUTH_EMAIL: z.email().optional(),
 
-    COIN_USD_CENTS: z.coerce.number().int().positive().default(50),
+    COIN_USD_CENTS: z.coerce.number().int().positive().default(20),
     /** Referral commission paid after a referred user's first completed booking. */
     REFERRAL_REWARD_COINS: z.coerce.number().int().positive().optional(),
     CASH_OUT_MIN_USD_CENTS: z.coerce.number().int().positive().default(500),
@@ -71,6 +71,23 @@ export const envSchema = z
     // risk R2); one env var is the entire migration since geo.service.ts
     // only ever calls whatever this points at.
     OSRM_BASE_URL: z.url().default('https://router.project-osrm.org'),
+
+    // Universal Links (iOS) / App Links (Android) for shared provider-profile
+    // links — see app-links.controller.ts. Neither ID below is a secret in
+    // the access-granting sense (both end up published, unauthenticated, in
+    // the .well-known files the OS itself fetches) — they're env vars anyway
+    // because that's this codebase's one convention for "external config the
+    // server needs at boot," not because they need to be hidden.
+    /** Apple Developer → Membership → Team ID. */
+    APPLE_TEAM_ID: z.string().min(1).optional(),
+    /** SHA-256 fingerprint of the Android app signing cert (Play Console → App signing), colon-separated hex. */
+    ANDROID_SHA256_CERT_FINGERPRINT: z.string().min(1).optional(),
+    /** Where /provider-share/:id redirects an iOS visitor who doesn't have the app installed. Unset until the app has an App Store listing. */
+    IOS_APP_STORE_URL: z.url().optional(),
+    /** Where /provider-share/:id redirects an Android visitor who doesn't have the app installed. */
+    ANDROID_PLAY_STORE_URL: z
+      .url()
+      .default('https://play.google.com/store/apps/details?id=zw.co.stylistscenter.app'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {

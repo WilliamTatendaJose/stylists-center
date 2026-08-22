@@ -5,7 +5,7 @@ import { walletRates } from './wallet-rates';
 
 describe('walletRates', () => {
   it('uses the shared defaults when no runtime configuration is available', () => {
-    expect(walletRates()).toEqual({ coinUsdCents: 50, referralRewardCoins: 6 });
+    expect(walletRates()).toEqual({ coinUsdCents: 20, referralRewardCoins: 6 });
   });
 
   it('uses backend-configured coin value and commission amount', () => {

@@ -23,10 +23,12 @@ const BASE_ENV: Env = {
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
   EXPO_PUSH_API_URL: 'https://push.invalid/send',
+  ANDROID_PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=zw.co.stylistscenter.app',
 };
 
 describe('WalletService', () => {
   let prisma: PrismaService;
+  let config: ConfigService<Env, true>;
   let wallet: WalletService;
   let cityId: string;
   let plainUserId: string;
@@ -34,7 +36,8 @@ describe('WalletService', () => {
   let agentId: string;
 
   beforeAll(async () => {
-    prisma = new PrismaService(new ConfigService<Env, true>(BASE_ENV));
+    config = new ConfigService<Env, true>(BASE_ENV);
+    prisma = new PrismaService(config);
     await prisma.onModuleInit();
 
     const city = await prisma.city.create({
@@ -81,14 +84,8 @@ describe('WalletService', () => {
     await prisma.referral.create({
       data: { agentId, referredName: 'Referred Salon', coinsAwarded: 6, status: 'paid' },
     });
-    await prisma.walletTransaction.create({
-      data: {
-        userId: agentUserId,
-        type: 'referral_coin',
-        coins: 6,
-        usdCents: 300,
-        reference: 'Referred Salon',
-      },
+    await prisma.referral.create({
+      data: { agentId, referredName: 'Second Referral', coinsAwarded: 6, status: 'paid' },
     });
     await prisma.walletTransaction.create({
       data: {
@@ -96,7 +93,7 @@ describe('WalletService', () => {
         type: 'referral_coin',
         coins: 6,
         usdCents: 300,
-        reference: 'Second Referral',
+        reference: 'Referred Salon',
       },
     });
   });
@@ -113,7 +110,7 @@ describe('WalletService', () => {
   });
 
   beforeEach(() => {
-    wallet = new WalletService(prisma);
+    wallet = new WalletService(prisma, config);
   });
 
   it('a plain (non-agent) user has an empty, non-cash-out-able wallet', async () => {
@@ -125,7 +122,7 @@ describe('WalletService', () => {
     expect(dto.referralCode).toBe('');
   });
 
-  it('sums the ledger for a verified agent and lists their referrals', async () => {
+  it('repairs a paid referral missing from the ledger and lists the commissions', async () => {
     const dto = await wallet.getWallet(agentUserId);
     expect(dto.coins).toBe(12);
     expect(dto.usdCents).toBe(600);
@@ -133,7 +130,7 @@ describe('WalletService', () => {
     expect(dto.canCashOut).toBe(true); // 600 > CASH_OUT_MIN_USD_CENTS (500)
 
     const referrals = await wallet.listReferrals(agentUserId);
-    expect(referrals).toHaveLength(1);
+    expect(referrals).toHaveLength(2);
     expect(referrals[0]?.referredName).toBe('Referred Salon');
   });
 
@@ -149,7 +146,7 @@ describe('WalletService', () => {
     const transactions = await prisma.walletTransaction.findMany({
       where: { userId: agentUserId },
     });
-    expect(transactions).toHaveLength(3); // the two referral credits plus this cash_out debit
+    expect(transactions).toHaveLength(3); // two referral credits, then this cash_out debit
   });
 
   it('cashOut refuses a balance at or below the minimum', async () => {

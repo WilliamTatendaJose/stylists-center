@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
+import { RequestMethod } from '@nestjs/common';
 import helmet from 'helmet';
 import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
@@ -15,8 +16,20 @@ async function bootstrap() {
 
   // Health checks stay unprefixed — infra probes (load balancer, container
   // orchestrator) expect a fixed /healthz path, not one that moves with the
-  // API version.
-  app.setGlobalPrefix('v1', { exclude: ['healthz', 'readyz'] });
+  // API version. The two .well-known files are unprefixed because the
+  // Apple/Google spec requires them at the domain root, full stop — they
+  // aren't found if they move. provider-share/:id rides along so a shared
+  // link's path is identical whether the OS opens the app directly or a
+  // browser falls through to this server (see app-links.controller.ts).
+  app.setGlobalPrefix('v1', {
+    exclude: [
+      'healthz',
+      'readyz',
+      '.well-known/apple-app-site-association',
+      '.well-known/assetlinks.json',
+      { path: 'provider-share/:id', method: RequestMethod.GET },
+    ],
+  });
 
   app.use(helmet());
   app.useStaticAssets(uploadDirectory(config), {

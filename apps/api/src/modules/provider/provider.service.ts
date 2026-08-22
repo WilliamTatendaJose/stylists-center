@@ -472,8 +472,10 @@ export class ProviderService {
               data: {
                 userId: referral.agent.userId,
                 type: 'referral_coin',
-                coins: rates.referralRewardCoins,
-                usdCents: rates.referralRewardCoins * rates.coinUsdCents,
+                // Keep the wallet credit aligned with the Commission row that
+                // was created when this invite was linked.
+                coins: referral.coinsAwarded,
+                usdCents: referral.coinsAwarded * rates.coinUsdCents,
                 reference: `First completed booking ${current.reference}`,
               },
             });

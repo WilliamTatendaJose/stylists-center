@@ -24,6 +24,7 @@ import { apiAssetUrl } from '../../src/api/client.js';
 import { useBookingDraftStore, usePendingPaymentStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { FullScreenImageViewer } from '../../src/components/FullScreenImageViewer.js';
+import { providerShareLink } from '../../src/sharing/providerShareLink.js';
 
 const styles = StyleSheet.create({
   reportedNote: { marginBottom: space.m },
@@ -132,9 +133,7 @@ export default function ProviderProfile() {
   const shareProfile = () => {
     if (!provider) return;
     void Share.share({
-      message:
-        `Check out ${provider.displayName} on Style Center!\n` +
-        `stylistscenter://provider-share/${provider.id}`,
+      message: `Check out ${provider.displayName} on Style Center!\n${providerShareLink(provider.id)}`,
     });
   };
 

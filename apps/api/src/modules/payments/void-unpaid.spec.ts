@@ -22,6 +22,7 @@ const BASE_ENV: Env = {
   CASH_OUT_MIN_USD_CENTS: 500,
   OSRM_BASE_URL: 'https://router.project-osrm.org',
   EXPO_PUSH_API_URL: 'https://push.invalid/send',
+  ANDROID_PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=zw.co.stylistscenter.app',
 };
 
 const uniquePhone = () => `+263779${String(Math.floor(Math.random() * 900000) + 100000)}`;

@@ -36,6 +36,7 @@ import {
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
+import { providerShareLink } from '../../src/sharing/providerShareLink.js';
 import {
   ProfileHero,
   ProfileIconTile,
@@ -256,9 +257,7 @@ export default function ProviderProfile() {
   const shareProfile = () => {
     if (!data) return;
     void Share.share({
-      message:
-        `Check out ${data.displayName} on Style Center!\n` +
-        `stylistscenter://provider-share/${data.id}`,
+      message: `Check out ${data.displayName} on Style Center!\n${providerShareLink(data.id)}`,
     });
   };
 

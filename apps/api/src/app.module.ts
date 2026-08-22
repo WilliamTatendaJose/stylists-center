@@ -6,6 +6,7 @@ import { validateEnv } from './config/env';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { HealthModule } from './modules/health/health.module';
+import { AppLinksModule } from './modules/app-links/app-links.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { GeoModule } from './modules/geo/geo.module';
@@ -50,6 +51,7 @@ import { AdminVerificationsModule } from './modules/admin-verifications/admin-ve
     PrismaModule,
     RedisModule,
     HealthModule,
+    AppLinksModule,
     AuditModule,
     AuthModule,
     GeoModule,
