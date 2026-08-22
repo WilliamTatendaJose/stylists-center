@@ -10,6 +10,8 @@ export interface PaymentCheckoutInput {
    * checkout URL.
    */
   phone?: string;
+  /** Prevent a phone-prompt failure from opening a hosted browser checkout. */
+  allowHostedCheckout?: boolean;
 }
 
 export interface PaymentIntentResult {

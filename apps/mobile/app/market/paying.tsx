@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { formatUsd } from '@sc/shared';
 import { space } from '@sc/tokens';
 import { Screen, Text, Button, Badge, Card, useTheme } from '@sc/ui';
@@ -26,7 +25,7 @@ interface PendingOrder {
   reference: string;
   providerName: string;
   totalUsdCents: number;
-  checkoutUrl?: string;
+  requiresHostedCheckout?: boolean;
 }
 
 function parseOrders(raw: string | undefined): PendingOrder[] {
@@ -54,10 +53,12 @@ function parseOrders(raw: string | undefined): PendingOrder[] {
 function OrderStatusRow({
   order,
   enabled,
+  blocked,
   onStatus,
 }: {
   order: PendingOrder;
   enabled: boolean;
+  blocked: boolean;
   onStatus: (orderId: string, status: string) => void;
 }) {
   const { data } = useOrderPaymentStatus(order.id, enabled);
@@ -80,7 +81,7 @@ function OrderStatusRow({
           </Text>
         </View>
         <Badge
-          label={paid ? 'Paid' : settled ? 'Not paid' : 'Waiting'}
+          label={paid ? 'Paid' : blocked || settled ? 'Not paid' : 'Waiting'}
           tone={paid ? 'accent100' : 'neutral'}
         />
       </View>
@@ -89,10 +90,8 @@ function OrderStatusRow({
 }
 
 /**
- * Shown after Paynow pushes an EcoCash prompt for a market checkout. The cart
- * used to jump straight to "Reserved for you" the moment the browser closed,
- * which claimed the order was paid for when nothing had been confirmed. This
- * waits for each order's real result and only then calls it done.
+ * Shown after the in-app marketplace checkout pushes an EcoCash prompt. It
+ * waits for each order's real result and only then calls the checkout done.
  */
 export default function MarketPaying() {
   const { colors } = useTheme();
@@ -100,7 +99,7 @@ export default function MarketPaying() {
   const orders = useMemo(() => parseOrders(params.orders), [params.orders]);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [timedOut, setTimedOut] = useState(false);
-  const openedCheckouts = useRef(new Set<string>());
+  const hostedFallback = orders.some((order) => order.requiresHostedCheckout);
 
   const onStatus = useCallback((orderId: string, status: string) => {
     setStatuses((prev) => (prev[orderId] === status ? prev : { ...prev, [orderId]: status }));
@@ -109,18 +108,6 @@ export default function MarketPaying() {
   useEffect(() => {
     if (orders.length === 0) router.replace('/market/orders');
   }, [orders.length]);
-
-  useEffect(() => {
-    const openBrowsers = async () => {
-      for (const order of orders) {
-        if (order.checkoutUrl && !openedCheckouts.current.has(order.id)) {
-          openedCheckouts.current.add(order.id);
-          await WebBrowser.openBrowserAsync(order.checkoutUrl);
-        }
-      }
-    };
-    void openBrowsers();
-  }, [orders]);
 
   useEffect(() => {
     const timer = setTimeout(() => setTimedOut(true), POLL_TIMEOUT_MS);
@@ -133,7 +120,7 @@ export default function MarketPaying() {
 
   if (orders.length === 0) return null;
 
-  const done = timedOut || allSettled;
+  const done = hostedFallback || timedOut || allSettled;
   const goOrders = () => router.replace('/market/orders');
   // Not auto-forwarded on success — see the note in book/paying.tsx: the
   // confirmed result is the thing worth showing, so it takes a deliberate tap.
@@ -168,28 +155,38 @@ export default function MarketPaying() {
           <ActivityIndicator size="large" color={colors.accent} style={styles.spinner} />
         )}
         <Text variant="h3" style={styles.title}>
-          {allPaid
-            ? 'Payment confirmed'
-            : allSettled
-              ? 'Some payments did not go through'
-              : timedOut
-                ? 'Still waiting on EcoCash'
-                : 'Check your phone'}
+          {hostedFallback
+            ? 'In-app payment unavailable'
+            : allPaid
+              ? 'Payment confirmed'
+              : allSettled
+                ? 'Some payments did not go through'
+                : timedOut
+                  ? 'Still waiting for payment'
+                  : 'Check your phone'}
         </Text>
         <Text variant="body" color="neutral700" style={styles.intro}>
-          {allPaid
-            ? `Paynow confirmed ${orders.length > 1 ? 'these payments' : 'this payment'}. Bring the order number when you collect.`
-            : allSettled
-              ? "Anything marked 'Not paid' is still reserved but unpaid — you can settle it on collection, or cancel it from My orders."
-              : timedOut
-                ? "This is taking longer than expected. Your orders are on file — we'll update them as soon as Paynow confirms."
-                : (params.instructions ??
-                  'Approve the EcoCash prompt on your phone to pay for these orders.')}
+          {hostedFallback
+            ? 'Your order is reserved but unpaid because this number could not receive an in-app EcoCash prompt. Open My orders to cancel it, then try again with another EcoCash number.'
+            : allPaid
+              ? `Your in-app ${orders.length > 1 ? 'payments were' : 'payment was'} confirmed. Bring the order number when you collect.`
+              : allSettled
+                ? "Anything marked 'Not paid' is still reserved but unpaid — you can settle it on collection, or cancel it from My orders."
+                : timedOut
+                  ? "This is taking longer than expected. Your orders are on file — we'll update them as soon as the payment is confirmed."
+                  : (params.instructions ??
+                    'Approve the EcoCash prompt on your phone to pay for these orders.')}
         </Text>
       </View>
 
       {orders.map((order) => (
-        <OrderStatusRow key={order.id} order={order} enabled={!timedOut} onStatus={onStatus} />
+        <OrderStatusRow
+          key={order.id}
+          order={order}
+          enabled={!timedOut && !hostedFallback}
+          blocked={Boolean(order.requiresHostedCheckout)}
+          onStatus={onStatus}
+        />
       ))}
     </Screen>
   );

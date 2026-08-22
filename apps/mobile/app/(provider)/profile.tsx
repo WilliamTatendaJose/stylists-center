@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Switch, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { Clock3, Gift, LogOut, MapPin, Moon, Sun, UserRound } from 'lucide-react-native';
 import {
   deriveInitials,
@@ -281,7 +281,7 @@ export default function ProviderProfile() {
               ...(result.checkoutUrl ? { checkoutUrl: result.checkoutUrl } : {}),
             });
             setSubSheetOpen(false);
-            router.push('/(provider)/subscription-paying');
+            router.push('/(provider)/subscription-paying' as Href);
           } else {
             setSubSheetOpen(false);
             setSubError(null);

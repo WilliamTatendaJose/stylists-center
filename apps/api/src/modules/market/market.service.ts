@@ -217,6 +217,7 @@ export class MarketService {
           amountUsdCents: totalUsdCents,
           description: `Market order ${order.reference}`,
           phone: paymentPhone,
+          allowHostedCheckout: false,
         });
         await tx.payment.create({
           data: {

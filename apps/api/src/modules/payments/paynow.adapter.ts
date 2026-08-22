@@ -69,6 +69,10 @@ export class PaynowAdapter implements PaymentGatewayPort {
         // though nothing was wrong. Only a refusal of the *method* (an
         // unregistered line, a test-mode number) earns the hosted page.
         if (error instanceof PaynowDeclinedError) throw error;
+        if (input.allowHostedCheckout === false) {
+          if (error instanceof Error) throw error;
+          throw new ServiceUnavailableException('The in-app EcoCash prompt could not be started');
+        }
         this.logger.warn(
           `Paynow mobile checkout for ${input.reference} failed, falling back to hosted checkout: ${
             error instanceof Error ? error.message : String(error)
@@ -161,7 +165,7 @@ export class PaynowAdapter implements PaymentGatewayPort {
     return {
       externalRef: reply.pollurl,
       status: 'pending',
-      ...(reply.instructions ? { instructions: reply.instructions } : {}),
+      instructions: reply.instructions ?? 'Approve the EcoCash prompt on your phone.',
       provider: 'paynow',
     };
   }

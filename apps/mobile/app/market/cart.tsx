@@ -171,29 +171,26 @@ export default function Cart() {
 
     clear();
 
-    // Paynow is in play — an EcoCash prompt per order, its hosted page, or a
-    // mix if one buyer's number takes the prompt and another falls back. All
-    // of them wait on the real result rather than calling the checkout done
-    // the moment the request returned.
+    // In-app EcoCash starts one phone prompt per order. Every order waits on
+    // its real result rather than treating a successful API request as paid.
     const awaitingPayment = succeeded.some(
       ({ created }) => created.instructions ?? created.checkoutUrl,
     );
     if (awaitingPayment) {
-      // Pass checkout URLs to the paying screen so it can open them
-      // while showing the waiting/polling UI.
-      const ordersWithCheckout = succeeded.map(({ group, created }) => ({
+      // The waiting screen stays inside Style Center and polls each order.
+      const pendingOrders = succeeded.map(({ group, created }) => ({
         id: created.id,
         reference: created.reference,
         providerName: group.providerName,
         totalUsdCents: created.totalUsdCents,
-        ...(created.checkoutUrl ? { checkoutUrl: created.checkoutUrl } : {}),
+        requiresHostedCheckout: Boolean(created.checkoutUrl),
       }));
       const firstInstructions = succeeded.find(({ created }) => created.instructions)?.created
         .instructions;
       router.replace({
         pathname: '/market/paying',
         params: {
-          orders: JSON.stringify(ordersWithCheckout),
+          orders: JSON.stringify(pendingOrders),
           ...(firstInstructions ? { instructions: firstInstructions } : {}),
         },
       });
@@ -226,7 +223,7 @@ export default function Cart() {
                 : groups.length > 1
                   ? `Pay ${formatUsd(total)} — ${String(groups.length)} orders`
                   : paymentMethod === 'ecocash'
-                    ? `Pay ${formatUsd(total)} with EcoCash`
+                    ? `Pay ${formatUsd(total)} in app`
                     : `Reserve — pay ${formatUsd(total)} on collection`
             }
             block
@@ -326,8 +323,8 @@ export default function Cart() {
         </Text>
         <View style={styles.radioGap}>
           <RadioCard
-            title="Paynow — pay securely"
-            description="Choose EcoCash, card, or another supported Paynow method. We verify the result with Paynow."
+            title="Pay in app"
+            description="Approve an EcoCash prompt on your phone. Stay in Style Center while we confirm the payment."
             dot
             selected={paymentMethod === 'ecocash'}
             onPress={() => {
