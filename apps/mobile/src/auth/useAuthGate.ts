@@ -3,6 +3,7 @@ import { router, useSegments } from 'expo-router';
 import { useAuthStore } from '../state/useAuthStore.js';
 import { useSessionStore } from '../state/useSessionStore.js';
 import { usePendingProviderStore } from '../state/usePendingProviderStore.js';
+import { useSignupIntentStore } from '../state/useSignupIntentStore.js';
 import { useMe } from '../api/hooks/useMe.js';
 
 /**
@@ -27,6 +28,8 @@ export function useAuthGate(): boolean {
   const { data: me } = useMe();
   const pendingProviderId = usePendingProviderStore((s) => s.pendingProviderId);
   const clearPendingProviderId = usePendingProviderStore((s) => s.clearPendingProviderId);
+  const pendingAccountType = useSignupIntentStore((s) => s.pendingAccountType);
+  const clearPendingAccountType = useSignupIntentStore((s) => s.clearPendingAccountType);
 
   useEffect(() => {
     void hydrate();
@@ -87,6 +90,24 @@ export function useAuthGate(): boolean {
       return;
     }
 
+    // The sign-up screen's "I'm a stylist" choice, captured before the
+    // account even existed to check against. Only forces anything when it's
+    // 'provider' and no profile has been created yet — cleared immediately
+    // (not on the profile actually being created) so backing out of
+    // provider-setup lands as a normal client rather than re-trapping them
+    // here on every cold start. 'client', or 'provider' with a profile
+    // already made (e.g. signing in again on a new device), has nothing to
+    // do here and just clears the stray flag.
+    if (pendingAccountType === 'provider' && !me.hasProviderProfile) {
+      if (segments[0] !== 'provider-setup') {
+        clearPendingAccountType();
+        router.replace('/provider-setup');
+        return;
+      }
+    } else if (pendingAccountType) {
+      clearPendingAccountType();
+    }
+
     const inProviderGroup = segments[0] === '(provider)';
     const inClientGroup = segments[0] === '(tabs)';
     const wantsProvider = me.activeRole === 'provider' && me.hasProviderProfile;
@@ -113,6 +134,8 @@ export function useAuthGate(): boolean {
     me,
     pendingProviderId,
     clearPendingProviderId,
+    pendingAccountType,
+    clearPendingAccountType,
   ]);
 
   return isHydrated && isSessionHydrated;

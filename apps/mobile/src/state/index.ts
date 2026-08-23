@@ -9,3 +9,4 @@ export * from './useTripStore.js';
 export * from './useCartStore.js';
 export * from './useInviteStore.js';
 export * from './usePendingProviderStore.js';
+export * from './useSignupIntentStore.js';

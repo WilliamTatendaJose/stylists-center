@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Check, Circle } from 'lucide-react-native';
-import { Button, Text, useTheme } from '@sc/ui';
+import { Button, RadioCard, Text, useTheme } from '@sc/ui';
 import { space } from '@sc/tokens';
 import {
   AuthDivider,
@@ -18,9 +18,13 @@ import {
   firebaseErrorMessage,
   signInWithGoogle,
 } from '../../src/auth/firebaseAuth.js';
+import { useSignupIntentStore } from '../../src/state/index.js';
+
+type AccountType = 'client' | 'provider';
 
 const styles = StyleSheet.create({
   form: { gap: space.l },
+  accountTypeRow: { gap: space.s },
   passwordHint: { gap: space.s, marginTop: -space.s },
   rule: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   ruleIcon: { width: 16, alignItems: 'center' },
@@ -48,6 +52,8 @@ function PasswordRule({ label, passed }: { label: string; passed: boolean }) {
 }
 
 export default function SignUp() {
+  const setPendingAccountType = useSignupIntentStore((s) => s.setPendingAccountType);
+  const [accountType, setAccountType] = useState<AccountType>('client');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -70,6 +76,7 @@ export default function SignUp() {
     if (!canSubmit || loading) return;
     setLoading(true);
     setError(null);
+    setPendingAccountType(accountType);
     try {
       const result = await createAccount(email.trim(), password, name.trim());
       if (!result.needsEmailVerification) {
@@ -91,6 +98,7 @@ export default function SignUp() {
     if (loading) return;
     setLoading(true);
     setError(null);
+    setPendingAccountType(accountType);
     try {
       const result = await signInWithGoogle();
       if (!result) return;
@@ -113,6 +121,22 @@ export default function SignUp() {
       showHero={false}
     >
       <View style={styles.form}>
+        <View style={styles.accountTypeRow}>
+          <RadioCard
+            title="I'm a client"
+            description="Book stylists and shop supplies."
+            dot
+            selected={accountType === 'client'}
+            onPress={() => setAccountType('client')}
+          />
+          <RadioCard
+            title="I'm a stylist"
+            description="List your services and get booked."
+            dot
+            selected={accountType === 'provider'}
+            onPress={() => setAccountType('provider')}
+          />
+        </View>
         <AuthGoogleButton onPress={() => void submitGoogle()} disabled={loading} />
         <AuthDivider />
         <AuthField
