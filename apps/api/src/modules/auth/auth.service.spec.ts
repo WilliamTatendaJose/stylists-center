@@ -117,6 +117,41 @@ describe('AuthService Firebase exchange', () => {
     expect(await prisma.user.findUnique({ where: { email: TEST_EMAIL } })).toBeNull();
   });
 
+  it('re-links an address whose Firebase account was replaced after an interrupted sign-up', async () => {
+    // The exchange that created this row committed; only its response was lost
+    // to a timeout, so the app retried and Firebase minted a second account for
+    // the same address. Refusing the new uid used to lock the address out for
+    // good — by any route, with no way back short of editing the database.
+    await auth.exchangeFirebaseToken('firebase-id-token');
+    const original = await prisma.user.findUnique({ where: { email: TEST_EMAIL } });
+
+    verifyIdToken.mockResolvedValueOnce({ ...verifiedIdentity, uid: 'firebase-auth-spec-uid-2' });
+    const tokens = await auth.exchangeFirebaseToken('replacement-id-token');
+    expect(tokens.accessToken).toEqual(expect.any(String));
+
+    // The same account, now answering to the new uid — not a duplicate.
+    const relinked = await prisma.user.findUnique({ where: { email: TEST_EMAIL } });
+    expect(relinked?.id).toBe(original?.id);
+    expect(relinked?.firebaseUid).toBe('firebase-auth-spec-uid-2');
+  });
+
+  it('refuses to adopt an existing row for an unverified address', async () => {
+    // The re-link above is only safe because Firebase vouched for the mailbox.
+    // Without that, adopting someone else's row is account takeover.
+    await auth.exchangeFirebaseToken('firebase-id-token');
+    verifyIdToken.mockResolvedValueOnce({
+      ...verifiedIdentity,
+      uid: 'firebase-auth-spec-uid-3',
+      emailVerified: false,
+    });
+    await expect(auth.exchangeFirebaseToken('unverified-replacement')).rejects.toThrow(
+      'Verify your email',
+    );
+    expect((await prisma.user.findUnique({ where: { email: TEST_EMAIL } }))?.firebaseUid).toBe(
+      verifiedIdentity.uid,
+    );
+  });
+
   it('rotates refresh tokens and detects replay', async () => {
     const first = await auth.exchangeFirebaseToken('firebase-id-token');
     const second = await auth.refresh(first.refreshToken);

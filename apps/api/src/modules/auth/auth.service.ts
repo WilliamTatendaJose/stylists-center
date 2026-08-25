@@ -74,8 +74,28 @@ export class AuthService {
 
     const byEmail = await this.prisma.user.findUnique({ where: { email } });
     if (byEmail) {
-      if (byEmail.firebaseUid && byEmail.firebaseUid !== identity.uid) {
-        throw new UnauthorizedException('This email is linked to another sign-in');
+      /**
+       * A row for this address already exists under a *different* Firebase uid.
+       * That is the ordinary wreckage of an interrupted sign-up, not an attack:
+       * the exchange that created this row can have committed and then lost its
+       * response to the cold-start timeout, leaving the app convinced sign-up
+       * failed. Retrying mints a second Firebase account for the same address,
+       * and from then on every uid disagrees with the stored one.
+       *
+       * Refusing outright made that state permanent — the address could never
+       * sign in again, by any route, with no way back short of database
+       * surgery. It was also protecting nothing: exchangeFirebaseToken rejects
+       * an unverified email before this runs, so reaching here means Firebase
+       * has confirmed this caller controls the mailbox. That is the same proof
+       * the original row was established with, so honouring the new uid grants
+       * no access that re-verifying the address would not already give.
+       *
+       * Re-assert it rather than trusting the caller's guarantee at a distance:
+       * this is the check that decides whether one Firebase account may adopt
+       * another's row, and it should be readable as safe on its own.
+       */
+      if (!identity.emailVerified) {
+        throw new UnauthorizedException('Verify your email before continuing');
       }
       return this.prisma.user.update({
         where: { id: byEmail.id },
