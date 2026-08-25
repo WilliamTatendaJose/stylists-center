@@ -53,6 +53,7 @@ function PasswordRule({ label, passed }: { label: string; passed: boolean }) {
 
 export default function SignUp() {
   const setPendingAccountType = useSignupIntentStore((s) => s.setPendingAccountType);
+  const clearPendingAccountType = useSignupIntentStore((s) => s.clearPendingAccountType);
   const [accountType, setAccountType] = useState<AccountType>('client');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -98,16 +99,28 @@ export default function SignUp() {
     if (loading) return;
     setLoading(true);
     setError(null);
+    // Recorded before the Google sheet opens, not after: signInWithGoogle
+    // establishes the session itself, and useAuthGate can act on it the moment
+    // it does — setting the intent afterwards would race that redirect.
     setPendingAccountType(accountType);
     try {
       const result = await signInWithGoogle();
-      if (!result) return;
+      // Dismissing the sheet has to take the intent back with it. The store is
+      // persisted (it has to survive the app close that email verification
+      // involves), so a 'provider' left behind by an abandoned sign-up outlives
+      // the screen and would capture whoever signs in on this device next,
+      // routing a client into provider-setup for a choice they never made.
+      if (!result) {
+        clearPendingAccountType();
+        return;
+      }
       if (result.needsEmailVerification) {
         router.replace('/(auth)/verify-email');
         return;
       }
       router.replace('/(tabs)');
     } catch (reason) {
+      clearPendingAccountType();
       setError(firebaseErrorMessage(reason));
     } finally {
       setLoading(false);

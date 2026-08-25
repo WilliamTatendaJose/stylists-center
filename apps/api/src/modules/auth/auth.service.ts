@@ -83,7 +83,7 @@ export class AuthService {
       });
     }
 
-    const city = await this.prisma.city.findFirstOrThrow();
+    const city = await this.resolveDefaultCity();
     return this.prisma.user.create({
       data: {
         firebaseUid: identity.uid,
@@ -93,6 +93,39 @@ export class AuthService {
         avatarImageUrl: identity.photoUrl,
         cityId: city.id,
       },
+    });
+  }
+
+  /**
+   * `User.cityId` is required, so a sign-up cannot complete without some city
+   * to point at. Cities are only ever inserted by `prisma/seed.ts` — the full
+   * demo seed that RAILWAY.md explicitly tells you *not* to run in production
+   * — while `seed:admin`, the one production is told to run, creates none. On
+   * a correctly-provisioned deployment the table is therefore empty, and
+   * `findFirstOrThrow` turned that into a Prisma error escaping as a 500 on
+   * every genuinely-new account: sign-up worked for nobody, with a message
+   * that pointed at nothing.
+   *
+   * Seeding a placeholder is the recoverable failure mode. An admin can rename
+   * it and fix the centroid from the catalog console; the alternative strands
+   * every new user until someone thinks to seed a table by hand.
+   */
+  private async resolveDefaultCity(): Promise<{ id: string }> {
+    const existing = await this.prisma.city.findFirst({ select: { id: true } });
+    if (existing) return existing;
+
+    return this.prisma.city.create({
+      data: {
+        name: 'Harare',
+        timezone: 'Africa/Harare',
+        centroidLat: -17.8252,
+        centroidLng: 31.0335,
+        bboxWest: 30.9,
+        bboxSouth: -17.95,
+        bboxEast: 31.2,
+        bboxNorth: -17.7,
+      },
+      select: { id: true },
     });
   }
 
