@@ -88,6 +88,14 @@ const UNIVERSAL_LINK_HOST = (() => {
 const config: ExpoConfig = {
   name: 'Style Center',
   slug: 'style-center',
+  // The EAS account that owns the builds. Stated rather than inferred because
+  // the credentials used here own more than one account, and eas-cli refuses
+  // to guess which of them to bill. Both this and the project id below must
+  // agree with the account being built under, and — the part that is easy to
+  // get wrong — they are read again on the build server, which does not see
+  // whatever env vars the local CLI was given. Overriding either one for a
+  // build therefore means setting it in eas.json's `env`, not just the shell.
+  owner: process.env.EAS_PROJECT_OWNER ?? 'liam_jose',
   scheme: 'stylistscenter',
   version: '0.1.0',
   orientation: 'portrait',
@@ -200,7 +208,9 @@ const config: ExpoConfig = {
   extra: {
     router: {},
     eas: {
-      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? '563fa89a-e790-487f-8d78-0815ed9588c1',
+      // @liam_jose/style-center — the account the shipped builds are actually
+      // made from, and the one holding the keystore they are signed with.
+      projectId: process.env.EXPO_PUBLIC_EAS_PROJECT_ID ?? '8afff97c-d6e3-4ecf-a62d-4ea0d3c98e1f',
     },
   },
   experiments: {
