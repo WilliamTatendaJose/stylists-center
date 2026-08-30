@@ -11,17 +11,21 @@ import { hashPassword } from '../admin-auth/password';
 
 /**
  * Every admin console feature shares one flat access level — there's no role
- * model here, just accounts. `disabled` (not delete) so AuditLog.adminActor
- * stays resolvable for a revoked staffer's past actions, and bumping
- * tokenVersion on disable invalidates their live session immediately (same
- * lever User.tokenVersion uses for a ban).
+ * model here, just accounts. Revocation uses `disabled`, while deletion uses
+ * `deletedAt`, so AuditLog.adminActor stays resolvable for past actions.
+ * Bumping tokenVersion on disable/delete invalidates live sessions immediately
+ * (same lever User.tokenVersion uses for a ban).
  */
 @Injectable()
 export class AdminStaffService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(): Promise<AdminStaffRowDto[]> {
-    const admins = await this.prisma.adminUser.findMany({ orderBy: { createdAt: 'asc' } });
+  async list(includeDeleted = false): Promise<AdminStaffRowDto[]> {
+    const where = includeDeleted ? {} : { deletedAt: null };
+    const admins = await this.prisma.adminUser.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+    });
     return admins.map(toRow);
   }
 
@@ -45,12 +49,16 @@ export class AdminStaffService {
     input: UpdateStaffInput,
     actingAdminId: string,
   ): Promise<AdminStaffRowDto> {
+    const target = await this.prisma.adminUser.findUniqueOrThrow({ where: { id } });
+    if (target.deletedAt) {
+      throw new BadRequestException('Deleted staff accounts cannot be edited');
+    }
+
     if (input.disabled === true) {
       if (id === actingAdminId) {
         throw new ForbiddenException('You cannot disable your own account');
       }
       const enabledCount = await this.prisma.adminUser.count({ where: { disabled: false } });
-      const target = await this.prisma.adminUser.findUniqueOrThrow({ where: { id } });
       if (!target.disabled && enabledCount <= 1) {
         throw new BadRequestException('At least one staff account must stay enabled');
       }
@@ -73,6 +81,39 @@ export class AdminStaffService {
     });
     return toRow(admin);
   }
+
+  async remove(id: string, actingAdminId: string): Promise<AdminStaffRowDto> {
+    if (id === actingAdminId) {
+      throw new ForbiddenException('You cannot delete your own account');
+    }
+
+    const target = await this.prisma.adminUser.findUniqueOrThrow({ where: { id } });
+    if (target.deletedAt) return toRow(target);
+
+    if (!target.disabled) {
+      const enabledCount = await this.prisma.adminUser.count({ where: { disabled: false } });
+      if (enabledCount <= 1) {
+        throw new BadRequestException('At least one staff account must stay enabled');
+      }
+    }
+
+    const admin = await this.prisma.$transaction(async (tx) => {
+      await tx.adminRefreshToken.updateMany({
+        where: { adminUserId: id },
+        data: { revoked: true },
+      });
+      return tx.adminUser.update({
+        where: { id },
+        data: {
+          disabled: true,
+          deletedAt: new Date(),
+          tokenVersion: { increment: 1 },
+        },
+      });
+    });
+
+    return toRow(admin);
+  }
 }
 
 function toRow(admin: {
@@ -80,6 +121,7 @@ function toRow(admin: {
   email: string;
   displayName: string;
   disabled: boolean;
+  deletedAt: Date | null;
   createdAt: Date;
 }): AdminStaffRowDto {
   return {
@@ -88,5 +130,6 @@ function toRow(admin: {
     displayName: admin.displayName,
     disabled: admin.disabled,
     createdAt: admin.createdAt.toISOString(),
+    deletedAt: admin.deletedAt?.toISOString() ?? null,
   };
 }

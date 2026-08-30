@@ -25,8 +25,8 @@ export function AuditLogPage() {
         </p>
       ) : null}
 
-      <div className="overflow-hidden rounded-2xl border border-neutral-200 dark:border-dark-border">
-        <table className="w-full text-left text-sm">
+      <div className="max-w-full overflow-x-auto rounded-2xl border border-neutral-200 dark:border-dark-border">
+        <table className="w-full min-w-[640px] text-left text-sm">
           <thead className="bg-neutral-50 text-neutral-600 dark:bg-white/5 dark:text-dark-muted">
             <tr>
               <th className="px-5 py-3 font-medium">Actor</th>

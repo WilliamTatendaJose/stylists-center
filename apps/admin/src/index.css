@@ -41,3 +41,7 @@
 body {
   @apply bg-white text-neutral-900 dark:bg-dark-bg dark:text-dark-text;
 }
+
+#root {
+  min-height: 100vh;
+}

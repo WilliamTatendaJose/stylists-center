@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   CreditCard,
@@ -6,6 +7,7 @@ import {
   LayoutDashboard,
   ListChecks,
   LogOut,
+  Menu,
   MapPinned,
   Search,
   ShieldBan,
@@ -15,6 +17,7 @@ import {
   UserCog,
   UsersRound,
   Wallet,
+  X,
 } from 'lucide-react';
 import { useAuthStore } from '../state/authStore';
 import { useLogout } from '../api/auth';
@@ -41,15 +44,59 @@ const NAV_ITEMS = [
 export function Layout() {
   const admin = useAuthStore((s) => s.admin);
   const logout = useLogout();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setMobileNavOpen(false);
+    };
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [mobileNavOpen]);
 
   return (
-    <div className="flex min-h-screen bg-neutral-50 dark:bg-dark-bg">
-      <aside className="flex w-64 shrink-0 flex-col border-r border-neutral-200 bg-white dark:border-dark-border dark:bg-dark-surface">
-        <div className="px-5 py-5">
-          <BrandLogo className="w-full rounded-lg" />
-          <p className="mt-2 px-1 text-xs font-semibold tracking-[0.18em] text-neutral-500 uppercase dark:text-dark-muted">
-            Admin console
-          </p>
+    <div className="flex min-h-screen overflow-x-hidden bg-neutral-50 dark:bg-dark-bg">
+      {mobileNavOpen ? (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => {
+            setMobileNavOpen(false);
+          }}
+        />
+      ) : null}
+
+      <aside
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[calc(100vw-3rem)] -translate-x-full flex-col overflow-y-auto border-r border-neutral-200 bg-white transition-transform lg:static lg:z-auto lg:w-64 lg:max-w-none lg:translate-x-0 lg:overflow-visible dark:border-dark-border dark:bg-dark-surface ${
+          mobileNavOpen ? 'translate-x-0' : ''
+        }`}
+      >
+        <div className="flex items-start justify-between px-4 py-4 sm:px-5 sm:py-5">
+          <div className="min-w-0">
+            <BrandLogo className="w-full rounded-lg" />
+            <p className="mt-2 px-1 text-xs font-semibold tracking-[0.18em] text-neutral-500 uppercase dark:text-dark-muted">
+              Admin console
+            </p>
+          </div>
+          <button
+            type="button"
+            aria-label="Close navigation"
+            className="ml-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-600 hover:bg-neutral-100 lg:hidden dark:text-dark-muted dark:hover:bg-white/10"
+            onClick={() => {
+              setMobileNavOpen(false);
+            }}
+          >
+            <X size={20} />
+          </button>
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
@@ -64,6 +111,9 @@ export function Layout() {
                     : 'text-neutral-700 hover:bg-neutral-100 dark:text-dark-muted dark:hover:bg-white/5'
                 }`
               }
+              onClick={() => {
+                setMobileNavOpen(false);
+              }}
             >
               <Icon size={18} strokeWidth={2} />
               {label}
@@ -96,10 +146,24 @@ export function Layout() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-end border-b border-neutral-200 bg-white px-8 py-3 dark:border-dark-border dark:bg-dark-surface">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-neutral-200 bg-white px-4 py-2.5 sm:px-6 lg:justify-end lg:px-8 lg:py-3 dark:border-dark-border dark:bg-dark-surface">
+          <div className="flex items-center gap-3 lg:hidden">
+            <button
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={mobileNavOpen}
+              className="flex h-9 w-9 items-center justify-center rounded-full text-neutral-700 hover:bg-neutral-100 dark:text-dark-muted dark:hover:bg-white/10"
+              onClick={() => {
+                setMobileNavOpen(true);
+              }}
+            >
+              <Menu size={20} />
+            </button>
+            <BrandLogo className="h-8 w-auto rounded-md" />
+          </div>
           <ThemeToggle />
         </header>
-        <main className="flex-1 px-8 py-8">
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
           <Outlet />
         </main>
       </div>

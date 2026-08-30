@@ -351,6 +351,7 @@ export const adminStaffRowSchema = z.object({
   displayName: z.string(),
   disabled: z.boolean(),
   createdAt: z.iso.datetime(),
+  deletedAt: z.iso.datetime().nullable(),
 });
 export type AdminStaffRowDto = z.infer<typeof adminStaffRowSchema>;
 

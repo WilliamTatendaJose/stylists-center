@@ -45,7 +45,12 @@ export class AdminAuthService {
     // bad password one hands an attacker a working email-enumeration oracle.
     // A disabled account fails the same way, for the same reason — it
     // shouldn't reveal that the email belongs to a (revoked) staff account.
-    if (!admin || admin.disabled || !(await verifyPassword(password, admin.passwordHash))) {
+    if (
+      !admin ||
+      admin.disabled ||
+      admin.deletedAt ||
+      !(await verifyPassword(password, admin.passwordHash))
+    ) {
       throw new UnauthorizedException('Incorrect email or password');
     }
 
@@ -129,7 +134,7 @@ export class AdminAuthService {
     if (!admin) {
       throw new UnauthorizedException('Session no longer valid');
     }
-    if (admin.tokenVersion !== payload.ver || admin.disabled) {
+    if (admin.tokenVersion !== payload.ver || admin.disabled || admin.deletedAt) {
       throw new UnauthorizedException('Session no longer valid');
     }
 

@@ -129,14 +129,14 @@ function CategoryRow({ category }: { category: AdminCategoryRowDto }) {
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-      <div className="flex min-w-0 items-center gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
         <input
           value={name}
           onChange={(e) => {
             setName(e.target.value);
           }}
-          className="w-48 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:border-accent focus:outline-none dark:border-dark-border dark:bg-white/5 dark:text-dark-text"
+          className="w-full rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm text-neutral-900 focus:border-accent focus:outline-none sm:w-48 dark:border-dark-border dark:bg-white/5 dark:text-dark-text"
         />
         {category.parentName ? (
           <span className="text-sm text-neutral-500 dark:text-dark-muted">
@@ -242,7 +242,7 @@ function CityForm({
 
   return (
     <div className="mb-4 rounded-xl bg-neutral-50 p-4 dark:bg-white/5">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <TextField
           label="Name"
           value={form.name}

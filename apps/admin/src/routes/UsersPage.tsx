@@ -312,7 +312,7 @@ export function UsersPage() {
 
       <Card className="mb-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="min-w-64 flex-1">
+          <div className="min-w-0 w-full flex-1 sm:min-w-64">
             <TextField
               label="Search name, email, phone or Firebase UID"
               value={draftQuery}
@@ -332,10 +332,11 @@ export function UsersPage() {
               setQuery(draftQuery.trim());
               setOffset(0);
             }}
+            className="w-full sm:w-auto"
           >
             Search
           </Button>
-          <label className="mb-2 flex items-center gap-2 text-sm text-neutral-700 dark:text-dark-muted">
+          <label className="mb-2 flex w-full items-center gap-2 text-sm text-neutral-700 sm:w-auto dark:text-dark-muted">
             <input
               type="checkbox"
               checked={includeDeleted}

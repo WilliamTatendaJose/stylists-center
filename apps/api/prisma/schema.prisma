@@ -732,6 +732,8 @@ model AdminUser {
   /// stays resolvable for their past actions. Checked at login and on every
   /// access-token verification, so revocation takes effect immediately.
   disabled     Boolean  @default(false)
+  /// Deleted accounts stay in the database so historical audit actors remain resolvable.
+  deletedAt    DateTime?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -739,6 +741,7 @@ model AdminUser {
   auditLogEntries AuditLog[]
 
   @@index([email])
+  @@index([deletedAt])
 }
 
 /// Mirrors RefreshToken's rotation-with-reuse-detection scheme exactly, kept

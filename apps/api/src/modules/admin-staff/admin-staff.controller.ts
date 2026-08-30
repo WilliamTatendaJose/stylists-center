@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { CurrentAdmin } from '../admin-auth/current-admin.decorator';
 import { AdminStaffService } from './admin-staff.service';
@@ -10,8 +20,8 @@ export class AdminStaffController {
   constructor(private readonly adminStaff: AdminStaffService) {}
 
   @Get()
-  list() {
-    return this.adminStaff.list();
+  list(@Query('includeDeleted') includeDeleted?: string) {
+    return this.adminStaff.list(includeDeleted === 'true');
   }
 
   @Post()
@@ -26,5 +36,10 @@ export class AdminStaffController {
     @CurrentAdmin() admin: { id: string },
   ) {
     return this.adminStaff.update(id, dto, admin.id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string, @CurrentAdmin() admin: { id: string }) {
+    return this.adminStaff.remove(id, admin.id);
   }
 }
