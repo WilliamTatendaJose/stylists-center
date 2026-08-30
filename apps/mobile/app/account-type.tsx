@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
 import { Button, RadioCard, Screen, ScreenHeader, Text } from '@sc/ui';
 import { color, space } from '@sc/tokens';
 import type { ActiveRole } from '@sc/shared';
@@ -39,6 +40,11 @@ export default function AccountType() {
               selectAccountType.mutate(
                 { accountType },
                 {
+                  onSuccess: () => {
+                    router.replace(
+                      accountType === 'provider' ? '/provider-setup' : '/complete-profile',
+                    );
+                  },
                   onError: (cause) =>
                     setError(describeError(cause, "Couldn't save your account type.")),
                 },

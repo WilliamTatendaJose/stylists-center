@@ -88,6 +88,10 @@ const UNIVERSAL_LINK_HOST = (() => {
 const config: ExpoConfig = {
   name: 'Style Center',
   slug: 'style-center',
+  runtimeVersion: { policy: 'appVersion' },
+  updates: {
+    url: 'https://u.expo.dev/8afff97c-d6e3-4ecf-a62d-4ea0d3c98e1f',
+  },
   // The EAS account that owns the builds. Stated rather than inferred because
   // the credentials used here own more than one account, and eas-cli refuses
   // to guess which of them to bill. Both this and the project id below must
@@ -164,6 +168,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    'expo-updates',
     [
       'expo-splash-screen',
       {

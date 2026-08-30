@@ -72,9 +72,6 @@ export function useAuthGate(): boolean {
     }
 
     if (!me.onboardingComplete) {
-      // Allow the selector to remain reachable until setup is committed, so a
-      // user can change their mind before entering either onboarding form.
-      if (onAccountType) return;
       const destination =
         me.selectedAccountType === 'provider' ? '/provider-setup' : '/complete-profile';
       if (segments[0] !== destination.slice(1)) router.replace(destination);
