@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   PROVIDER_PAGE_SIZE,
+  type Me,
   type CreateProviderProfileInput,
   type CreateProviderProfileResponse,
   type CreateProviderServiceInput,
@@ -17,6 +18,7 @@ import {
   type UpdateProviderServiceInput,
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
+import { confirmAfterTimeout } from '../confirmAfterTimeout.js';
 import { ME_QUERY_KEY } from './useMe.js';
 import { useSessionStore } from '../../state/index.js';
 
@@ -141,10 +143,44 @@ export function useCreateProviderProfile() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: CreateProviderProfileInput) =>
-      apiFetch<CreateProviderProfileResponse>('/v1/providers', { method: 'POST', body: input }),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    mutationFn: async (input: CreateProviderProfileInput) => {
+      try {
+        await apiFetch<CreateProviderProfileResponse>('/v1/providers', {
+          method: 'POST',
+          body: input,
+        });
+        return { kind: 'created' as const, displayName: input.displayName };
+      } catch (error) {
+        const me = await confirmAfterTimeout(
+          error,
+          () => apiFetch<Me>('/v1/me'),
+          (current) => current.hasProviderProfile && current.onboardingComplete,
+        );
+        return { kind: 'confirmed-after-timeout' as const, me };
+      }
+    },
+    onSuccess: (outcome) => {
+      if (outcome.kind === 'confirmed-after-timeout') {
+        queryClient.setQueryData(ME_QUERY_KEY, outcome.me);
+      } else {
+        // A successful POST is authoritative. Seed the destination state
+        // synchronously so the auth gate cannot bounce navigation back to
+        // onboarding while a background /me refresh is still in flight.
+        queryClient.setQueryData<Me>(ME_QUERY_KEY, (current) =>
+          current
+            ? {
+                ...current,
+                displayName: outcome.displayName,
+                activeRole: 'provider',
+                selectedAccountType: 'provider',
+                onboardingComplete: true,
+                hasProviderProfile: true,
+                profileComplete: true,
+              }
+            : current,
+        );
+      }
+      void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY, refetchType: 'none' });
     },
   });
 }

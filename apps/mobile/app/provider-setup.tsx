@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router, type Href } from 'expo-router';
-import { MapPin } from 'lucide-react-native';
+import { CheckCircle2 } from 'lucide-react-native';
 import { color, space } from '@sc/tokens';
-import { Screen, ScreenHeader, Text, Chip, TextField, RangeInput, Button, useTheme } from '@sc/ui';
+import {
+  Screen,
+  ScreenHeader,
+  Text,
+  Chip,
+  TextField,
+  RangeInput,
+  Button,
+  Pressable,
+  useTheme,
+} from '@sc/ui';
 import { useCategories } from '../src/api/hooks/useCategories.js';
 import { useCreateProviderProfile } from '../src/api/hooks/useProviders.js';
 import { useMe } from '../src/api/hooks/useMe.js';
@@ -11,6 +21,7 @@ import { useClaimReferral } from '../src/api/hooks/useWallet.js';
 import { useInviteStore, useLocationPickerStore, useSessionStore } from '../src/state/index.js';
 import { describeError } from '../src/api/errorMessage.js';
 import { useBack } from '../src/navigation/useBack.js';
+import { useAddressAutocomplete } from '../src/location/useAddressAutocomplete.js';
 
 const MIN_YEARS = 0;
 const MAX_YEARS = 30;
@@ -38,6 +49,21 @@ const styles = StyleSheet.create({
     gap: space.s,
     marginTop: space.s,
   },
+  addressResults: {
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: space.s,
+  },
+  addressResult: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: space.l,
+    paddingVertical: space.s,
+    borderBottomWidth: 1,
+  },
+  addressResultLast: { borderBottomWidth: 0 },
+  addressHint: { marginTop: space.s },
   sliderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -55,7 +81,7 @@ const styles = StyleSheet.create({
  * and selfie verification is a separate, later step this does not cover.
  */
 export default function ProviderSetup() {
-  const { data: me } = useMe();
+  const { data: me, refetch: refetchMe } = useMe();
   const onBack = useBack((me?.onboardingComplete ? '/(tabs)' : '/account-type') as Href);
   const { colors } = useTheme();
   const location = useSessionStore((s) => s.location);
@@ -71,6 +97,8 @@ export default function ProviderSetup() {
   const [displayName, setDisplayName] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [areaName, setAreaName] = useState(areaLabel ?? '');
+  const [addressQuery, setAddressQuery] = useState('');
+  const [locationAttached, setLocationAttached] = useState(Boolean(areaLabel));
   const [lat, setLat] = useState(location.lat);
   const [lng, setLng] = useState(location.lng);
   const [workingHoursLabel, setWorkingHoursLabel] = useState('');
@@ -81,14 +109,18 @@ export default function ProviderSetup() {
   const [referralCode, setReferralCode] = useState(pendingReferralCode ?? '');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
+  const [checkingSetup, setCheckingSetup] = useState(false);
+  const [setupConfirmed, setSetupConfirmed] = useState(false);
 
   const [profileCreated, setProfileCreated] = useState(false);
+  const addressLookup = useAddressAutocomplete(addressQuery, location);
 
   const canSubmit =
     (profileCreated ||
       (!!categoryId &&
         displayName.trim().length >= 2 &&
         areaName.trim().length >= 2 &&
+        locationAttached &&
         workingHoursLabel.trim().length >= 2 &&
         serviceName.trim().length >= 2)) &&
     !createProfile.isPending &&
@@ -102,6 +134,8 @@ export default function ProviderSetup() {
     setLat(pickedLocation.lat);
     setLng(pickedLocation.lng);
     if (pickedLocation.areaName) setAreaName(pickedLocation.areaName);
+    setAddressQuery('');
+    setLocationAttached(true);
     clearPickedLocation();
   }, [pickedLocation, clearPickedLocation]);
 
@@ -109,6 +143,16 @@ export default function ProviderSetup() {
     if (displayName || !me?.displayName || me.displayName === me.email) return;
     setDisplayName(me.displayName);
   }, [displayName, me?.displayName, me?.email]);
+
+  // Recovers a page that was committed while an earlier app version was
+  // waiting on a lost response. It turns the otherwise-dead onboarding form
+  // into a confirmed success state as soon as /me knows the page exists.
+  useEffect(() => {
+    if (!me?.hasProviderProfile || !me.onboardingComplete) return;
+    setProfileCreated(true);
+    setSetupConfirmed(true);
+    setSubmitError(null);
+  }, [me?.hasProviderProfile, me?.onboardingComplete]);
 
   // Creating the page now commits provider role and onboarding in the same
   // API transaction, so this navigation never races a second role mutation.
@@ -166,8 +210,12 @@ export default function ProviderSetup() {
         ],
       },
       {
-        onSuccess: () => {
+        onSuccess: (outcome) => {
           setProfileCreated(true);
+          if (outcome.kind === 'confirmed-after-timeout') {
+            setSetupConfirmed(true);
+            return;
+          }
           finishAfterProfile();
         },
         onError: (error) => {
@@ -175,6 +223,26 @@ export default function ProviderSetup() {
         },
       },
     );
+  };
+
+  const checkSetupStatus = async () => {
+    if (checkingSetup) return;
+    setCheckingSetup(true);
+    setSubmitError(null);
+    try {
+      const result = await refetchMe();
+      if (result.error) throw result.error;
+      if (result.data?.hasProviderProfile && result.data.onboardingComplete) {
+        setProfileCreated(true);
+        setSetupConfirmed(true);
+        return;
+      }
+      setSubmitError('No stylist page was found yet. You can submit the form again.');
+    } catch (error) {
+      setSubmitError(describeError(error, "Couldn't check your stylist page. Try again."));
+    } finally {
+      setCheckingSetup(false);
+    }
   };
 
   // A rejected referral never blocks the already-created stylist page.
@@ -188,7 +256,7 @@ export default function ProviderSetup() {
     : claimReferral.isPending
       ? 'Applying referral…'
       : profileCreated
-        ? 'Continue'
+        ? 'Continue to Jobs'
         : 'Create my page';
 
   return (
@@ -196,6 +264,11 @@ export default function ProviderSetup() {
       header={<ScreenHeader title="Set up your stylist page" onBack={onBack} />}
       footer={
         <View style={styles.footer}>
+          {setupConfirmed ? (
+            <Text variant="bodyStrong" color="accent700" accessibilityLiveRegion="polite">
+              Your stylist page is set up. Continue to open your Jobs screen.
+            </Text>
+          ) : null}
           {submitError ? (
             <Text
               variant="meta"
@@ -224,6 +297,15 @@ export default function ProviderSetup() {
             arrow
             disabled={!canSubmit}
           />
+          {!profileCreated ? (
+            <Button
+              label={checkingSetup ? 'Checking setup…' : 'Already submitted? Check setup status'}
+              onPress={() => void checkSetupStatus()}
+              block
+              variant="secondary"
+              disabled={checkingSetup || createProfile.isPending}
+            />
+          ) : null}
           {profileCreated && referralError ? (
             <Button label="Skip and continue" onPress={skipReferral} block variant="ghost" />
           ) : null}
@@ -265,29 +347,91 @@ export default function ProviderSetup() {
       <View style={styles.section}>
         <View style={styles.field}>
           <TextField
-            label="Area"
+            label="Business address"
             value={areaName}
-            onChangeText={setAreaName}
-            placeholder="e.g. Avondale"
+            onChangeText={(value) => {
+              setAreaName(value);
+              setAddressQuery(value);
+              setLocationAttached(false);
+            }}
+            placeholder="Start typing your street or area"
           />
+          {addressLookup.status === 'searching' ? (
+            <View style={styles.locationRow}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text variant="meta" color="neutral700">
+                Finding matching addresses…
+              </Text>
+            </View>
+          ) : null}
+          {addressLookup.suggestions.length > 0 ? (
+            <View
+              style={[
+                styles.addressResults,
+                { borderColor: colors.divider, backgroundColor: colors.bg },
+              ]}
+            >
+              {addressLookup.suggestions.map((suggestion, index) => (
+                <Pressable
+                  key={suggestion.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use ${suggestion.label}`}
+                  onPress={() => {
+                    setAreaName(suggestion.label);
+                    setLat(suggestion.lat);
+                    setLng(suggestion.lng);
+                    setAddressQuery('');
+                    setLocationAttached(true);
+                  }}
+                  style={[
+                    styles.addressResult,
+                    { borderColor: colors.divider },
+                    index === addressLookup.suggestions.length - 1
+                      ? styles.addressResultLast
+                      : null,
+                  ]}
+                >
+                  <Text variant="body" numberOfLines={2}>
+                    {suggestion.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {!areaName.trim() ? (
+            <Text variant="metaSmall" color="neutral600" style={styles.addressHint}>
+              Select a matching address and its map coordinates will be attached automatically.
+            </Text>
+          ) : null}
         </View>
-        <Button
-          label="Choose on map"
-          variant="secondary"
-          block
-          onPress={() => {
-            router.push({
-              pathname: '/map/pick-location',
-              params: { lat: String(lat), lng: String(lng) },
-            });
-          }}
-        />
-        <View style={styles.locationRow}>
-          <MapPin size={16} color={colors.neutral700} />
-          <Text variant="metaSmall" color="neutral600">
-            {lat.toFixed(5)}, {lng.toFixed(5)}
-          </Text>
-        </View>
+        {locationAttached ? (
+          <View style={styles.locationRow}>
+            <CheckCircle2 size={17} color={colors.accent} />
+            <Text variant="metaSmall" color="neutral600">
+              Address attached · {lat.toFixed(5)}, {lng.toFixed(5)}
+            </Text>
+          </View>
+        ) : null}
+        {addressLookup.status === 'not-found' || addressLookup.status === 'unavailable' ? (
+          <>
+            <Text variant="meta" color="accent700" style={styles.sectionLabelSpace}>
+              {addressLookup.status === 'not-found'
+                ? "We couldn't find that address. Choose it manually on the map."
+                : 'Address search is unavailable. Choose the location manually on the map.'}
+            </Text>
+            <Button
+              label="Choose on map"
+              variant="secondary"
+              block
+              onPress={() => {
+                router.push({
+                  pathname: '/map/pick-location',
+                  params: { lat: String(lat), lng: String(lng) },
+                });
+              }}
+            />
+          </>
+        ) : null}
       </View>
 
       <View style={[styles.section, styles.field]}>

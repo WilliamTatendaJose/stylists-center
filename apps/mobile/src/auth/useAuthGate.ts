@@ -74,7 +74,16 @@ export function useAuthGate(): boolean {
     if (!me.onboardingComplete) {
       const destination =
         me.selectedAccountType === 'provider' ? '/provider-setup' : '/complete-profile';
-      if (segments[0] !== destination.slice(1)) router.replace(destination);
+      const onProviderSetupChild =
+        me.selectedAccountType === 'provider' &&
+        String(segments[0]) === 'map' &&
+        String(segments[1]) === 'pick-location';
+      const onExpectedSetup = segments[0] === destination.slice(1);
+      // Account type remains reachable through the onboarding back button;
+      // the explicit selector success callback moves forward after saving.
+      if (!onAccountType && !onProviderSetupChild && !onExpectedSetup) {
+        router.replace(destination);
+      }
       return;
     }
 
