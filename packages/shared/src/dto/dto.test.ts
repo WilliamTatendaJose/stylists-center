@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createMatchRequestSchema } from './matching.js';
 import { createBookingSchema } from './bookings.js';
-import { firebaseExchangeSchema } from './auth.js';
+import { firebaseExchangeSchema, meSchema, selectAccountTypeSchema } from './auth.js';
 import { conversationSchema } from './chat.js';
 import { imageUrlSchema } from './uploads.js';
 import { paySubscriptionSchema } from './subscription.js';
@@ -135,6 +135,26 @@ describe('auth schemas', () => {
       firebaseExchangeSchema.safeParse({ idToken: 'firebase-token', accountType: 'admin' }).success,
     ).toBe(false);
     expect(firebaseExchangeSchema.safeParse({ idToken: '' }).success).toBe(false);
+  });
+
+  it('validates the post-auth account selection and onboarding state', () => {
+    expect(selectAccountTypeSchema.safeParse({ accountType: 'provider' }).success).toBe(true);
+    expect(selectAccountTypeSchema.safeParse({ accountType: 'admin' }).success).toBe(false);
+    expect(
+      meSchema.safeParse({
+        id: PROVIDER_ID,
+        email: 'new@example.com',
+        phone: null,
+        displayName: 'New User',
+        avatarImageUrl: null,
+        activeRole: 'client',
+        selectedAccountType: null,
+        onboardingComplete: false,
+        hasProviderProfile: false,
+        verificationStatus: 'unverified',
+        profileComplete: true,
+      }).success,
+    ).toBe(true);
   });
 });
 

@@ -12,7 +12,7 @@ export type ActiveRole = z.infer<typeof activeRoleSchema>;
 
 export const firebaseExchangeSchema = z.object({
   idToken: z.string().min(1),
-  /** Present only when authentication started from the create-account screen. */
+  /** @deprecated Accepted temporarily for older installed builds; selection now happens after exchange. */
   accountType: activeRoleSchema.optional(),
 });
 export type FirebaseExchangeInput = z.infer<typeof firebaseExchangeSchema>;
@@ -33,6 +33,11 @@ export const setActiveRoleSchema = z.object({
 });
 export type SetActiveRoleInput = z.infer<typeof setActiveRoleSchema>;
 
+export const selectAccountTypeSchema = z.object({
+  accountType: activeRoleSchema,
+});
+export type SelectAccountTypeInput = z.infer<typeof selectAccountTypeSchema>;
+
 export const meSchema = z.object({
   id: z.uuid(),
   email: z.email().nullable(),
@@ -40,6 +45,8 @@ export const meSchema = z.object({
   displayName: z.string(),
   avatarImageUrl: imageUrlSchema.nullable(),
   activeRole: activeRoleSchema,
+  selectedAccountType: activeRoleSchema.nullable(),
+  onboardingComplete: z.boolean(),
   hasProviderProfile: z.boolean(),
   verificationStatus: z.enum(['unverified', 'pending', 'verified']),
   /** False until `displayName` has been changed away from its sign-up placeholder (the phone number itself). */

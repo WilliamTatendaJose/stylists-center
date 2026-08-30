@@ -11,7 +11,6 @@ import {
   refreshVerificationAndContinue,
   resendVerification,
 } from '../../src/auth/firebaseAuth.js';
-import { useSignupIntentStore } from '../../src/state/index.js';
 
 const styles = StyleSheet.create({
   panel: {
@@ -38,7 +37,6 @@ const styles = StyleSheet.create({
 export default function VerifyEmail() {
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ email?: string }>();
-  const pendingAccountType = useSignupIntentStore((s) => s.pendingAccountType);
   const email = String(params.email ?? currentFirebaseEmail() ?? 'your email address');
   const [resent, setResent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -57,7 +55,7 @@ export default function VerifyEmail() {
     setLoading(true);
     setError(null);
     try {
-      const verified = await refreshVerificationAndContinue(pendingAccountType ?? undefined);
+      const verified = await refreshVerificationAndContinue();
       if (!verified) {
         setError('Your email is not verified yet. Open the latest link, then try again.');
         return;

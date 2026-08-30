@@ -17,10 +17,13 @@ const identity = {
   phoneNumber: null,
 };
 
-function buildAuth(oldFirebaseStatus: 'active' | 'disabled' | 'missing') {
+function buildAuth(
+  oldFirebaseStatus: 'active' | 'disabled' | 'missing',
+  oldFirebaseUid: string | null = 'old-firebase-uid',
+) {
   const oldUser = {
     id: 'old-app-user',
-    firebaseUid: 'old-firebase-uid',
+    firebaseUid: oldFirebaseUid,
     email: identity.email,
     disabledAt: null,
     deletedAt: null,
@@ -87,5 +90,15 @@ describe('AuthService orphaned Firebase identity reconciliation', () => {
     );
     expect(tombstone).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('archives an unlinked legacy row instead of inheriting its old role', async () => {
+    const { auth, create, tombstone } = buildAuth('active', null);
+
+    await expect(auth.exchangeFirebaseToken('id-token')).resolves.toMatchObject({
+      accessToken: 'app-access-token',
+    });
+    expect(tombstone).toHaveBeenCalledWith('old-app-user', true);
+    expect(create).toHaveBeenCalled();
   });
 });

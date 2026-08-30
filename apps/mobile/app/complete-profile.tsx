@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { color, space } from '@sc/tokens';
 import { Screen, ScreenHeader, Text, TextField, Button } from '@sc/ui';
@@ -26,6 +26,11 @@ export default function CompleteProfile() {
   const updateProfile = useUpdateProfile();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (name || !me?.displayName || me.displayName === me.email) return;
+    setName(me.displayName);
+  }, [me?.displayName, me?.email, name]);
 
   const canSubmit = name.trim().length >= 2 && !updateProfile.isPending;
 

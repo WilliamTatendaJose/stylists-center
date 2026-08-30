@@ -19,6 +19,10 @@ export interface FirebaseIdentity {
 }
 
 export type FirebaseAccountStatus = 'active' | 'disabled' | 'missing';
+export interface FirebaseAccountMatch {
+  uid: string;
+  status: Exclude<FirebaseAccountStatus, 'missing'>;
+}
 
 /** Verifies Firebase credentials at the API boundary; it never stores passwords. */
 @Injectable()
@@ -115,6 +119,42 @@ export class FirebaseIdentityService {
       if ('uid' in missing && missing.uid) statuses.set(missing.uid, 'missing');
     }
     return statuses;
+  }
+
+  async getAccountsByEmails(emails: string[]): Promise<Map<string, FirebaseAccountMatch>> {
+    const normalized = [...new Set(emails.map((email) => email.trim().toLowerCase()))];
+    const matches = new Map<string, FirebaseAccountMatch>();
+    for (let index = 0; index < normalized.length; index += 100) {
+      const chunk = normalized.slice(index, index + 100);
+      const result = await this.requireManagementAuth().getUsers(chunk.map((email) => ({ email })));
+      for (const user of result.users) {
+        if (!user.email) continue;
+        matches.set(user.email.toLowerCase(), {
+          uid: user.uid,
+          status: user.disabled ? 'disabled' : 'active',
+        });
+      }
+    }
+    return matches;
+  }
+
+  /** Resolves legacy rows whose Firebase UID was never persisted, without treating email as login identity. */
+  async resolveAccount(
+    uid: string | null,
+    email: string | null,
+  ): Promise<FirebaseAccountMatch | null> {
+    if (uid) {
+      const status = await this.getAccountStatus(uid);
+      if (status !== 'missing') return { uid, status };
+    }
+    if (!email) return null;
+    try {
+      const user = await this.requireManagementAuth().getUserByEmail(email.trim().toLowerCase());
+      return { uid: user.uid, status: user.disabled ? 'disabled' : 'active' };
+    } catch (error) {
+      if (firebaseErrorCode(error) === 'auth/user-not-found') return null;
+      throw error;
+    }
   }
 
   async createAccount(input: {

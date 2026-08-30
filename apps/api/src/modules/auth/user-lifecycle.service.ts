@@ -30,7 +30,10 @@ export class UserLifecycleService {
         },
       },
     });
-    if (user.deletedAt) return { firebaseUid: user.firebaseUid };
+    if (user.deletedAt) {
+      if (releaseFirebaseUid && user.firebaseUid) await this.releaseFirebaseUid(userId);
+      return { firebaseUid: user.firebaseUid };
+    }
 
     const provider = user.providerProfile;
     const imageUrls = [
@@ -77,6 +80,8 @@ export class UserLifecycleService {
           displayName: `Deleted user ${userId.slice(0, 8)}`,
           avatarImageUrl: null,
           activeRole: 'client',
+          selectedAccountType: null,
+          onboardingCompletedAt: null,
           verificationStatus: 'unverified',
           verificationIdDocumentUrl: null,
           verificationSelfieImageUrl: null,

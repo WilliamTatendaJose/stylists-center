@@ -243,25 +243,40 @@ export class ProvidersService {
       throw new BadRequestException('You already have a stylist page');
     }
 
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
     // Single-city M1 build (plan §5) — there is nowhere else to assign one from yet.
     const city = await this.prisma.city.findFirstOrThrow();
 
-    const profile = await this.prisma.providerProfile.create({
-      data: {
-        userId,
-        displayName: user.displayName,
-        tint: deriveTint(user.displayName),
-        initials: deriveInitials(user.displayName),
-        categoryId: input.categoryId,
-        areaName: input.areaName,
-        latitude: input.lat,
-        longitude: input.lng,
-        cityId: city.id,
-        yearsExperience: input.yearsExperience,
-        workingHoursLabel: input.workingHoursLabel,
-        services: { create: input.services },
-      },
+    const profile = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.providerProfile.create({
+        data: {
+          userId,
+          displayName: input.displayName,
+          tint: deriveTint(input.displayName),
+          initials: deriveInitials(input.displayName),
+          categoryId: input.categoryId,
+          areaName: input.areaName,
+          latitude: input.lat,
+          longitude: input.lng,
+          cityId: city.id,
+          yearsExperience: input.yearsExperience,
+          workingHoursLabel: input.workingHoursLabel,
+          services: { create: input.services },
+        },
+      });
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          displayName: input.displayName,
+          selectedAccountType: 'provider',
+          activeRole: 'provider',
+          onboardingCompletedAt: new Date(),
+        },
+      });
+      await tx.referral.updateMany({
+        where: { referredUserId: userId },
+        data: { referredName: input.displayName },
+      });
+      return created;
     });
 
     return { id: profile.id };

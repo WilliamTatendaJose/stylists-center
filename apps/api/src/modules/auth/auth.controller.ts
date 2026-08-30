@@ -23,6 +23,7 @@ import {
   SetActiveRoleDto,
   UpdateProfileDto,
   RegisterPushTokenDto,
+  SelectAccountTypeDto,
   VerificationSubmissionDto,
 } from './dto';
 
@@ -52,6 +53,12 @@ export class MeController {
   @Get()
   me(@CurrentUser() user: { id: string }) {
     return this.auth.me(user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('account-type')
+  selectAccountType(@CurrentUser() user: { id: string }, @Body() dto: SelectAccountTypeDto) {
+    return this.auth.selectAccountType(user.id, dto.accountType);
   }
 
   @UseGuards(JwtAuthGuard)

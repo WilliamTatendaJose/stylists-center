@@ -49,37 +49,23 @@ export class AuthService {
     private readonly userLifecycle: UserLifecycleService,
   ) {}
 
-  async exchangeFirebaseToken(idToken: string, accountType?: ActiveRole): Promise<AuthTokens> {
+  async exchangeFirebaseToken(
+    idToken: string,
+    // Accepted by the DTO while older installed builds are upgraded. Account
+    // type is now selected explicitly after authentication and never trusted
+    // as part of credential exchange.
+    _legacyAccountType?: ActiveRole,
+  ): Promise<AuthTokens> {
+    void _legacyAccountType;
     const identity = await this.firebaseIdentity.verifyIdToken(idToken);
     if (!identity.email || !identity.emailVerified) {
       throw new UnauthorizedException('Verify your email before continuing');
     }
 
-    let user = await this.findOrCreateFirebaseUser(identity);
+    const user = await this.findOrCreateFirebaseUser(identity);
     const ban = await this.trust.findActiveBan(user.id);
     if (ban) {
       throw new ForbiddenException(`Your account has been removed: ${ban.reason}`);
-    }
-
-    // The create-account screen is shared by password and Google auth. Carry
-    // its selection through the exchange so Google cannot silently inherit
-    // User.activeRole's database default (client), and so choosing client on
-    // an existing dual-role account is respected too. A brand-new stylist
-    // cannot be activated until provider setup creates their page; the mobile
-    // gate uses the same accountType intent to take them there first.
-    if (accountType === 'client' && user.activeRole !== 'client') {
-      user = await this.prisma.user.update({
-        where: { id: user.id },
-        data: { activeRole: 'client' },
-      });
-    } else if (accountType === 'provider' && user.activeRole !== 'provider') {
-      const profile = await this.prisma.providerProfile.findUnique({ where: { userId: user.id } });
-      if (profile) {
-        user = await this.prisma.user.update({
-          where: { id: user.id },
-          data: { activeRole: 'provider' },
-        });
-      }
     }
 
     return this.issueTokens(user.id, user.tokenVersion);
@@ -118,9 +104,11 @@ export class AuthService {
           );
         }
       } else {
-        throw new ConflictException(
-          'An account already uses this email. Ask support to reconcile it before signing up.',
-        );
+        // Legacy app rows were created before Firebase UIDs were persisted.
+        // A verified Firebase identity must start clean instead of inheriting
+        // that row's role and skipping onboarding. Tombstoning also releases
+        // the unique email before the new row is inserted.
+        await this.userLifecycle.tombstone(byEmail.id, true);
       }
     }
 
@@ -261,6 +249,8 @@ export class AuthService {
       displayName: user.displayName,
       avatarImageUrl: user.avatarImageUrl,
       activeRole: user.activeRole,
+      selectedAccountType: user.selectedAccountType,
+      onboardingComplete: user.onboardingCompletedAt !== null,
       hasProviderProfile: !!user.providerProfile,
       verificationStatus: user.verificationStatus,
       profileComplete: isProfileComplete(user.displayName, user.email ?? user.phone ?? ''),
@@ -269,13 +259,20 @@ export class AuthService {
 
   /** `PATCH /v1/me` — replaces the sign-up placeholder `displayName` with a real one. */
   async updateProfile(userId: string, input: UpdateProfileInput): Promise<Me> {
-    const provider = await this.prisma.providerProfile.findUnique({ where: { userId } });
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { providerProfile: true },
+    });
+    const provider = user.providerProfile;
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
         data: {
           displayName: input.displayName,
           ...(input.avatarImageUrl !== undefined ? { avatarImageUrl: input.avatarImageUrl } : {}),
+          ...(user.selectedAccountType === 'client' && !user.onboardingCompletedAt
+            ? { onboardingCompletedAt: new Date(), activeRole: 'client' }
+            : {}),
         },
       }),
       ...(provider
@@ -295,6 +292,29 @@ export class AuthService {
         data: { referredName: input.displayName },
       }),
     ]);
+    return this.me(userId);
+  }
+
+  /** Persists the post-authentication onboarding fork; it is never a local-only preference. */
+  async selectAccountType(userId: string, accountType: ActiveRole): Promise<Me> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { providerProfile: true },
+    });
+    if (user.onboardingCompletedAt) {
+      throw new BadRequestException('Account setup is already complete; use the role switcher');
+    }
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        selectedAccountType: accountType,
+        activeRole: accountType === 'provider' && user.providerProfile ? 'provider' : 'client',
+        ...(accountType === 'provider' && user.providerProfile
+          ? { onboardingCompletedAt: new Date() }
+          : {}),
+      },
+    });
     return this.me(userId);
   }
 

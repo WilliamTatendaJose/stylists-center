@@ -6,7 +6,6 @@ import {
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
-  updateProfile,
   type User,
 } from 'firebase/auth';
 import {
@@ -14,7 +13,7 @@ import {
   isCancelledResponse,
   isSuccessResponse,
 } from '@react-native-google-signin/google-signin';
-import type { ActiveRole, AuthTokens } from '@sc/shared';
+import type { AuthTokens } from '@sc/shared';
 import { apiFetch } from '../api/client.js';
 import { TimeoutError } from '../api/errors.js';
 import { useAuthStore } from '../state/useAuthStore.js';
@@ -24,7 +23,7 @@ export interface AuthResult {
   needsEmailVerification: boolean;
 }
 
-async function exchange(user: User, accountType?: ActiveRole): Promise<AuthResult> {
+async function exchange(user: User): Promise<AuthResult> {
   if (!user.emailVerified) return { needsEmailVerification: true };
   const idToken = await user.getIdToken(true);
 
@@ -48,20 +47,20 @@ async function exchange(user: User, accountType?: ActiveRole): Promise<AuthResul
    * the session this very call is what creates. Retrying is what's left, and
    * it is safe for precisely the reason the helper's own doc requires.
    */
-  const tokens = await postExchange(idToken, accountType).catch((error: unknown) => {
+  const tokens = await postExchange(idToken).catch((error: unknown) => {
     if (!(error instanceof TimeoutError)) throw error;
-    return postExchange(idToken, accountType);
+    return postExchange(idToken);
   });
 
   await useAuthStore.getState().setSession(tokens);
   return { needsEmailVerification: false };
 }
 
-function postExchange(idToken: string, accountType?: ActiveRole): Promise<AuthTokens> {
+function postExchange(idToken: string): Promise<AuthTokens> {
   return apiFetch<AuthTokens>('/v1/auth/firebase/exchange', {
     method: 'POST',
     auth: false,
-    body: { idToken, ...(accountType ? { accountType } : {}) },
+    body: { idToken },
   });
 }
 
@@ -70,16 +69,10 @@ export async function signInWithEmail(email: string, password: string): Promise<
   return exchange(credential.user);
 }
 
-export async function createAccount(
-  email: string,
-  password: string,
-  displayName: string,
-  accountType: ActiveRole,
-): Promise<AuthResult> {
+export async function createAccount(email: string, password: string): Promise<AuthResult> {
   const trimmedEmail = email.trim();
   try {
     const credential = await createUserWithEmailAndPassword(firebaseAuth, trimmedEmail, password);
-    await updateProfile(credential.user, { displayName: displayName.trim() });
     await sendEmailVerification(credential.user);
     return { needsEmailVerification: true };
   } catch (error) {
@@ -95,13 +88,13 @@ export async function createAccount(
       error.code === 'auth/email-already-in-use'
     ) {
       const credential = await signInWithEmailAndPassword(firebaseAuth, trimmedEmail, password);
-      return exchange(credential.user, accountType);
+      return exchange(credential.user);
     }
     throw error;
   }
 }
 
-export async function signInWithGoogle(accountType?: ActiveRole): Promise<AuthResult | null> {
+export async function signInWithGoogle(): Promise<AuthResult | null> {
   const webClientId = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim();
   if (!webClientId) {
     throw new Error('Google sign-in needs EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID from Firebase Console.');
@@ -117,7 +110,7 @@ export async function signInWithGoogle(accountType?: ActiveRole): Promise<AuthRe
 
   const firebaseCredential = GoogleAuthProvider.credential(response.data.idToken);
   const credential = await signInWithCredential(firebaseAuth, firebaseCredential);
-  return exchange(credential.user, accountType);
+  return exchange(credential.user);
 }
 
 export async function sendPasswordReset(email: string): Promise<void> {
@@ -143,12 +136,12 @@ export async function resendVerification(): Promise<void> {
   await sendEmailVerification(user);
 }
 
-export async function refreshVerificationAndContinue(accountType?: ActiveRole): Promise<boolean> {
+export async function refreshVerificationAndContinue(): Promise<boolean> {
   const user = firebaseAuth.currentUser;
   if (!user) throw new Error('Sign in again to continue.');
   await reload(user);
   if (!user.emailVerified) return false;
-  await exchange(user, accountType);
+  await exchange(user);
   return true;
 }
 

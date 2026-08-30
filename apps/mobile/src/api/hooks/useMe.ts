@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ActiveRole, Me, UpdateProfileInput } from '@sc/shared';
+import type { ActiveRole, Me, SelectAccountTypeInput, UpdateProfileInput } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { confirmAfterTimeout } from '../confirmAfterTimeout.js';
 import { useAuthStore } from '../../state/useAuthStore.js';
@@ -67,6 +67,16 @@ export function useSetActiveRole() {
       // which is what made switching roles feel like it hung.
       void queryClient.invalidateQueries({ refetchType: 'none' });
     },
+  });
+}
+
+/** New accounts choose their onboarding path only after Firebase authentication succeeds. */
+export function useSelectAccountType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SelectAccountTypeInput) =>
+      apiFetch<Me>('/v1/me/account-type', { method: 'POST', body: input }),
+    onSuccess: (me) => queryClient.setQueryData(ME_QUERY_KEY, me),
   });
 }
 

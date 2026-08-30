@@ -130,6 +130,11 @@ model User {
   /// Client-controlled photo used for their identity in stylist jobs and messages.
   avatarImageUrl     String?
   activeRole         ActiveRole         @default(client)
+  /// Chosen after Firebase authentication. Null means this account has not yet
+  /// selected which onboarding path to enter; activeRole is not consulted yet.
+  selectedAccountType ActiveRole?
+  /// Set only after client details or stylist setup is finished.
+  onboardingCompletedAt DateTime?
   verificationStatus VerificationStatus @default(unverified)
   verificationIdDocumentUrl String?
   verificationSelfieImageUrl String?

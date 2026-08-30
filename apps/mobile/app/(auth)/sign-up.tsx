@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Check, Circle } from 'lucide-react-native';
-import { Button, RadioCard, Text, useTheme } from '@sc/ui';
+import { Button, Text, useTheme } from '@sc/ui';
 import { space } from '@sc/tokens';
 import {
   AuthDivider,
@@ -18,13 +18,9 @@ import {
   firebaseErrorMessage,
   signInWithGoogle,
 } from '../../src/auth/firebaseAuth.js';
-import { useSignupIntentStore } from '../../src/state/index.js';
-
-type AccountType = 'client' | 'provider';
 
 const styles = StyleSheet.create({
   form: { gap: space.l },
-  accountTypeRow: { gap: space.s },
   passwordHint: { gap: space.s, marginTop: -space.s },
   rule: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   ruleIcon: { width: 16, alignItems: 'center' },
@@ -52,10 +48,6 @@ function PasswordRule({ label, passed }: { label: string; passed: boolean }) {
 }
 
 export default function SignUp() {
-  const setPendingAccountType = useSignupIntentStore((s) => s.setPendingAccountType);
-  const clearPendingAccountType = useSignupIntentStore((s) => s.clearPendingAccountType);
-  const [accountType, setAccountType] = useState<AccountType>('client');
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -70,16 +62,14 @@ export default function SignUp() {
     }),
     [password],
   );
-  const canSubmit =
-    name.trim().length >= 2 && email.trim().length > 3 && Object.values(rules).every(Boolean);
+  const canSubmit = email.trim().length > 3 && Object.values(rules).every(Boolean);
 
   const submit = async () => {
     if (!canSubmit || loading) return;
     setLoading(true);
     setError(null);
-    setPendingAccountType(accountType);
     try {
-      const result = await createAccount(email.trim(), password, name.trim(), accountType);
+      const result = await createAccount(email.trim(), password);
       if (!result.needsEmailVerification) {
         return;
       }
@@ -98,27 +88,14 @@ export default function SignUp() {
     if (loading) return;
     setLoading(true);
     setError(null);
-    // Recorded before the Google sheet opens, not after: signInWithGoogle
-    // establishes the session itself, and useAuthGate can act on it the moment
-    // it does — setting the intent afterwards would race that redirect.
-    setPendingAccountType(accountType);
     try {
-      const result = await signInWithGoogle(accountType);
-      // Dismissing the sheet has to take the intent back with it. The store is
-      // persisted (it has to survive the app close that email verification
-      // involves), so a 'provider' left behind by an abandoned sign-up outlives
-      // the screen and would capture whoever signs in on this device next,
-      // routing a client into provider-setup for a choice they never made.
-      if (!result) {
-        clearPendingAccountType();
-        return;
-      }
+      const result = await signInWithGoogle();
+      if (!result) return;
       if (result.needsEmailVerification) {
         router.replace('/(auth)/verify-email');
         return;
       }
     } catch (reason) {
-      clearPendingAccountType();
       setError(firebaseErrorMessage(reason));
     } finally {
       setLoading(false);
@@ -132,34 +109,8 @@ export default function SignUp() {
       showHero={false}
     >
       <View style={styles.form}>
-        <View style={styles.accountTypeRow}>
-          <RadioCard
-            title="I'm a client"
-            description="Book stylists and shop supplies."
-            dot
-            selected={accountType === 'client'}
-            onPress={() => setAccountType('client')}
-          />
-          <RadioCard
-            title="I'm a stylist"
-            description="List your services and get booked."
-            dot
-            selected={accountType === 'provider'}
-            onPress={() => setAccountType('provider')}
-          />
-        </View>
         <AuthGoogleButton onPress={() => void submitGoogle()} disabled={loading} />
         <AuthDivider />
-        <AuthField
-          label="Your name"
-          value={name}
-          onChangeText={setName}
-          placeholder="e.g. Tariro Moyo"
-          autoCapitalize="words"
-          autoComplete="name"
-          textContentType="name"
-          autoFocus
-        />
         <AuthField
           label="Email address"
           value={email}
@@ -170,6 +121,7 @@ export default function SignUp() {
           autoCorrect={false}
           autoComplete="email"
           textContentType="emailAddress"
+          autoFocus
         />
         <AuthField
           label="Create a password"

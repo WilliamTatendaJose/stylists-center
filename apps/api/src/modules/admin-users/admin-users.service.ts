@@ -11,6 +11,10 @@ import {
 import { Prisma, type User } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { FirebaseIdentityService } from '../auth/firebase-identity.service';
+import type {
+  FirebaseAccountMatch,
+  FirebaseAccountStatus,
+} from '../auth/firebase-identity.service';
 import { UserLifecycleService } from '../auth/user-lifecycle.service';
 
 const MAX_PAGE_SIZE = 100;
@@ -54,11 +58,9 @@ export class AdminUsersService {
       }),
       this.prisma.user.count({ where }),
     ]);
-    const statuses = await this.firebaseStatuses(
-      users.flatMap((user) => (user.firebaseUid ? [user.firebaseUid] : [])),
-    );
+    const firebase = await this.firebaseSnapshot(users);
     return {
-      items: users.map((user) => toRow(user, !!user.providerProfile, statuses)),
+      items: users.map((user) => toRow(user, !!user.providerProfile, firebase)),
       total,
       limit,
       offset: input.offset,
@@ -70,8 +72,8 @@ export class AdminUsersService {
       where: { id },
       include: { providerProfile: { select: { id: true } } },
     });
-    const statuses = await this.firebaseStatuses(user.firebaseUid ? [user.firebaseUid] : []);
-    return toRow(user, !!user.providerProfile, statuses);
+    const firebase = await this.firebaseSnapshot([user]);
+    return toRow(user, !!user.providerProfile, firebase);
   }
 
   async create(input: CreateAdminUserInput): Promise<AdminUserRowDto> {
@@ -91,7 +93,11 @@ export class AdminUsersService {
           cityId: city.id,
         },
       });
-      return toRow(user, false, new Map([[firebaseUser.uid, 'active']]));
+      return toRow(user, false, {
+        uidStatuses: new Map([[firebaseUser.uid, 'active']]),
+        emailMatches: new Map([[email, { uid: firebaseUser.uid, status: 'active' }]]),
+        unavailable: false,
+      });
     } catch (error) {
       await this.firebase.deleteAccount(firebaseUser.uid);
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -122,12 +128,15 @@ export class AdminUsersService {
       input.displayName !== undefined ||
       input.disabled !== undefined ||
       input.password !== undefined;
-    if (firebaseWrite && !current.firebaseUid) {
+    const resolvedFirebase = firebaseWrite
+      ? await this.firebase.resolveAccount(current.firebaseUid, current.email)
+      : null;
+    if (firebaseWrite && !resolvedFirebase) {
       throw new ConflictException('This app user is not linked to Firebase');
     }
 
-    if (firebaseWrite && current.firebaseUid) {
-      await this.firebase.updateAccount(current.firebaseUid, {
+    if (firebaseWrite && resolvedFirebase) {
+      await this.firebase.updateAccount(resolvedFirebase.uid, {
         ...(email !== undefined ? { email } : {}),
         ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
         ...(input.disabled !== undefined ? { disabled: input.disabled } : {}),
@@ -143,6 +152,9 @@ export class AdminUsersService {
             ...(email !== undefined ? { email } : {}),
             ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
             ...(input.activeRole !== undefined ? { activeRole: input.activeRole } : {}),
+            ...(resolvedFirebase && resolvedFirebase.uid !== current.firebaseUid
+              ? { firebaseUid: resolvedFirebase.uid }
+              : {}),
             ...(input.disabled !== undefined
               ? { disabledAt: input.disabled ? new Date() : null }
               : {}),
@@ -170,9 +182,9 @@ export class AdminUsersService {
         }
       });
     } catch (error) {
-      if (firebaseWrite && current.firebaseUid) {
+      if (firebaseWrite && resolvedFirebase) {
         await this.firebase
-          .updateAccount(current.firebaseUid, {
+          .updateAccount(resolvedFirebase.uid, {
             ...(current.email ? { email: current.email } : {}),
             displayName: current.displayName,
             disabled: current.disabledAt !== null,
@@ -189,9 +201,19 @@ export class AdminUsersService {
 
   async remove(id: string): Promise<{ ok: true; firebaseDeleted: boolean }> {
     const current = await this.prisma.user.findUniqueOrThrow({ where: { id } });
-    const uid = current.firebaseUid;
+    const firebaseAccount = await this.firebase.resolveAccount(current.firebaseUid, current.email);
+    const uid = firebaseAccount?.uid ?? null;
+    // Persist a UID discovered from a legacy email-only row before any
+    // destructive work. If Firebase deletion later fails, the tombstone
+    // retains this UID and the admin can safely retry the cleanup.
+    if (uid && uid !== current.firebaseUid) {
+      await this.prisma.user.update({
+        where: { id },
+        data: { firebaseUid: uid },
+      });
+    }
     if (uid) await this.firebase.disableAccount(uid);
-    await this.lifecycle.tombstone(id, false);
+    await this.lifecycle.tombstone(id, !uid);
     if (uid) {
       await this.firebase.deleteAccount(uid);
       await this.lifecycle.releaseFirebaseUid(id);
@@ -199,32 +221,59 @@ export class AdminUsersService {
     return { ok: true, firebaseDeleted: !!uid };
   }
 
-  private async firebaseStatuses(uids: string[]): Promise<Map<string, AdminFirebaseStatus>> {
+  private async firebaseSnapshot(
+    users: { firebaseUid: string | null; email: string | null }[],
+  ): Promise<FirebaseSnapshot> {
     try {
-      return await this.firebase.getAccountStatuses(uids);
+      const [uidStatuses, emailMatches] = await Promise.all([
+        this.firebase.getAccountStatuses(
+          users.flatMap((user) => (user.firebaseUid ? [user.firebaseUid] : [])),
+        ),
+        this.firebase.getAccountsByEmails(
+          users.flatMap((user) => (user.email ? [user.email] : [])),
+        ),
+      ]);
+      return { uidStatuses, emailMatches, unavailable: false };
     } catch {
-      return new Map(uids.map((uid) => [uid, 'unavailable']));
+      return { uidStatuses: new Map(), emailMatches: new Map(), unavailable: true };
     }
   }
+}
+
+interface FirebaseSnapshot {
+  uidStatuses: Map<string, FirebaseAccountStatus>;
+  emailMatches: Map<string, FirebaseAccountMatch>;
+  unavailable: boolean;
 }
 
 function toRow(
   user: User,
   hasProviderProfile: boolean,
-  firebaseStatuses: Map<string, AdminFirebaseStatus>,
+  firebase: FirebaseSnapshot,
 ): AdminUserRowDto {
+  const storedStatus = user.firebaseUid ? firebase.uidStatuses.get(user.firebaseUid) : undefined;
+  const emailMatch = user.email ? firebase.emailMatches.get(user.email.toLowerCase()) : undefined;
+  const effectiveMatch =
+    storedStatus && storedStatus !== 'missing'
+      ? { uid: user.firebaseUid, status: storedStatus }
+      : emailMatch;
+  const firebaseStatus: AdminFirebaseStatus = firebase.unavailable
+    ? 'unavailable'
+    : effectiveMatch
+      ? effectiveMatch.status
+      : user.firebaseUid || user.email
+        ? 'missing'
+        : 'unlinked';
   return {
     id: user.id,
-    firebaseUid: user.firebaseUid,
+    firebaseUid: effectiveMatch?.uid ?? user.firebaseUid,
     email: user.email,
     phone: user.phone,
     displayName: user.displayName,
     activeRole: user.activeRole,
     hasProviderProfile,
     appStatus: user.deletedAt ? 'deleted' : user.disabledAt ? 'disabled' : 'active',
-    firebaseStatus: user.firebaseUid
-      ? (firebaseStatuses.get(user.firebaseUid) ?? 'unavailable')
-      : 'unlinked',
+    firebaseStatus,
     createdAt: user.createdAt.toISOString(),
     deletedAt: user.deletedAt?.toISOString() ?? null,
   };

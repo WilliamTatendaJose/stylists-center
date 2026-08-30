@@ -127,6 +127,8 @@ describe('AuthService Firebase exchange', () => {
       email: TEST_EMAIL,
       displayName: verifiedIdentity.displayName,
       activeRole: 'client',
+      selectedAccountType: null,
+      onboardingCompletedAt: null,
     });
   });
 
@@ -194,13 +196,15 @@ describe('AuthService Firebase exchange', () => {
     await expect(auth.refresh(second.refreshToken)).rejects.toThrow('reuse detected');
   });
 
-  it('keeps role and provider authorization behavior after Firebase sign-in', async () => {
+  it('selects account type after authentication and does not let legacy exchange input change it', async () => {
     const tokens = await auth.exchangeFirebaseToken('firebase-id-token');
     const { id } = await auth.verifyAccessToken(tokens.accessToken);
     expect(await auth.me(id)).toMatchObject({
       email: TEST_EMAIL,
       hasProviderProfile: false,
       activeRole: 'client',
+      selectedAccountType: null,
+      onboardingComplete: false,
     });
 
     await expect(auth.setActiveRole(id, 'provider')).rejects.toThrow(
@@ -220,24 +224,26 @@ describe('AuthService Firebase exchange', () => {
         workingHoursLabel: 'Mon-Sat, 8am-6pm',
       },
     });
-    expect((await auth.setActiveRole(id, 'provider')).activeRole).toBe('provider');
+    expect(await auth.selectAccountType(id, 'provider')).toMatchObject({
+      selectedAccountType: 'provider',
+      activeRole: 'provider',
+      onboardingComplete: true,
+    });
 
-    // Creating/signing up as a client must override the role on an existing
-    // dual-role account instead of dropping it back into the stylist UI.
     await auth.exchangeFirebaseToken('firebase-id-token', 'client');
-    expect((await auth.me(id)).activeRole).toBe('client');
-
-    // Conversely, Google sign-up as a provider must restore the provider side
-    // when this Firebase identity already owns a stylist page.
-    await auth.exchangeFirebaseToken('firebase-id-token', 'provider');
-    expect((await auth.me(id)).activeRole).toBe('provider');
+    expect(await auth.me(id)).toMatchObject({
+      selectedAccountType: 'provider',
+      activeRole: 'provider',
+    });
   });
 
   it('keeps a new provider selection on the client role until provider setup exists', async () => {
-    const tokens = await auth.exchangeFirebaseToken('firebase-id-token', 'provider');
+    const tokens = await auth.exchangeFirebaseToken('firebase-id-token');
     const { id } = await auth.verifyAccessToken(tokens.accessToken);
-    expect(await auth.me(id)).toMatchObject({
+    expect(await auth.selectAccountType(id, 'provider')).toMatchObject({
       activeRole: 'client',
+      selectedAccountType: 'provider',
+      onboardingComplete: false,
       hasProviderProfile: false,
     });
   });

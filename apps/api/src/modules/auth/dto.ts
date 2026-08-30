@@ -5,6 +5,7 @@ import {
   setActiveRoleSchema,
   updateProfileSchema,
   registerPushTokenSchema,
+  selectAccountTypeSchema,
   verificationSubmissionSchema,
 } from '@sc/shared';
 
@@ -17,6 +18,7 @@ import {
 export class FirebaseExchangeDto extends createZodDto(firebaseExchangeSchema) {}
 export class RefreshDto extends createZodDto(refreshSchema) {}
 export class SetActiveRoleDto extends createZodDto(setActiveRoleSchema) {}
+export class SelectAccountTypeDto extends createZodDto(selectAccountTypeSchema) {}
 export class UpdateProfileDto extends createZodDto(updateProfileSchema) {}
 export class RegisterPushTokenDto extends createZodDto(registerPushTokenSchema) {}
 export class VerificationSubmissionDto extends createZodDto(verificationSubmissionSchema) {}

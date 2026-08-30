@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { MapPin } from 'lucide-react-native';
 import { color, space } from '@sc/tokens';
 import { Screen, ScreenHeader, Text, Chip, TextField, RangeInput, Button, useTheme } from '@sc/ui';
 import { useCategories } from '../src/api/hooks/useCategories.js';
 import { useCreateProviderProfile } from '../src/api/hooks/useProviders.js';
-import { useSetActiveRole } from '../src/api/hooks/useMe.js';
+import { useMe } from '../src/api/hooks/useMe.js';
 import { useClaimReferral } from '../src/api/hooks/useWallet.js';
 import { useInviteStore, useLocationPickerStore, useSessionStore } from '../src/state/index.js';
 import { describeError } from '../src/api/errorMessage.js';
@@ -55,7 +55,8 @@ const styles = StyleSheet.create({
  * and selfie verification is a separate, later step this does not cover.
  */
 export default function ProviderSetup() {
-  const onBack = useBack('/(tabs)');
+  const { data: me } = useMe();
+  const onBack = useBack((me?.onboardingComplete ? '/(tabs)' : '/account-type') as Href);
   const { colors } = useTheme();
   const location = useSessionStore((s) => s.location);
   const areaLabel = useSessionStore((s) => s.areaLabel);
@@ -65,9 +66,9 @@ export default function ProviderSetup() {
   const clearPendingReferralCode = useInviteStore((s) => s.clearPendingReferralCode);
   const { data: categories } = useCategories();
   const createProfile = useCreateProviderProfile();
-  const setActiveRole = useSetActiveRole();
   const claimReferral = useClaimReferral();
 
+  const [displayName, setDisplayName] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [areaName, setAreaName] = useState(areaLabel ?? '');
   const [lat, setLat] = useState(location.lat);
@@ -80,19 +81,18 @@ export default function ProviderSetup() {
   const [referralCode, setReferralCode] = useState(pendingReferralCode ?? '');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [referralError, setReferralError] = useState<string | null>(null);
-  const [roleError, setRoleError] = useState<string | null>(null);
 
   const [profileCreated, setProfileCreated] = useState(false);
 
   const canSubmit =
     (profileCreated ||
       (!!categoryId &&
+        displayName.trim().length >= 2 &&
         areaName.trim().length >= 2 &&
         workingHoursLabel.trim().length >= 2 &&
         serviceName.trim().length >= 2)) &&
     !createProfile.isPending &&
-    !claimReferral.isPending &&
-    !setActiveRole.isPending;
+    !claimReferral.isPending;
 
   // Consumed once, right after the map picker pops back to this screen (still
   // mounted underneath it) — see useLocationPickerStore for why this goes
@@ -105,23 +105,14 @@ export default function ProviderSetup() {
     clearPickedLocation();
   }, [pickedLocation, clearPickedLocation]);
 
-  // The page now exists, so this account is a stylist in every sense but the
-  // one the rest of the app actually checks (activeRole) — without this,
-  // finishing setup dropped straight back into the client tabs and the new
-  // page was only reachable again via the role switcher. Skipping this on
-  // failure would strand someone with a real page and no way into it beyond
-  // that same switcher, so it always still lands them somewhere usable.
-  const activateProviderRole = () => {
-    setRoleError(null);
-    setActiveRole.mutate('provider', {
-      onSuccess: () => router.replace('/(provider)/jobs'),
-      onError: (error) => {
-        setRoleError(
-          describeError(error, "Your page is set up — couldn't switch you into it yet."),
-        );
-      },
-    });
-  };
+  useEffect(() => {
+    if (displayName || !me?.displayName || me.displayName === me.email) return;
+    setDisplayName(me.displayName);
+  }, [displayName, me?.displayName, me?.email]);
+
+  // Creating the page now commits provider role and onboarding in the same
+  // API transaction, so this navigation never races a second role mutation.
+  const openProviderApp = () => router.replace('/(provider)/jobs');
 
   // Referral linking is independent of the stylist page itself (an Agent/Referral
   // row, not a ProviderProfile field) — it runs after the page is created so a
@@ -130,7 +121,7 @@ export default function ProviderSetup() {
   const finishAfterProfile = () => {
     const code = referralCode.trim().toUpperCase();
     if (!code) {
-      activateProviderRole();
+      openProviderApp();
       return;
     }
     setReferralError(null);
@@ -139,7 +130,7 @@ export default function ProviderSetup() {
       {
         onSuccess: () => {
           clearPendingReferralCode();
-          activateProviderRole();
+          openProviderApp();
         },
         onError: (error) => {
           setReferralError(describeError(error, "Couldn't apply that referral code."));
@@ -158,6 +149,7 @@ export default function ProviderSetup() {
     setSubmitError(null);
     createProfile.mutate(
       {
+        displayName: displayName.trim(),
         categoryId,
         areaName: areaName.trim(),
         workingHoursLabel: workingHoursLabel.trim(),
@@ -185,30 +177,19 @@ export default function ProviderSetup() {
     );
   };
 
-  // Two different failures land here, needing two different escapes: a
-  // referral that wouldn't claim still has a real page underneath it worth
-  // finishing into, so skipping it proceeds to activate the stylist role
-  // same as a clean success would; a role switch that itself failed has
-  // nothing left to retry from this screen, so that one just leaves them as
-  // a client for now — the role switcher can pick it up later.
+  // A rejected referral never blocks the already-created stylist page.
   const skipReferral = () => {
-    if (roleError) {
-      router.replace('/(tabs)');
-      return;
-    }
     clearPendingReferralCode();
-    activateProviderRole();
+    openProviderApp();
   };
 
   const buttonLabel = createProfile.isPending
     ? 'Setting up…'
     : claimReferral.isPending
       ? 'Applying referral…'
-      : setActiveRole.isPending
-        ? 'Switching…'
-        : profileCreated
-          ? 'Continue'
-          : 'Create my page';
+      : profileCreated
+        ? 'Continue'
+        : 'Create my page';
 
   return (
     <Screen
@@ -235,16 +216,6 @@ export default function ProviderSetup() {
               {referralError}
             </Text>
           ) : null}
-          {roleError ? (
-            <Text
-              variant="meta"
-              color={color.accent700}
-              accessibilityLiveRegion="polite"
-              accessibilityRole="alert"
-            >
-              {roleError}
-            </Text>
-          ) : null}
           <Button
             label={buttonLabel}
             onPress={submit}
@@ -253,7 +224,7 @@ export default function ProviderSetup() {
             arrow
             disabled={!canSubmit}
           />
-          {profileCreated && (referralError || roleError) ? (
+          {profileCreated && referralError ? (
             <Button label="Skip and continue" onPress={skipReferral} block variant="ghost" />
           ) : null}
         </View>
@@ -263,6 +234,15 @@ export default function ProviderSetup() {
         This gets your page bookable — a category, your area, your hours, and one priced service. ID
         and selfie verification aren&apos;t part of this yet.
       </Text>
+
+      <View style={styles.field}>
+        <TextField
+          label="Your name"
+          value={displayName}
+          onChangeText={setDisplayName}
+          placeholder="e.g. Tariro Moyo"
+        />
+      </View>
 
       <View style={styles.section}>
         <Text variant="sectionLabel" style={styles.sectionLabelSpace}>

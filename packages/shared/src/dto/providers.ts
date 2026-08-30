@@ -156,6 +156,7 @@ export type CreateServiceInput = z.infer<typeof createServiceInputSchema>;
  * a separate, later step this does not cover.
  */
 export const createProviderProfileSchema = z.object({
+  displayName: z.string().trim().min(2).max(60),
   categoryId: z.uuid(),
   areaName: z.string().trim().min(2).max(60),
   workingHoursLabel: z.string().trim().min(2).max(80),
