@@ -68,7 +68,11 @@ export function useAuthGate(): boolean {
 
     const onAccountType = String(segments[0]) === 'account-type';
     if (!me.selectedAccountType) {
-      if (!onAccountType) router.replace('/account-type' as Href);
+      if (!onAccountType) {
+        // The generated route types can be stale in local Expo caches.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+        router.replace('/account-type' as Href);
+      }
       return;
     }
 

@@ -82,6 +82,8 @@ const styles = StyleSheet.create({
  */
 export default function ProviderSetup() {
   const { data: me, refetch: refetchMe } = useMe();
+  // The generated route types can be stale in local Expo caches.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
   const onBack = useBack((me?.onboardingComplete ? '/(tabs)' : '/account-type') as Href);
   const { colors } = useTheme();
   const location = useSessionStore((s) => s.location);
