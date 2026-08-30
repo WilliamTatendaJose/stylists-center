@@ -35,6 +35,69 @@ export const adminAccessTokenSchema = z.object({
 });
 export type AdminAccessToken = z.infer<typeof adminAccessTokenSchema>;
 
+// --- App users / Firebase identities ---------------------------------------
+
+export const adminFirebaseStatusSchema = z.enum([
+  'active',
+  'disabled',
+  'missing',
+  'unlinked',
+  'unavailable',
+]);
+export type AdminFirebaseStatus = z.infer<typeof adminFirebaseStatusSchema>;
+
+export const adminAppUserStatusSchema = z.enum(['active', 'disabled', 'deleted']);
+export type AdminAppUserStatus = z.infer<typeof adminAppUserStatusSchema>;
+
+export const adminUserRowSchema = z.object({
+  id: z.uuid(),
+  firebaseUid: z.string().nullable(),
+  email: z.email().nullable(),
+  phone: z.string().nullable(),
+  displayName: z.string(),
+  activeRole: activeRoleSchema,
+  hasProviderProfile: z.boolean(),
+  appStatus: adminAppUserStatusSchema,
+  firebaseStatus: adminFirebaseStatusSchema,
+  createdAt: z.iso.datetime(),
+  deletedAt: z.iso.datetime().nullable(),
+});
+export type AdminUserRowDto = z.infer<typeof adminUserRowSchema>;
+
+export const adminUserListSchema = z.object({
+  items: z.array(adminUserRowSchema),
+  total: z.number().int().nonnegative(),
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+});
+export type AdminUserListDto = z.infer<typeof adminUserListSchema>;
+
+export const createAdminUserSchema = z.object({
+  email: z.email(),
+  displayName: z.string().trim().min(2).max(60),
+  password: z.string().min(8).max(200),
+});
+export type CreateAdminUserInput = z.infer<typeof createAdminUserSchema>;
+
+export const updateAdminUserSchema = z
+  .object({
+    email: z.email().optional(),
+    displayName: z.string().trim().min(2).max(60).optional(),
+    activeRole: activeRoleSchema.optional(),
+    disabled: z.boolean().optional(),
+    password: z.string().min(8).max(200).optional(),
+  })
+  .refine(
+    (input) =>
+      input.email !== undefined ||
+      input.displayName !== undefined ||
+      input.activeRole !== undefined ||
+      input.disabled !== undefined ||
+      input.password !== undefined,
+    { message: 'Provide at least one field to update' },
+  );
+export type UpdateAdminUserInput = z.infer<typeof updateAdminUserSchema>;
+
 // --- Reports ---------------------------------------------------------------
 
 export const reportStatusSchema = z.enum(['open', 'reviewing', 'resolved']);

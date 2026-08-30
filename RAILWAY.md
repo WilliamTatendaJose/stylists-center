@@ -107,8 +107,8 @@ ADMIN_WEB_ORIGIN=https://<admin service's public domain>
 
 # Real values before going live — see apps/api/.env.example for what each does
 FIREBASE_PROJECT_ID=style-center-5162a
-FIREBASE_CLIENT_EMAIL=...iam.gserviceaccount.com  # optional; set with private key
-FIREBASE_PRIVATE_KEY=...   # optional revocation checks; keep escaped \\n sequences
+FIREBASE_CLIENT_EMAIL=...iam.gserviceaccount.com  # required for admin user CRUD and revocation checks
+FIREBASE_PRIVATE_KEY=...   # required with client email; keep escaped \\n sequences
 PAYMENT_PROVIDER=paynow   # Paynow's test integration IDs reject transactions with an email field — never add one to the checkout request
 PAYNOW_INTEGRATION_ID=...
 PAYNOW_INTEGRATION_KEY=...
@@ -202,8 +202,9 @@ Before the first auth-enabled build:
    `client_email`, and `private_key` on the API as `FIREBASE_PROJECT_ID`,
    `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`. Keep the private key's
    newlines escaped as `\\n` in Railway.
-5. Deploy the `20260821120000_firebase_auth` migration before directing users
-   to the new build.
+5. Deploy the `20260821120000_firebase_auth` and
+   `20260830113000_user_lifecycle` migrations before directing users to the
+   new build.
 
 These mobile values are public identifiers, but the Admin private key is an
 API-only secret and must never use an `EXPO_PUBLIC_` variable.

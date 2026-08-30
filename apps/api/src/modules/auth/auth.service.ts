@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   UnauthorizedException,
@@ -23,6 +24,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { TrustService } from '../trust/trust.service';
 import type { Env } from '../../config/env';
 import { FirebaseIdentityService, type FirebaseIdentity } from './firebase-identity.service';
+import { UserLifecycleService } from './user-lifecycle.service';
 
 const ACCESS_TOKEN_TTL = '15m';
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -44,6 +46,7 @@ export class AuthService {
     private readonly config: ConfigService<Env, true>,
     private readonly trust: TrustService,
     private readonly firebaseIdentity: FirebaseIdentityService,
+    private readonly userLifecycle: UserLifecycleService,
   ) {}
 
   async exchangeFirebaseToken(idToken: string, accountType?: ActiveRole): Promise<AuthTokens> {
@@ -91,37 +94,34 @@ export class AuthService {
     if (firebaseDisplayName === '') firebaseDisplayName = undefined;
     firebaseDisplayName ??= email;
     const byUid = await this.prisma.user.findUnique({ where: { firebaseUid: identity.uid } });
-    if (byUid) return byUid;
+    if (byUid) {
+      if (byUid.deletedAt) throw new ForbiddenException('This account has been deleted');
+      if (byUid.disabledAt) throw new ForbiddenException('This account has been disabled');
+      return byUid;
+    }
 
     const byEmail = await this.prisma.user.findUnique({ where: { email } });
     if (byEmail) {
       /**
-       * A row for this address already exists under a *different* Firebase uid.
-       * That is the ordinary wreckage of an interrupted sign-up, not an attack:
-       * the exchange that created this row can have committed and then lost its
-       * response to the cold-start timeout, leaving the app convinced sign-up
-       * failed. Retrying mints a second Firebase account for the same address,
-       * and from then on every uid disagrees with the stored one.
-       *
-       * Refusing outright made that state permanent — the address could never
-       * sign in again, by any route, with no way back short of database
-       * surgery. It was also protecting nothing: exchangeFirebaseToken rejects
-       * an unverified email before this runs, so reaching here means Firebase
-       * has confirmed this caller controls the mailbox. That is the same proof
-       * the original row was established with, so honouring the new uid grants
-       * no access that re-verifying the address would not already give.
-       *
-       * Re-assert it rather than trusting the caller's guarantee at a distance:
-       * this is the check that decides whether one Firebase account may adopt
-       * another's row, and it should be readable as safe on its own.
+       * Email is contact information, never an identity key. A new Firebase UID
+       * must not inherit this row's client/provider role, bookings or profile.
+       * If Firebase confirms the old UID was deleted outside the app, archive
+       * its database row and let this signup create a genuinely new account.
        */
-      if (!identity.emailVerified) {
-        throw new UnauthorizedException('Verify your email before continuing');
+      if (byEmail.firebaseUid) {
+        const oldFirebaseStatus = await this.firebaseIdentity.getAccountStatus(byEmail.firebaseUid);
+        if (oldFirebaseStatus === 'missing' && !byEmail.deletedAt && !byEmail.disabledAt) {
+          await this.userLifecycle.tombstone(byEmail.id, true);
+        } else {
+          throw new ConflictException(
+            'An account already uses this email. Sign in to it or ask support to remove it.',
+          );
+        }
+      } else {
+        throw new ConflictException(
+          'An account already uses this email. Ask support to reconcile it before signing up.',
+        );
       }
-      return this.prisma.user.update({
-        where: { id: byEmail.id },
-        data: { firebaseUid: identity.uid },
-      });
     }
 
     const city = await this.resolveDefaultCity();
@@ -228,6 +228,9 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: record.userId } });
+    if (user.deletedAt || user.disabledAt) {
+      throw new UnauthorizedException('Session no longer valid');
+    }
 
     await this.prisma.refreshToken.update({ where: { id: record.id }, data: { revoked: true } });
 
@@ -401,7 +404,7 @@ export class AuthService {
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
-    if (user?.tokenVersion !== payload.ver) {
+    if (user?.tokenVersion !== payload.ver || user.deletedAt !== null || user.disabledAt !== null) {
       throw new UnauthorizedException('Session no longer valid');
     }
 

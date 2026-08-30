@@ -183,8 +183,10 @@ export class GeoRepository {
         (SELECT MIN(s."priceUsdCents") FROM "Service" s WHERE s."providerId" = p.id) AS "minServicePriceUsdCents",
         ST_Distance(p.location, ${point}) / 1000 AS "distanceKm"
       FROM "ProviderProfile" p
+      JOIN "User" u ON u.id = p."userId"
       JOIN "Category" c ON c.id = p."categoryId"
-      WHERE true ${radiusFilter} ${categoryFilter} ${availabilityFilter} ${searchFilter}
+      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL
+      ${radiusFilter} ${categoryFilter} ${availabilityFilter} ${searchFilter}
       ${orderBy}
       ${pagination}
     `;
@@ -212,8 +214,9 @@ export class GeoRepository {
         (SELECT MIN(s."priceUsdCents") FROM "Service" s WHERE s."providerId" = p.id) AS "minServicePriceUsdCents",
         ST_Distance(p.location, ${point}) / 1000 AS "distanceKm"
       FROM "ProviderProfile" p
+      JOIN "User" u ON u.id = p."userId"
       JOIN "Category" c ON c.id = p."categoryId"
-      WHERE p.id = ${id}
+      WHERE p.id = ${id} AND u."deletedAt" IS NULL AND u."disabledAt" IS NULL
     `;
     return rows[0] ?? null;
   }
@@ -228,7 +231,9 @@ export class GeoRepository {
     const rows = await this.prisma.$queryRaw<{ categoryId: string; count: bigint }[]>`
       SELECT p."categoryId", COUNT(*) AS count
       FROM "ProviderProfile" p
-      WHERE ST_DWithin(p.location, ${point}, ${radiusKm * 1000})
+      JOIN "User" u ON u.id = p."userId"
+      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL
+        AND ST_DWithin(p.location, ${point}, ${radiusKm * 1000})
       GROUP BY p."categoryId"
     `;
     return new Map(rows.map((r) => [r.categoryId, Number(r.count)]));

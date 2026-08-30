@@ -7,6 +7,8 @@ import { imageUrlSchema } from './uploads.js';
 import { paySubscriptionSchema } from './subscription.js';
 import {
   adminLoginSchema,
+  createAdminUserSchema,
+  updateAdminUserSchema,
   createManualBanSchema,
   resolveAppealSchema,
   updateProviderAdminSchema,
@@ -165,6 +167,19 @@ describe('admin schemas', () => {
     expect(adminLoginSchema.safeParse({ email: 'staff@example.com', password: 'x' }).success).toBe(
       true,
     );
+  });
+
+  it('validates app-user management writes', () => {
+    expect(
+      createAdminUserSchema.safeParse({
+        email: 'client@example.com',
+        displayName: 'New Client',
+        password: 'temporary-password',
+      }).success,
+    ).toBe(true);
+    expect(updateAdminUserSchema.safeParse({}).success).toBe(false);
+    expect(updateAdminUserSchema.safeParse({ disabled: true }).success).toBe(true);
+    expect(updateAdminUserSchema.safeParse({ activeRole: 'admin' }).success).toBe(false);
   });
 
   it('rejects a manual ban with no reason', () => {

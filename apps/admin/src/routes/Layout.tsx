@@ -13,6 +13,7 @@ import {
   UserCheck,
   ShieldCheck,
   UserCog,
+  UsersRound,
   Wallet,
 } from 'lucide-react';
 import { useAuthStore } from '../state/authStore';
@@ -27,6 +28,7 @@ const NAV_ITEMS = [
   { to: '/bans', label: 'Bans', icon: ShieldBan },
   { to: '/reviews', label: 'Reviews', icon: Star },
   { to: '/providers', label: 'Providers', icon: UserCheck },
+  { to: '/users', label: 'Users', icon: UsersRound },
   { to: '/verifications', label: 'Verifications', icon: ShieldCheck },
   { to: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
   { to: '/payments', label: 'Payments', icon: Wallet },

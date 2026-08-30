@@ -4,6 +4,8 @@ import { JwtService } from '@nestjs/jwt';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthService } from './auth.service';
 import type { FirebaseIdentityService } from './firebase-identity.service';
+import { UserLifecycleService } from './user-lifecycle.service';
+import { ImageStorageService } from '../provider/image-storage.service';
 import { TrustService } from '../trust/trust.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
@@ -46,17 +48,24 @@ describe('AuthService Firebase exchange', () => {
     phoneNumber: null,
   };
   const verifyIdToken = vi.fn(() => Promise.resolve(verifiedIdentity));
+  const getAccountStatus = vi.fn(() =>
+    Promise.resolve<'active' | 'disabled' | 'missing'>('active'),
+  );
 
   beforeAll(async () => {
     prisma = new PrismaService(config);
     await prisma.onModuleInit();
-    const firebaseIdentity = { verifyIdToken } as unknown as FirebaseIdentityService;
+    const firebaseIdentity = {
+      verifyIdToken,
+      getAccountStatus,
+    } as unknown as FirebaseIdentityService;
     auth = new AuthService(
       prisma,
       new JwtService(),
       config,
       new TrustService(prisma),
       firebaseIdentity,
+      new UserLifecycleService(prisma, new ImageStorageService(config)),
     );
 
     const city = await prisma.city.create({
@@ -76,15 +85,27 @@ describe('AuthService Firebase exchange', () => {
   });
 
   async function cleanup() {
-    await prisma.service.deleteMany({ where: { provider: { user: { email: TEST_EMAIL } } } });
-    await prisma.providerProfile.deleteMany({ where: { user: { email: TEST_EMAIL } } });
-    await prisma.refreshToken.deleteMany({ where: { user: { email: TEST_EMAIL } } });
-    await prisma.user.deleteMany({ where: { email: TEST_EMAIL } });
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { email: TEST_EMAIL },
+          { firebaseUid: { startsWith: 'firebase-auth-spec-uid' } },
+          { displayName: { startsWith: 'Deleted user' }, cityId },
+        ],
+      },
+      select: { id: true },
+    });
+    const userIds = users.map((user) => user.id);
+    await prisma.service.deleteMany({ where: { provider: { userId: { in: userIds } } } });
+    await prisma.providerProfile.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.refreshToken.deleteMany({ where: { userId: { in: userIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
   }
 
   beforeEach(async () => {
     await cleanup();
     verifyIdToken.mockClear();
+    getAccountStatus.mockClear();
   });
 
   afterAll(async () => {
@@ -117,27 +138,40 @@ describe('AuthService Firebase exchange', () => {
     expect(await prisma.user.findUnique({ where: { email: TEST_EMAIL } })).toBeNull();
   });
 
-  it('re-links an address whose Firebase account was replaced after an interrupted sign-up', async () => {
-    // The exchange that created this row committed; only its response was lost
-    // to a timeout, so the app retried and Firebase minted a second account for
-    // the same address. Refusing the new uid used to lock the address out for
-    // good — by any route, with no way back short of editing the database.
+  it('starts fresh when Firebase confirms the previous identity was deleted', async () => {
     await auth.exchangeFirebaseToken('firebase-id-token');
     const original = await prisma.user.findUnique({ where: { email: TEST_EMAIL } });
+    expect(original).not.toBeNull();
+    if (!original) throw new Error('Expected the original user to exist');
 
     verifyIdToken.mockResolvedValueOnce({ ...verifiedIdentity, uid: 'firebase-auth-spec-uid-2' });
+    getAccountStatus.mockResolvedValueOnce('missing');
     const tokens = await auth.exchangeFirebaseToken('replacement-id-token');
     expect(tokens.accessToken).toEqual(expect.any(String));
 
-    // The same account, now answering to the new uid — not a duplicate.
-    const relinked = await prisma.user.findUnique({ where: { email: TEST_EMAIL } });
-    expect(relinked?.id).toBe(original?.id);
-    expect(relinked?.firebaseUid).toBe('firebase-auth-spec-uid-2');
+    const replacement = await prisma.user.findUnique({ where: { email: TEST_EMAIL } });
+    expect(replacement?.id).not.toBe(original.id);
+    expect(replacement).toMatchObject({
+      firebaseUid: 'firebase-auth-spec-uid-2',
+      activeRole: 'client',
+    });
+    const tombstoned = await prisma.user.findUnique({ where: { id: original.id } });
+    expect(tombstoned).toMatchObject({
+      email: null,
+      firebaseUid: null,
+    });
+    expect(tombstoned?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it('does not use email to adopt a different live Firebase identity', async () => {
+    await auth.exchangeFirebaseToken('firebase-id-token');
+    verifyIdToken.mockResolvedValueOnce({ ...verifiedIdentity, uid: 'firebase-auth-spec-uid-2' });
+    await expect(auth.exchangeFirebaseToken('replacement-id-token')).rejects.toThrow(
+      'An account already uses this email',
+    );
   });
 
   it('refuses to adopt an existing row for an unverified address', async () => {
-    // The re-link above is only safe because Firebase vouched for the mailbox.
-    // Without that, adopting someone else's row is account takeover.
     await auth.exchangeFirebaseToken('firebase-id-token');
     verifyIdToken.mockResolvedValueOnce({
       ...verifiedIdentity,

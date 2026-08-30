@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ImageStorageService } from '../provider/image-storage.service';
 import { FirebaseIdentityService } from './firebase-identity.service';
+import { UserLifecycleService } from './user-lifecycle.service';
 
 @Module({
   // Registered with no default secret/options: every sign/verify call in
@@ -13,7 +14,13 @@ import { FirebaseIdentityService } from './firebase-identity.service';
   // module-level secret would just be dead configuration.
   imports: [JwtModule.register({}), TrustModule],
   controllers: [AuthController, MeController],
-  providers: [AuthService, FirebaseIdentityService, JwtAuthGuard, ImageStorageService],
-  exports: [AuthService, JwtAuthGuard],
+  providers: [
+    AuthService,
+    FirebaseIdentityService,
+    UserLifecycleService,
+    JwtAuthGuard,
+    ImageStorageService,
+  ],
+  exports: [AuthService, FirebaseIdentityService, UserLifecycleService, JwtAuthGuard],
 })
 export class AuthModule {}

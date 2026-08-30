@@ -43,7 +43,10 @@ export class AdminProvidersService {
 
   async list(verified?: boolean): Promise<AdminProviderRowDto[]> {
     const providers = await this.prisma.providerProfile.findMany({
-      ...(verified !== undefined ? { where: { verified } } : {}),
+      where: {
+        user: { deletedAt: null },
+        ...(verified !== undefined ? { verified } : {}),
+      },
       include: PROVIDER_INCLUDE,
       orderBy: { createdAt: 'desc' },
     });

@@ -136,6 +136,12 @@ model User {
   verificationNote String?
   verificationSubmittedAt DateTime?
   tokenVersion       Int                @default(0)
+  /// Set by the admin console when access is suspended. Firebase is disabled
+  /// at the same time, while this database flag invalidates app JWTs immediately.
+  disabledAt         DateTime?
+  /// Tombstone rather than a hard delete: financial, booking and audit foreign
+  /// keys remain valid, while credentials and personal fields are removed.
+  deletedAt          DateTime?
   cityId             String
   city               City               @relation(fields: [cityId], references: [id])
   createdAt          DateTime           @default(now())
@@ -163,6 +169,7 @@ model User {
   pushTokens          DevicePushToken[]
 
   @@index([cityId])
+  @@index([deletedAt])
 }
 
 /// One row per user who has completed provider onboarding. `salonCreatedAt`
