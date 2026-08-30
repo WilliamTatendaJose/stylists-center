@@ -24,6 +24,7 @@ export function useAuthGate(): boolean {
   const accessToken = useAuthStore((s) => s.accessToken);
   const hydrate = useAuthStore((s) => s.hydrate);
   const segments = useSegments();
+  const routeSegments: readonly string[] = segments;
   const { data: me } = useMe();
   const pendingProviderId = usePendingProviderStore((s) => s.pendingProviderId);
   const clearPendingProviderId = usePendingProviderStore((s) => s.clearPendingProviderId);
@@ -77,7 +78,7 @@ export function useAuthGate(): boolean {
       const onProviderSetupChild =
         me.selectedAccountType === 'provider' &&
         String(segments[0]) === 'map' &&
-        String(segments[1] ?? '') === 'pick-location';
+        String(routeSegments[1] ?? '') === 'pick-location';
       const onExpectedSetup = segments[0] === destination.slice(1);
       // Account type remains reachable through the onboarding back button;
       // the explicit selector success callback moves forward after saving.
