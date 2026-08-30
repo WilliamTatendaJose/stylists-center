@@ -7,8 +7,13 @@ import { imageUrlSchema } from './uploads.js';
  * single source that keeps the two surfaces from drifting.
  */
 
+export const activeRoleSchema = z.enum(['client', 'provider']);
+export type ActiveRole = z.infer<typeof activeRoleSchema>;
+
 export const firebaseExchangeSchema = z.object({
   idToken: z.string().min(1),
+  /** Present only when authentication started from the create-account screen. */
+  accountType: activeRoleSchema.optional(),
 });
 export type FirebaseExchangeInput = z.infer<typeof firebaseExchangeSchema>;
 
@@ -22,9 +27,6 @@ export const refreshSchema = z.object({
   refreshToken: z.string(),
 });
 export type RefreshInput = z.infer<typeof refreshSchema>;
-
-export const activeRoleSchema = z.enum(['client', 'provider']);
-export type ActiveRole = z.infer<typeof activeRoleSchema>;
 
 export const setActiveRoleSchema = z.object({
   role: activeRoleSchema,

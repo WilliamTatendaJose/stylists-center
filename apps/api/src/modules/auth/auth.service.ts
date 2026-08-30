@@ -46,16 +46,37 @@ export class AuthService {
     private readonly firebaseIdentity: FirebaseIdentityService,
   ) {}
 
-  async exchangeFirebaseToken(idToken: string): Promise<AuthTokens> {
+  async exchangeFirebaseToken(idToken: string, accountType?: ActiveRole): Promise<AuthTokens> {
     const identity = await this.firebaseIdentity.verifyIdToken(idToken);
     if (!identity.email || !identity.emailVerified) {
       throw new UnauthorizedException('Verify your email before continuing');
     }
 
-    const user = await this.findOrCreateFirebaseUser(identity);
+    let user = await this.findOrCreateFirebaseUser(identity);
     const ban = await this.trust.findActiveBan(user.id);
     if (ban) {
       throw new ForbiddenException(`Your account has been removed: ${ban.reason}`);
+    }
+
+    // The create-account screen is shared by password and Google auth. Carry
+    // its selection through the exchange so Google cannot silently inherit
+    // User.activeRole's database default (client), and so choosing client on
+    // an existing dual-role account is respected too. A brand-new stylist
+    // cannot be activated until provider setup creates their page; the mobile
+    // gate uses the same accountType intent to take them there first.
+    if (accountType === 'client' && user.activeRole !== 'client') {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { activeRole: 'client' },
+      });
+    } else if (accountType === 'provider' && user.activeRole !== 'provider') {
+      const profile = await this.prisma.providerProfile.findUnique({ where: { userId: user.id } });
+      if (profile) {
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { activeRole: 'provider' },
+        });
+      }
     }
 
     return this.issueTokens(user.id, user.tokenVersion);

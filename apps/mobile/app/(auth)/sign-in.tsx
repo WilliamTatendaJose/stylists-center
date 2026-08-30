@@ -48,7 +48,6 @@ export default function SignIn() {
         });
         return;
       }
-      router.replace('/(tabs)');
     } catch (reason) {
       setError(firebaseErrorMessage(reason));
     } finally {
@@ -67,7 +66,6 @@ export default function SignIn() {
         router.replace({ pathname: '/(auth)/verify-email' });
         return;
       }
-      router.replace('/(tabs)');
     } catch (reason) {
       setError(firebaseErrorMessage(reason));
     } finally {

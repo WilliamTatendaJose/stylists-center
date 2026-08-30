@@ -187,5 +187,24 @@ describe('AuthService Firebase exchange', () => {
       },
     });
     expect((await auth.setActiveRole(id, 'provider')).activeRole).toBe('provider');
+
+    // Creating/signing up as a client must override the role on an existing
+    // dual-role account instead of dropping it back into the stylist UI.
+    await auth.exchangeFirebaseToken('firebase-id-token', 'client');
+    expect((await auth.me(id)).activeRole).toBe('client');
+
+    // Conversely, Google sign-up as a provider must restore the provider side
+    // when this Firebase identity already owns a stylist page.
+    await auth.exchangeFirebaseToken('firebase-id-token', 'provider');
+    expect((await auth.me(id)).activeRole).toBe('provider');
+  });
+
+  it('keeps a new provider selection on the client role until provider setup exists', async () => {
+    const tokens = await auth.exchangeFirebaseToken('firebase-id-token', 'provider');
+    const { id } = await auth.verifyAccessToken(tokens.accessToken);
+    expect(await auth.me(id)).toMatchObject({
+      activeRole: 'client',
+      hasProviderProfile: false,
+    });
   });
 });

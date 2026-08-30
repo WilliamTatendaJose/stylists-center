@@ -63,11 +63,6 @@ export function useAuthGate(): boolean {
       router.replace('/(auth)');
       return;
     }
-    if (accessToken && (inAuthGroup || inOnboarding)) {
-      router.replace('/(tabs)');
-      return;
-    }
-
     // Role and profile-completion routing both wait for /v1/me: guessing
     // from a local default would bounce a stylist through the client tabs
     // (or past the name prompt) on every cold start.
@@ -99,11 +94,11 @@ export function useAuthGate(): boolean {
     // already made (e.g. signing in again on a new device), has nothing to
     // do here and just clears the stray flag.
     if (pendingAccountType === 'provider' && !me.hasProviderProfile) {
+      clearPendingAccountType();
       if (segments[0] !== 'provider-setup') {
-        clearPendingAccountType();
         router.replace('/provider-setup');
-        return;
       }
+      return;
     } else if (pendingAccountType) {
       clearPendingAccountType();
     }
@@ -112,6 +107,7 @@ export function useAuthGate(): boolean {
     const inClientGroup = segments[0] === '(tabs)';
     const wantsProvider = me.activeRole === 'provider' && me.hasProviderProfile;
     const onCompleteProfile = segments[0] === 'complete-profile';
+    const leavingAuthentication = inAuthGroup || inOnboarding;
 
     // Three cases collapse to the same fix: sitting on the now-finished name
     // prompt, or on the wrong side of the client/provider split either way.
@@ -119,6 +115,7 @@ export function useAuthGate(): boolean {
     // roles. Redirect only when the user is actually inside the opposite tab
     // group; otherwise opening a provider conversation bounces to Jobs.
     if (
+      leavingAuthentication ||
       onCompleteProfile ||
       (wantsProvider && inClientGroup) ||
       (!wantsProvider && inProviderGroup)

@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Linking, FlatList, Modal, StyleSheet, View } from 'react-native';
-import { ChevronLeft, CheckCheck, FileText, Paperclip, Search, X } from 'lucide-react-native';
+import { ActivityIndicator, Image, Linking, FlatList, Modal, StyleSheet, View } from 'react-native';
+import {
+  ChevronLeft,
+  ChevronRight,
+  CheckCheck,
+  FileText,
+  Paperclip,
+  Search,
+  X,
+} from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import type { DocumentPickerAsset } from 'expo-document-picker';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { radius, space } from '@sc/tokens';
 import { formatInHarare, type ConversationDto, type MessageDto } from '@sc/shared';
 import {
@@ -27,6 +35,7 @@ import { useBack } from '../../src/navigation/useBack.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useMe } from '../../src/api/hooks/useMe.js';
 import { apiAssetUrl } from '../../src/api/client.js';
+import { ServerConnectionPanel } from '../../src/components/ServerConnectionPanel.js';
 
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -43,11 +52,30 @@ const PICKER_TYPES = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
 
+interface ChatListItem {
+  message: MessageDto;
+  showDate: boolean;
+}
+
 const styles = StyleSheet.create({
-  header: { flexDirection: 'row', alignItems: 'center', gap: space.m },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  headerIdentity: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    borderRadius: radius.pill,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.xs,
+  },
   headerText: { flex: 1, minWidth: 0 },
   headerAction: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   list: { flex: 1 },
+  listContent: { paddingTop: space.s },
+  listEmpty: { flexGrow: 1, justifyContent: 'center', paddingBottom: space.xxl },
+  loadingState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: space.m },
+  connectionState: { flex: 1, justifyContent: 'center' },
   searchWrap: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginBottom: space.m },
   composerWrap: { gap: space.s },
   attachmentQueue: { flexDirection: 'row', flexWrap: 'wrap', gap: space.s },
@@ -106,6 +134,9 @@ const styles = StyleSheet.create({
   timestamp: { marginTop: 3 },
   receipt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3 },
   centreNote: { textAlign: 'center', marginBottom: space.l, marginTop: space.s },
+  dayDivider: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginVertical: space.l },
+  dayRule: { flex: 1, height: 1 },
+  emptyCopy: { maxWidth: 260, alignSelf: 'center' },
   imageViewer: { flex: 1, padding: space.l, gap: space.m },
   viewerClose: {
     alignSelf: 'flex-end',
@@ -137,7 +168,13 @@ export default function Chat() {
     me?.activeRole === 'provider' ? '/(provider)/messages' : '/(tabs)/messages',
   );
   const startConversation = useStartConversation();
-  const { data: conversations } = useConversations();
+  const {
+    data: conversations,
+    isLoading: isLoadingConversations,
+    isError: conversationsError,
+    error: conversationLoadError,
+    refetch: refetchConversations,
+  } = useConversations();
   const [resolvedConversation, setResolvedConversation] = useState<ConversationDto | null>(null);
   const [draft, setDraft] = useState('');
   const [queuedAttachments, setQueuedAttachments] = useState<DocumentPickerAsset[]>([]);
@@ -156,7 +193,13 @@ export default function Chat() {
     resolvedConversation ??
     (!providerId ? (conversations?.find((c) => c.id === threadId) ?? null) : null);
   const conversationId = conversation?.id ?? null;
-  const { data: messages = [] } = useConversationMessages(conversationId);
+  const {
+    data: messages = [],
+    isLoading: isLoadingMessages,
+    isError: messagesError,
+    error: messageLoadError,
+    refetch: refetchMessages,
+  } = useConversationMessages(conversationId);
   useChatRealtime(conversationId);
   const sendMessage = useSendMessage(conversationId);
 
@@ -169,10 +212,65 @@ export default function Chat() {
             .includes(query),
         )
       : messages;
-    return [...matching].reverse();
+    return [...matching]
+      .map<ChatListItem>((message, index) => ({
+        message,
+        showDate:
+          index === 0 ||
+          formatInHarare(message.createdAt, 'yyyy-MM-dd') !==
+            formatInHarare(matching[index - 1]?.createdAt ?? message.createdAt, 'yyyy-MM-dd'),
+      }))
+      .reverse();
   }, [messageQuery, messages]);
 
-  if (!threadId || !conversation) return null;
+  if (!threadId) return null;
+
+  if (!conversation) {
+    const failed = startConversation.isError || conversationsError;
+    return (
+      <Screen
+        scroll={false}
+        header={
+          <View style={styles.header}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+              onPress={onBack}
+              style={styles.headerAction}
+            >
+              <ChevronLeft size={22} strokeWidth={1.9} color={colors.text} />
+            </Pressable>
+            <Text variant="cardTitle">Messages</Text>
+          </View>
+        }
+      >
+        {failed ? (
+          <View style={styles.connectionState}>
+            <ServerConnectionPanel
+              error={startConversation.error ?? conversationLoadError}
+              onRetry={() => {
+                if (providerId) {
+                  startConversation.reset();
+                  startConversation.mutate(providerId, { onSuccess: setResolvedConversation });
+                } else {
+                  void refetchConversations();
+                }
+              }}
+            />
+          </View>
+        ) : (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="large" color={colors.accent} />
+            <Text variant="meta" color="neutral600">
+              {isLoadingConversations || startConversation.isPending
+                ? 'Opening conversationâ€¦'
+                : 'Conversation not found.'}
+            </Text>
+          </View>
+        )}
+      </Screen>
+    );
+  }
 
   const pickAttachments = async () => {
     setSendError(null);
@@ -233,85 +331,134 @@ export default function Chat() {
     }
   };
 
-  const renderMessage = ({ item }: { item: MessageDto }) => (
-    <View style={[styles.bubbleRow, item.mine ? styles.bubbleMine : styles.bubbleTheirs]}>
-      <View
-        style={[
-          styles.bubble,
-          item.mine
-            ? { backgroundColor: colors.accent }
-            : [
-                styles.bubbleTheirsBorder,
-                { backgroundColor: colors.surface, borderColor: colors.divider },
-              ],
-        ]}
-      >
-        {item.text ? (
-          <Text variant="body" color={item.mine ? colors.bg : colors.text}>
-            {item.text}
-          </Text>
-        ) : null}
-        {(item.attachments ?? []).map((attachment) => {
-          const image = attachment.mimeType.startsWith('image/');
-          return (
-            <Pressable
-              key={attachment.id}
-              accessibilityRole="link"
-              accessibilityLabel={`Open attachment ${attachment.name}`}
-              onPress={() => {
-                if (image) {
-                  const url = apiAssetUrl(attachment.url);
-                  if (url) setSelectedImage({ url, name: attachment.name });
-                  return;
-                }
-                void openAttachment(attachment.url);
-              }}
-              style={[
-                styles.attachmentCard,
-                item.mine
-                  ? { backgroundColor: colors.onDark.border }
-                  : { backgroundColor: colors.neutral200 },
-                image ? styles.attachmentImageCard : null,
-              ]}
-            >
-              {image ? (
-                <ImagePlaceholder
-                  uri={apiAssetUrl(attachment.url)}
-                  label={attachment.name}
-                  radius={12}
-                  style={styles.attachmentImage}
-                />
-              ) : (
-                <FileText size={24} strokeWidth={1.7} color={item.mine ? colors.bg : colors.text} />
-              )}
-              <View style={styles.attachmentText}>
-                <Text variant="meta" color={item.mine ? colors.bg : colors.text} numberOfLines={1}>
-                  {attachment.name}
-                </Text>
-                <Text variant="metaSmall" color={item.mine ? colors.bg : colors.neutral600}>
-                  {formatFileSize(attachment.sizeBytes)} · Tap to open
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
-      </View>
-      {item.mine ? (
-        <View style={styles.receipt}>
-          <CheckCheck
-            size={13}
-            strokeWidth={1.8}
-            color={item.read ? colors.accent700 : colors.neutral600}
-          />
-          <Text variant="metaSmall" color={item.read ? 'accent700' : 'neutral600'}>
-            {formatInHarare(item.createdAt, 'HH:mm')} · {item.read ? 'Read' : 'Sent'}
-          </Text>
-        </View>
-      ) : (
-        <Text variant="metaSmall" color="neutral600" style={styles.timestamp}>
-          {formatInHarare(item.createdAt, 'HH:mm')}
+  const openProviderProfile = () => {
+    if (!conversation.counterpartyProviderId) return;
+    router.push({
+      pathname: '/provider/[id]',
+      params: { id: conversation.counterpartyProviderId },
+    });
+  };
+
+  const headerIdentity = (
+    <>
+      <Avatar
+        initials={conversation.initials}
+        tint={conversation.tint}
+        uri={apiAssetUrl(conversation.imageUrl)}
+        size={38}
+      />
+      <View style={styles.headerText}>
+        <Text variant="cardTitle" numberOfLines={1}>
+          {conversation.counterpartyName}
         </Text>
-      )}
+        <Text variant="metaSmall" color="neutral600">
+          {conversation.counterpartyProviderId ? 'View stylist profile' : 'Conversation'}
+        </Text>
+      </View>
+      {conversation.counterpartyProviderId ? (
+        <ChevronRight size={17} strokeWidth={1.8} color={colors.neutral600} />
+      ) : null}
+    </>
+  );
+
+  const renderMessage = ({ item: { message: item, showDate } }: { item: ChatListItem }) => (
+    <View>
+      {showDate ? (
+        <View style={styles.dayDivider}>
+          <View style={[styles.dayRule, { backgroundColor: colors.divider }]} />
+          <Text variant="metaSmall" color="neutral600">
+            {formatInHarare(item.createdAt, 'EEE, d MMM')}
+          </Text>
+          <View style={[styles.dayRule, { backgroundColor: colors.divider }]} />
+        </View>
+      ) : null}
+      <View style={[styles.bubbleRow, item.mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+        <View
+          style={[
+            styles.bubble,
+            item.mine
+              ? { backgroundColor: colors.accent }
+              : [
+                  styles.bubbleTheirsBorder,
+                  { backgroundColor: colors.surface, borderColor: colors.divider },
+                ],
+          ]}
+        >
+          {item.text ? (
+            <Text variant="body" color={item.mine ? colors.bg : colors.text}>
+              {item.text}
+            </Text>
+          ) : null}
+          {(item.attachments ?? []).map((attachment) => {
+            const image = attachment.mimeType.startsWith('image/');
+            return (
+              <Pressable
+                key={attachment.id}
+                accessibilityRole="link"
+                accessibilityLabel={`Open attachment ${attachment.name}`}
+                onPress={() => {
+                  if (image) {
+                    const url = apiAssetUrl(attachment.url);
+                    if (url) setSelectedImage({ url, name: attachment.name });
+                    return;
+                  }
+                  void openAttachment(attachment.url);
+                }}
+                style={[
+                  styles.attachmentCard,
+                  item.mine
+                    ? { backgroundColor: colors.onDark.border }
+                    : { backgroundColor: colors.neutral200 },
+                  image ? styles.attachmentImageCard : null,
+                ]}
+              >
+                {image ? (
+                  <ImagePlaceholder
+                    uri={apiAssetUrl(attachment.url)}
+                    label={attachment.name}
+                    radius={12}
+                    style={styles.attachmentImage}
+                  />
+                ) : (
+                  <FileText
+                    size={24}
+                    strokeWidth={1.7}
+                    color={item.mine ? colors.bg : colors.text}
+                  />
+                )}
+                <View style={styles.attachmentText}>
+                  <Text
+                    variant="meta"
+                    color={item.mine ? colors.bg : colors.text}
+                    numberOfLines={1}
+                  >
+                    {attachment.name}
+                  </Text>
+                  <Text variant="metaSmall" color={item.mine ? colors.bg : colors.neutral600}>
+                    {formatFileSize(attachment.sizeBytes)} · Tap to open
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+        {item.mine ? (
+          <View style={styles.receipt}>
+            <CheckCheck
+              size={13}
+              strokeWidth={1.8}
+              color={item.read ? colors.accent700 : colors.neutral600}
+            />
+            <Text variant="metaSmall" color={item.read ? 'accent700' : 'neutral600'}>
+              {formatInHarare(item.createdAt, 'HH:mm')} · {item.read ? 'Read' : 'Sent'}
+            </Text>
+          </View>
+        ) : (
+          <Text variant="metaSmall" color="neutral600" style={styles.timestamp}>
+            {formatInHarare(item.createdAt, 'HH:mm')}
+          </Text>
+        )}
+      </View>
     </View>
   );
 
@@ -320,25 +467,26 @@ export default function Chat() {
       scroll={false}
       header={
         <View style={styles.header}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" onPress={onBack}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={onBack}
+            style={styles.headerAction}
+          >
             <ChevronLeft size={22} strokeWidth={1.9} color={colors.text} />
           </Pressable>
-          <Avatar
-            initials={conversation.initials}
-            tint={conversation.tint}
-            uri={apiAssetUrl(conversation.imageUrl)}
-            size={34}
-          />
-          <View style={styles.headerText}>
-            <Text variant="cardTitle" numberOfLines={1}>
-              {conversation.counterpartyName}
-            </Text>
-            <Text variant="metaSmall" color="neutral600">
-              {conversation.unreadCount > 0
-                ? `${String(conversation.unreadCount)} unread`
-                : 'Conversation'}
-            </Text>
-          </View>
+          {conversation.counterpartyProviderId ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`View ${conversation.counterpartyName}'s stylist profile`}
+              onPress={openProviderProfile}
+              style={styles.headerIdentity}
+            >
+              {headerIdentity}
+            </Pressable>
+          ) : (
+            <View style={styles.headerIdentity}>{headerIdentity}</View>
+          )}
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={searchOpen ? 'Close message search' : 'Search this conversation'}
@@ -433,24 +581,51 @@ export default function Chat() {
           ) : null}
         </View>
       ) : null}
-      <FlatList
-        style={styles.list}
-        data={visibleMessages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        inverted
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <Text variant="meta" color="neutral600" align="center">
-            {messageQuery.trim() ? 'No messages match your search.' : 'No messages yet. Say hello.'}
-          </Text>
-        }
-        ListFooterComponent={
-          <Text variant="metaSmall" color="neutral600" style={styles.centreNote}>
-            Keep order details and collection updates here so both sides have the same record.
-          </Text>
-        }
-      />
+      {messagesError ? (
+        <View style={styles.connectionState}>
+          <ServerConnectionPanel
+            error={messageLoadError}
+            compact
+            onRetry={() => void refetchMessages()}
+          />
+        </View>
+      ) : (
+        <FlatList
+          style={styles.list}
+          contentContainerStyle={
+            visibleMessages.length === 0 ? styles.listEmpty : styles.listContent
+          }
+          data={visibleMessages}
+          keyExtractor={(item) => item.message.id}
+          renderItem={renderMessage}
+          inverted
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            isLoadingMessages ? (
+              <View style={styles.loadingState}>
+                <ActivityIndicator size="large" color={colors.accent} />
+                <Text variant="meta" color="neutral600">
+                  Loading messagesâ€¦
+                </Text>
+              </View>
+            ) : (
+              <Text variant="meta" color="neutral600" align="center" style={styles.emptyCopy}>
+                {messageQuery.trim()
+                  ? 'No messages match your search.'
+                  : `No messages yet. Say hello to ${conversation.counterpartyName}.`}
+              </Text>
+            )
+          }
+          ListFooterComponent={
+            visibleMessages.length > 0 ? (
+              <Text variant="metaSmall" color="neutral600" style={styles.centreNote}>
+                Keep order details and collection updates here so both sides have the same record.
+              </Text>
+            ) : null
+          }
+        />
+      )}
       <Modal
         visible={selectedImage !== null}
         animationType="fade"

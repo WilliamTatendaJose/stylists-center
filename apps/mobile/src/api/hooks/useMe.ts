@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ActiveRole, Me, UpdateProfileInput } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { confirmAfterTimeout } from '../confirmAfterTimeout.js';
+import { useAuthStore } from '../../state/useAuthStore.js';
 
 export const ME_QUERY_KEY = ['me'] as const;
 
@@ -14,9 +15,11 @@ export const ME_QUERY_KEY = ['me'] as const;
  * as. The server has known both all along; this is what asks it.
  */
 export function useMe() {
+  const accessToken = useAuthStore((state) => state.accessToken);
   return useQuery({
     queryKey: ME_QUERY_KEY,
     queryFn: () => apiFetch<Me>('/v1/me'),
+    enabled: !!accessToken,
     // Identity changes rarely and only through this app, so a refetch on
     // every screen focus is wasted data on a metered connection.
     staleTime: 5 * 60 * 1000,

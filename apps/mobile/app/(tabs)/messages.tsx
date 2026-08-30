@@ -26,6 +26,7 @@ const styles = StyleSheet.create({
   unreadRow: {
     marginHorizontal: -space.s,
     paddingHorizontal: space.s,
+    borderRadius: 18,
   },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.s },
 });
@@ -65,6 +66,11 @@ export default function Messages() {
       : isLoading
         ? 'Loading your conversations…'
         : 'No conversations yet — message a stylist or buyer to start one.';
+
+  const openProvider = (providerId: string | undefined) => {
+    if (!providerId) return;
+    router.push({ pathname: '/provider/[id]', params: { id: providerId } });
+  };
 
   return (
     <Screen
@@ -132,7 +138,12 @@ export default function Messages() {
                 size: 48,
               }}
               title={conversation.counterpartyName}
-              meta={conversation.lastMessagePreview || 'Say hello…'}
+              meta={
+                conversation.lastMessagePreview
+                  ? `${conversation.lastMessageMine ? 'You: ' : ''}${conversation.lastMessagePreview}`
+                  : 'Start the conversation…'
+              }
+              subMeta={conversation.unreadCount > 0 ? 'New message' : undefined}
               rightCaption={formatBookingWhen(conversation.lastMessageAt)}
               right={
                 conversation.unreadCount > 0 ? (
@@ -145,6 +156,16 @@ export default function Messages() {
                   params: { threadId: conversation.id },
                 });
               }}
+              onAvatarPress={
+                conversation.counterpartyProviderId
+                  ? () => openProvider(conversation.counterpartyProviderId)
+                  : undefined
+              }
+              avatarAccessibilityLabel={
+                conversation.counterpartyProviderId
+                  ? `View ${conversation.counterpartyName}'s stylist profile`
+                  : undefined
+              }
             />
           </View>
         ))

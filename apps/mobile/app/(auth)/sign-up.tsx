@@ -79,9 +79,8 @@ export default function SignUp() {
     setError(null);
     setPendingAccountType(accountType);
     try {
-      const result = await createAccount(email.trim(), password, name.trim());
+      const result = await createAccount(email.trim(), password, name.trim(), accountType);
       if (!result.needsEmailVerification) {
-        router.replace('/(tabs)');
         return;
       }
       router.replace({
@@ -104,7 +103,7 @@ export default function SignUp() {
     // it does — setting the intent afterwards would race that redirect.
     setPendingAccountType(accountType);
     try {
-      const result = await signInWithGoogle();
+      const result = await signInWithGoogle(accountType);
       // Dismissing the sheet has to take the intent back with it. The store is
       // persisted (it has to survive the app close that email verification
       // involves), so a 'provider' left behind by an abandoned sign-up outlives
@@ -118,7 +117,6 @@ export default function SignUp() {
         router.replace('/(auth)/verify-email');
         return;
       }
-      router.replace('/(tabs)');
     } catch (reason) {
       clearPendingAccountType();
       setError(firebaseErrorMessage(reason));

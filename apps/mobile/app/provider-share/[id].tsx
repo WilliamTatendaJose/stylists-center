@@ -24,7 +24,7 @@ export default function ProviderShareLanding() {
 
   useEffect(() => {
     if (!providerId?.trim()) {
-      router.replace('/(auth)/index');
+      router.replace('/(auth)');
       return;
     }
     if (accessToken) {

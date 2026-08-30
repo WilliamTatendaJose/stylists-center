@@ -71,7 +71,11 @@ export class ChatService {
             createdAt: { gt: lastReadAt },
           },
         });
-        return toConversationDto(c, counterparty, messagePreview(c.messages[0]), unreadCount);
+        return toConversationDto(c, counterparty, messagePreview(c.messages[0]), unreadCount, {
+          viewerId,
+          lastMessageAuthorId: c.messages[0]?.authorId,
+          counterpartyProviderId: viewingAsClient ? profile?.id : undefined,
+        });
       }),
     );
   }
@@ -100,7 +104,11 @@ export class ChatService {
       },
     });
 
-    return toConversationDto(conversation, provider, messagePreview(lastMessage), unreadCount);
+    return toConversationDto(conversation, provider, messagePreview(lastMessage), unreadCount, {
+      viewerId: clientId,
+      lastMessageAuthorId: lastMessage?.authorId,
+      counterpartyProviderId: provider.id,
+    });
   }
 
   /**
@@ -152,7 +160,11 @@ export class ChatService {
           initials: deriveInitials(order.buyer.displayName),
           avatarImageUrl: order.buyer.avatarImageUrl,
         };
-    return toConversationDto(conversation, counterparty, messagePreview(lastMessage), unreadCount);
+    return toConversationDto(conversation, counterparty, messagePreview(lastMessage), unreadCount, {
+      viewerId,
+      lastMessageAuthorId: lastMessage?.authorId,
+      counterpartyProviderId: viewingAsBuyer ? order.provider.id : undefined,
+    });
   }
 
   /** Viewing the thread is what marks it read — plan §9's endpoint list has no separate "mark read" call. */

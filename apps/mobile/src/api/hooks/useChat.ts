@@ -89,7 +89,12 @@ export function useSendMessage(conversationId: string | null) {
         method: 'POST',
         body: messageForm(input),
       }),
-    onSuccess: () => {
+    onSuccess: (message) => {
+      // Put the acknowledged message on screen immediately; the refetch still
+      // reconciles read receipts and any simultaneous incoming messages.
+      queryClient.setQueryData<MessageDto[]>(messagesKey(conversationId), (current = []) =>
+        current.some((row) => row.id === message.id) ? current : [...current, message],
+      );
       void queryClient.invalidateQueries({ queryKey: messagesKey(conversationId) });
       void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY, exact: true });
     },

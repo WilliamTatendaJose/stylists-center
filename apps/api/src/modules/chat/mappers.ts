@@ -37,15 +37,24 @@ export function toConversationDto(
   counterparty: ProviderIdentity,
   lastMessagePreview: string,
   unreadCount: number,
+  context: {
+    viewerId: string;
+    lastMessageAuthorId?: string | undefined;
+    counterpartyProviderId?: string | undefined;
+  },
 ): ConversationDto {
   const imageUrl = counterparty.avatarImageUrl ?? counterparty.profileImageUrl;
   return {
     id: conversation.id,
     counterpartyName: counterparty.displayName,
+    ...(context.counterpartyProviderId
+      ? { counterpartyProviderId: context.counterpartyProviderId }
+      : {}),
     tint: counterparty.tint,
     initials: counterparty.initials,
     ...(imageUrl ? { imageUrl } : {}),
     lastMessagePreview,
+    lastMessageMine: context.lastMessageAuthorId === context.viewerId,
     lastMessageAt: conversation.lastMessageAt.toISOString(),
     unreadCount,
   };

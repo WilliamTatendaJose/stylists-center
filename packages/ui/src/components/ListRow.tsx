@@ -26,6 +26,9 @@ export interface ListRowProps {
   right?: ReactNode;
   divider?: boolean;
   onPress?: () => void;
+  /** Optional independent action for identity-driven rows such as the message inbox. */
+  onAvatarPress?: () => void;
+  avatarAccessibilityLabel?: string;
 }
 
 const styles = StyleSheet.create({
@@ -58,11 +61,27 @@ export function ListRow({
   right,
   divider = true,
   onPress,
+  onAvatarPress,
+  avatarAccessibilityLabel,
 }: ListRowProps) {
   const { colors } = useTheme();
+  const avatarNode = onAvatarPress ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={avatarAccessibilityLabel ?? `View ${title}`}
+      onPress={(event) => {
+        event.stopPropagation();
+        onAvatarPress();
+      }}
+    >
+      <Avatar initials={avatar.initials} tint={avatar.tint} uri={avatar.uri} size={avatar.size} />
+    </Pressable>
+  ) : (
+    <Avatar initials={avatar.initials} tint={avatar.tint} uri={avatar.uri} size={avatar.size} />
+  );
   const content = (
     <>
-      <Avatar initials={avatar.initials} tint={avatar.tint} uri={avatar.uri} size={avatar.size} />
+      {avatarNode}
       <View style={styles.middle}>
         <View style={styles.titleRow}>
           <Text variant="cardTitle" numberOfLines={1}>

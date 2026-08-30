@@ -22,6 +22,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ accessToken: stored?.accessToken ?? null, isHydrated: true });
   },
   setSession: async (tokens) => {
+    // A Firebase exchange may authenticate a different identity without the
+    // previous session passing through our explicit sign-out button. Do not
+    // let that identity inherit the old account's cached /me role while the
+    // auth gate is deciding which side of the app to open.
+    queryClient.clear();
     await setStoredTokens(tokens);
     set({ accessToken: tokens.accessToken });
   },

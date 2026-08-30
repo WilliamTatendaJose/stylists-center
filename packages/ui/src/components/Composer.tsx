@@ -17,6 +17,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', gap: space.s, alignItems: 'center' },
   input: {
     flex: 1,
+    minHeight: 44,
+    maxHeight: 112,
     backgroundColor: color.surface,
     borderWidth: 1,
     borderColor: color.divider,
@@ -46,6 +48,9 @@ export function Composer({
         onChangeText={onChange}
         placeholder="Message…"
         placeholderTextColor={colors.neutral600}
+        multiline
+        maxLength={2000}
+        textAlignVertical="top"
         style={[
           styles.input,
           { backgroundColor: colors.surface, borderColor: colors.divider, color: colors.text },

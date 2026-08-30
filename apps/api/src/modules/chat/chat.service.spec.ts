@@ -142,6 +142,8 @@ describe('ChatService', () => {
   it('creates a conversation with a provider on first message, and reuses it on a second call', async () => {
     const first = await chat.getOrCreateByProvider(clientId, providerId);
     expect(first.counterpartyName).toBe('Chat Provider');
+    expect(first.counterpartyProviderId).toBe(providerId);
+    expect(first.lastMessageMine).toBe(false);
     expect(first.unreadCount).toBe(0);
 
     const second = await chat.getOrCreateByProvider(clientId, providerId);
@@ -204,6 +206,7 @@ describe('ChatService', () => {
     const row = list.find((c) => c.id === conversation.id);
     expect(row?.unreadCount).toBe(1);
     expect(row?.lastMessagePreview).toBe('Yes, come by at 4.');
+    expect(row?.lastMessageMine).toBe(false);
 
     await chat.getMessages(conversation.id, clientId);
     const after = await chat.list(clientId);
@@ -217,6 +220,7 @@ describe('ChatService', () => {
     const providerInbox = await chat.list(providerUserId);
     const providerRow = providerInbox.find((row) => row.id === conversation.id);
     expect(providerRow?.counterpartyName).toBe('Chat Client');
+    expect(providerRow?.counterpartyProviderId).toBeUndefined();
     expect(providerRow?.unreadCount).toBeGreaterThan(0);
 
     const providerMessages = await chat.getMessages(conversation.id, providerUserId);

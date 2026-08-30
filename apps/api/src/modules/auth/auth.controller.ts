@@ -32,7 +32,7 @@ export class AuthController {
 
   @Post('firebase/exchange')
   exchangeFirebaseToken(@Body() dto: FirebaseExchangeDto) {
-    return this.auth.exchangeFirebaseToken(dto.idToken);
+    return this.auth.exchangeFirebaseToken(dto.idToken, dto.accountType);
   }
 
   @Post('refresh')

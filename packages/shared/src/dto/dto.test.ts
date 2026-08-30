@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createMatchRequestSchema } from './matching.js';
 import { createBookingSchema } from './bookings.js';
 import { firebaseExchangeSchema } from './auth.js';
+import { conversationSchema } from './chat.js';
 import { imageUrlSchema } from './uploads.js';
 import { paySubscriptionSchema } from './subscription.js';
 import {
@@ -124,7 +125,32 @@ describe('paySubscriptionSchema', () => {
 describe('auth schemas', () => {
   it('requires a Firebase ID token for session exchange', () => {
     expect(firebaseExchangeSchema.safeParse({ idToken: 'firebase-token' }).success).toBe(true);
+    expect(
+      firebaseExchangeSchema.safeParse({ idToken: 'firebase-token', accountType: 'provider' })
+        .success,
+    ).toBe(true);
+    expect(
+      firebaseExchangeSchema.safeParse({ idToken: 'firebase-token', accountType: 'admin' }).success,
+    ).toBe(false);
     expect(firebaseExchangeSchema.safeParse({ idToken: '' }).success).toBe(false);
+  });
+});
+
+describe('chat schemas', () => {
+  it('carries the provider destination and sent-message state used by the inbox', () => {
+    expect(
+      conversationSchema.safeParse({
+        id: '00000000-0000-4000-8000-000000000001',
+        counterpartyName: 'Stylist',
+        counterpartyProviderId: '00000000-0000-4000-8000-000000000002',
+        tint: '#222222',
+        initials: 'ST',
+        lastMessagePreview: 'See you soon',
+        lastMessageMine: true,
+        lastMessageAt: '2026-08-30T12:00:00.000Z',
+        unreadCount: 0,
+      }).success,
+    ).toBe(true);
   });
 });
 

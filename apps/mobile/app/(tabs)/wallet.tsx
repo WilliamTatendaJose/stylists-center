@@ -287,7 +287,7 @@ export default function WalletScreen() {
           Coins
         </Text>
         <Text variant="meta" color="neutral700" style={styles.conversion}>
-          = {formatUsd(displayUsdCents)} Â· 1 coin = {formatUsd(wallet.coinUsdCents)}
+          = {formatUsd(displayUsdCents)} · 1 coin = {formatUsd(wallet.coinUsdCents)}
         </Text>
         <Button
           label={cashOut.isPending ? 'Submittingâ€¦' : `Cash out ${formatUsd(wallet.usdCents)}`}

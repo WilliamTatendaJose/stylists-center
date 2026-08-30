@@ -4,11 +4,15 @@ import { imageUrlSchema } from './uploads.js';
 export const conversationSchema = z.object({
   id: z.uuid(),
   counterpartyName: z.string(),
+  /** Present when the other participant has a public provider page. */
+  counterpartyProviderId: z.uuid().optional(),
   tint: z.string(),
   initials: z.string(),
   /** The other person's public photo, when they have set one. */
   imageUrl: imageUrlSchema.optional(),
   lastMessagePreview: z.string(),
+  /** Lets the inbox distinguish a sent preview from an incoming message. */
+  lastMessageMine: z.boolean(),
   lastMessageAt: z.iso.datetime(),
   unreadCount: z.number().int(),
 });
