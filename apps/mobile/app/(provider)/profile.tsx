@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react';
-import { Share, StyleSheet, Switch, View } from 'react-native';
+import { ActivityIndicator, Share, StyleSheet, Switch, View } from 'react-native';
 import { router } from 'expo-router';
-import { Clock3, Gift, LogOut, MapPin, Moon, Sun, UserRound } from 'lucide-react-native';
+import {
+  CheckCircle2,
+  Clock3,
+  Gift,
+  LogOut,
+  MapPin,
+  Moon,
+  Sun,
+  UserRound,
+} from 'lucide-react-native';
 import { deriveInitials, formatInHarare, formatUsd, type ServiceDto } from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
@@ -37,6 +46,7 @@ import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 import { providerShareLink } from '../../src/sharing/shareLinks.js';
+import { useAddressAutocomplete } from '../../src/location/useAddressAutocomplete.js';
 import {
   ProfileHero,
   ProfileIconTile,
@@ -93,6 +103,21 @@ const styles = StyleSheet.create({
     marginTop: space.s,
     marginBottom: space.m,
   },
+  addressResults: {
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginTop: space.s,
+  },
+  addressResult: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: space.l,
+    paddingVertical: space.s,
+    borderBottomWidth: 1,
+  },
+  addressResultLast: { borderBottomWidth: 0 },
+  addressHint: { marginTop: space.s },
 });
 
 export default function ProviderProfile() {
@@ -122,6 +147,8 @@ export default function ProviderProfile() {
   const [portfolioImageUrls, setPortfolioImageUrls] = useState<string[]>([]);
   const [lat, setLat] = useState(0);
   const [lng, setLng] = useState(0);
+  const [addressQuery, setAddressQuery] = useState('');
+  const [locationAttached, setLocationAttached] = useState(false);
   const [serviceName, setServiceName] = useState('');
   const [duration, setDuration] = useState('60');
   const [price, setPrice] = useState('20');
@@ -140,6 +167,8 @@ export default function ProviderProfile() {
     setPortfolioImageUrls(data.portfolioImageUrls);
     setLat(data.lat);
     setLng(data.lng);
+    setAddressQuery('');
+    setLocationAttached(true);
   }, [data]);
 
   // Consumed once, right after the map picker pops back to this screen (still
@@ -150,8 +179,12 @@ export default function ProviderProfile() {
     setLat(pickedLocation.lat);
     setLng(pickedLocation.lng);
     if (pickedLocation.areaName) setAreaName(pickedLocation.areaName);
+    setAddressQuery('');
+    setLocationAttached(true);
     clearPickedLocation();
   }, [pickedLocation, clearPickedLocation]);
+
+  const addressLookup = useAddressAutocomplete(addressQuery, deviceLocation);
 
   if (isError && !data) {
     return (
@@ -272,6 +305,7 @@ export default function ProviderProfile() {
   const profileValid =
     displayName.trim().length >= 2 &&
     areaName.trim().length >= 2 &&
+    locationAttached &&
     workingHoursLabel.trim().length >= 2;
   const serviceValid =
     serviceName.trim().length >= 2 && Number(duration) >= 10 && Number(price) >= 1;
@@ -387,6 +421,7 @@ export default function ProviderProfile() {
               block
               onPress={() => {
                 setError(null);
+                setAddressQuery('');
                 setDetailsSheetOpen(true);
               }}
             />
@@ -601,17 +636,79 @@ export default function ProviderProfile() {
           <TextField label="Provider name" value={displayName} onChangeText={setDisplayName} />
         </View>
         <View style={styles.sheetField}>
-          <TextField label="Area" value={areaName} onChangeText={setAreaName} />
-        </View>
-        <View style={styles.sheetField}>
           <TextField
-            label="Working hours"
-            value={workingHoursLabel}
-            onChangeText={setWorkingHoursLabel}
+            label="Business address"
+            value={areaName}
+            onChangeText={(value) => {
+              setAreaName(value);
+              setAddressQuery(value);
+              setLocationAttached(false);
+            }}
+            placeholder="Start typing your street or area"
           />
+          {addressLookup.status === 'searching' ? (
+            <View style={styles.locationRow}>
+              <ActivityIndicator size="small" color={colors.accent} />
+              <Text variant="meta" color="neutral700">
+                Finding matching addresses…
+              </Text>
+            </View>
+          ) : null}
+          {addressLookup.suggestions.length > 0 ? (
+            <View
+              style={[
+                styles.addressResults,
+                { borderColor: colors.divider, backgroundColor: colors.bg },
+              ]}
+            >
+              {addressLookup.suggestions.map((suggestion, index) => (
+                <Pressable
+                  key={suggestion.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use ${suggestion.label}`}
+                  onPress={() => {
+                    setAreaName(suggestion.label);
+                    setLat(suggestion.lat);
+                    setLng(suggestion.lng);
+                    setAddressQuery('');
+                    setLocationAttached(true);
+                  }}
+                  style={[
+                    styles.addressResult,
+                    { borderColor: colors.divider },
+                    index === addressLookup.suggestions.length - 1
+                      ? styles.addressResultLast
+                      : null,
+                  ]}
+                >
+                  <Text variant="body" numberOfLines={2}>
+                    {suggestion.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
+          {!areaName.trim() ? (
+            <Text variant="metaSmall" color="neutral600" style={styles.addressHint}>
+              Select a matching address and its map coordinates will be attached automatically.
+            </Text>
+          ) : null}
         </View>
-        <View style={styles.row}>
-          <View style={styles.grow}>
+        {locationAttached ? (
+          <View style={styles.locationRow}>
+            <CheckCircle2 size={17} color={colors.accent} />
+            <Text variant="metaSmall" color="neutral600">
+              Address attached · {lat.toFixed(5)}, {lng.toFixed(5)}
+            </Text>
+          </View>
+        ) : null}
+        {addressLookup.status === 'not-found' || addressLookup.status === 'unavailable' ? (
+          <>
+            <Text variant="meta" color="accent700" style={styles.sheetField}>
+              {addressLookup.status === 'not-found'
+                ? "We couldn't find that address. Choose it manually on the map."
+                : 'Address search is unavailable. Choose the location manually on the map.'}
+            </Text>
             <Button
               label="Choose on map"
               variant="secondary"
@@ -623,7 +720,16 @@ export default function ProviderProfile() {
                 });
               }}
             />
-          </View>
+          </>
+        ) : null}
+        <View style={styles.sheetField}>
+          <TextField
+            label="Working hours"
+            value={workingHoursLabel}
+            onChangeText={setWorkingHoursLabel}
+          />
+        </View>
+        <View style={styles.row}>
           <View style={styles.grow}>
             <Button
               label={locationSource === 'device' ? 'Use current location' : 'Location unavailable'}
@@ -633,6 +739,7 @@ export default function ProviderProfile() {
               onPress={() => {
                 setLat(deviceLocation.lat);
                 setLng(deviceLocation.lng);
+                setLocationAttached(true);
               }}
             />
           </View>
