@@ -11,6 +11,7 @@ import type { Prisma } from '../../generated/prisma';
 export interface ProductGeoRow {
   id: string;
   name: string;
+  category: string;
   description: string;
   priceUsdCents: number;
   stockQty: number;
@@ -21,7 +22,10 @@ export interface ProductGeoRow {
   initials: string;
   providerImageUrl?: string | null;
   verified: boolean;
+  sellerRatingAvg: number;
+  sellerCompletedCount: number;
   areaName: string;
+  pickupHours: string;
   distanceKm: number;
 }
 
@@ -29,6 +33,7 @@ export function toProductRow(row: ProductGeoRow): ProductRowDto {
   return {
     id: row.id,
     name: row.name,
+    category: row.category as ProductRowDto['category'],
     priceUsdCents: row.priceUsdCents,
     stockQty: row.stockQty,
     imageUrls: row.imageUrls,
@@ -38,17 +43,19 @@ export function toProductRow(row: ProductGeoRow): ProductRowDto {
     initials: row.initials,
     ...(row.providerImageUrl ? { providerImageUrl: row.providerImageUrl } : {}),
     verified: row.verified,
+    sellerRatingAvg: row.sellerRatingAvg,
+    sellerCompletedCount: row.sellerCompletedCount,
     areaName: row.areaName,
     distanceKm: row.distanceKm,
   };
 }
 
 export function toProductDetail(row: ProductGeoRow): ProductDetailDto {
-  return { ...toProductRow(row), description: row.description };
+  return { ...toProductRow(row), description: row.description, pickupHours: row.pickupHours };
 }
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{
-  include: { provider: true; items: true };
+  include: { provider: true; items: true; productReviews: true };
 }>;
 
 export function toOrderRow(order: OrderWithRelations): OrderRowDto {
@@ -66,12 +73,18 @@ export function toOrderRow(order: OrderWithRelations): OrderRowDto {
     initials: order.provider.initials,
     ...(providerImageUrl ? { providerImageUrl } : {}),
     areaName: order.provider.areaName,
+    pickupAddress: order.pickupAddress ?? order.provider.areaName,
+    pickupHours: order.pickupHours ?? order.provider.workingHoursLabel,
+    pickupLat: order.pickupLat ?? order.provider.latitude,
+    pickupLng: order.pickupLng ?? order.provider.longitude,
+    pickupNote: order.pickupNote,
     // The name and price the buyer agreed to, not whatever the product says now.
     items: order.items.map((item) => ({
       productId: item.productId,
       name: item.nameSnapshot,
       priceUsdCents: item.priceUsdCents,
       quantity: item.quantity,
+      reviewed: order.productReviews.some((review) => review.productId === item.productId),
     })),
     canCancel: canCancelOrder(order.status),
     canCollect: canCollectOrder(order.status),

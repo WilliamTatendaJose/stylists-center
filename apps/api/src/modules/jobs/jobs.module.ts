@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env';
 
 export const MATCHING_QUEUE = 'matching';
+export const REMINDERS_QUEUE = 'reminders';
 
 /**
  * BullMQ delayed jobs are the authority for match/offer expiry (plan §6) —
@@ -32,6 +33,7 @@ export const MATCHING_QUEUE = 'matching';
       },
     }),
     BullModule.registerQueue({ name: MATCHING_QUEUE }),
+    BullModule.registerQueue({ name: REMINDERS_QUEUE }),
   ],
   exports: [BullModule],
 })

@@ -14,7 +14,7 @@ import {
   EmptyPanel,
   ImagePlaceholder,
 } from '@sc/ui';
-import { useProduct } from '../../src/api/hooks/useMarket.js';
+import { useProduct, useProductReviews } from '../../src/api/hooks/useMarket.js';
 import { useCartStore } from '../../src/state/index.js';
 import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
 import { apiAssetUrl } from '../../src/api/client.js';
@@ -31,6 +31,7 @@ const styles = StyleSheet.create({
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   description: { marginBottom: space.l },
   stockRow: { marginBottom: space.xl },
+  reviews: { marginTop: space.xl, gap: space.s },
   footer: { gap: space.s },
 });
 
@@ -40,6 +41,7 @@ export default function ProductDetail() {
   const marketHome = useMarketHome();
   const onBack = useBack(marketHome);
   const { data: product, isError } = useProduct(id);
+  const { data: reviews } = useProductReviews(id);
 
   const addToCart = useCartStore((s) => s.add);
   const [added, setAdded] = useState(false);
@@ -134,11 +136,20 @@ export default function ProductDetail() {
           <Text variant="meta" color="neutral700">
             {product.areaName} · {product.distanceKm.toFixed(1)} km away
           </Text>
+          {product.sellerCompletedCount > 0 ? (
+            <Text variant="metaSmall" color="neutral600">
+              Stylist rating {product.sellerRatingAvg.toFixed(1)} ★ · {product.sellerCompletedCount}{' '}
+              completed services
+            </Text>
+          ) : null}
         </View>
       </View>
 
       <Text variant="body" color="neutral700" style={styles.description}>
         {product.description}
+      </Text>
+      <Text variant="meta" color="neutral700" style={styles.description}>
+        Category: {product.category} · Collection hours: {product.pickupHours}
       </Text>
 
       <View style={styles.stockRow}>
@@ -158,6 +169,26 @@ export default function ProductDetail() {
         You collect this from {product.providerName} in {product.areaName}. Stock is held for you
         once you order — up to {String(MAX_ORDER_ITEM_QUANTITY)} of any one item.
       </Text>
+      <View style={styles.reviews}>
+        <Text variant="sectionLabel">Buyer reviews</Text>
+        <Text variant="meta" color="neutral700">
+          {reviews?.count
+            ? `${reviews.averageRating.toFixed(1)} ★ from ${reviews.count} verified buyers`
+            : 'No buyer reviews yet'}
+        </Text>
+        {reviews?.reviews.map((review) => (
+          <View key={review.id}>
+            <Text variant="bodyStrong">
+              {review.rating} ★ · {review.buyerName}
+            </Text>
+            {review.text ? (
+              <Text variant="meta" color="neutral700">
+                {review.text}
+              </Text>
+            ) : null}
+          </View>
+        ))}
+      </View>
     </Screen>
   );
 }

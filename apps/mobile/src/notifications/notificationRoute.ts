@@ -13,7 +13,7 @@
  */
 export function notificationRoute(data: unknown): string | null {
   if (typeof data !== 'object' || data === null) return null;
-  const { type, matchId, conversationId, bookingId } = data as Record<string, unknown>;
+  const { type, matchId, conversationId, bookingId, orderId } = data as Record<string, unknown>;
 
   switch (type) {
     case 'match.offered':
@@ -24,6 +24,10 @@ export function notificationRoute(data: unknown): string | null {
       return typeof conversationId === 'string' ? `/chat/${conversationId}` : null;
     case 'booking.updated':
       return typeof bookingId === 'string' ? '/(tabs)/bookings' : null;
+    case 'market.order.created':
+      return typeof orderId === 'string' ? '/(provider)/shop' : null;
+    case 'market.order.ready':
+      return typeof orderId === 'string' ? '/market/orders' : null;
     default:
       return null;
   }

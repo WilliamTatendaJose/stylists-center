@@ -16,6 +16,9 @@ import {
   type ServiceDto,
   type UpdateProviderProfileInput,
   type UpdateProviderServiceInput,
+  type ProviderCalendarDto,
+  type UpdateWeeklyHoursInput,
+  type CreateProviderTimeOffInput,
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { confirmAfterTimeout } from '../confirmAfterTimeout.js';
@@ -186,6 +189,53 @@ export function useCreateProviderProfile() {
 }
 
 const PROVIDER_PROFILE_KEY = ['provider', 'profile'] as const;
+
+const PROVIDER_CALENDAR_KEY = ['provider', 'calendar'] as const;
+export function useProviderCalendar() {
+  return useQuery({
+    queryKey: PROVIDER_CALENDAR_KEY,
+    queryFn: () => apiFetch<ProviderCalendarDto>('/v1/provider/calendar'),
+  });
+}
+
+export function useUpdateProviderCalendar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateWeeklyHoursInput) =>
+      apiFetch<ProviderCalendarDto>('/v1/provider/calendar', { method: 'PATCH', body: input }),
+    onSuccess: (calendar) => {
+      queryClient.setQueryData(PROVIDER_CALENDAR_KEY, calendar);
+      void queryClient.invalidateQueries({ queryKey: ['providers'] });
+    },
+  });
+}
+
+export function useAddProviderTimeOff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateProviderTimeOffInput) =>
+      apiFetch<ProviderCalendarDto>('/v1/provider/calendar/time-off', {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: (calendar) => {
+      queryClient.setQueryData(PROVIDER_CALENDAR_KEY, calendar);
+      void queryClient.invalidateQueries({ queryKey: ['providers'] });
+    },
+  });
+}
+
+export function useRemoveProviderTimeOff() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<ProviderCalendarDto>(`/v1/provider/calendar/time-off/${id}`, { method: 'DELETE' }),
+    onSuccess: (calendar) => {
+      queryClient.setQueryData(PROVIDER_CALENDAR_KEY, calendar);
+      void queryClient.invalidateQueries({ queryKey: ['providers'] });
+    },
+  });
+}
 
 export function useProviderManagementProfile() {
   return useQuery({

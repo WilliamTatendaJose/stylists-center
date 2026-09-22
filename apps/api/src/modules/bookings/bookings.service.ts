@@ -12,12 +12,14 @@ import type {
   CreateBookingInput,
   CreateBookingResponse,
   CreateReviewInput,
+  RescheduleBookingInput,
 } from '@sc/shared';
 import {
   canCancelBooking,
   formatBookingReference,
   isLateCancellation,
   isSubscriptionActive,
+  FREE_CANCELLATION_WINDOW_HOURS,
   needsCashReconciliation,
   normalizePhone,
 } from '@sc/shared';
@@ -38,6 +40,7 @@ import { PaymentStatusService } from '../payments/payment-status.service';
 import { TrustService } from '../trust/trust.service';
 import { toBookingRowDto } from './mappers';
 import { expireStaleBookingRequests } from './booking-expiry';
+import { isWithinWeeklyHours, readWeeklyHours } from '../providers/calendar-policy';
 
 const NON_BLOCKING_STATUSES = ['cancelled', 'declined'] as const;
 
@@ -72,6 +75,17 @@ export class BookingsService {
 
     const startsAt = new Date(input.startsAt);
     const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
+    if (
+      !Number.isFinite(startsAt.getTime()) ||
+      startsAt <= new Date() ||
+      !isWithinWeeklyHours(readWeeklyHours(service.provider.weeklyHours), startsAt, endsAt)
+    ) {
+      throw new BadRequestException('That time is outside this stylist’s working hours');
+    }
+    const existingTimeOff = await this.prisma.providerTimeOff.findFirst({
+      where: { providerId: input.providerId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
+    });
+    if (existingTimeOff) throw new BadRequestException('That stylist is away at this time');
     const reference = formatBookingReference(await this.nextBookingSequence());
 
     // EcoCash checkout is created BEFORE the match is confirmed and the
@@ -115,6 +129,19 @@ export class BookingsService {
       // in the migration remains the final database-level safeguard for any
       // future write path that does not use this service.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.providerId}))`;
+
+      // Calendar edits take the same lock, so a newly blocked period cannot race checkout.
+      const currentProfile = await tx.providerProfile.findUniqueOrThrow({
+        where: { id: input.providerId },
+        select: { weeklyHours: true },
+      });
+      if (!isWithinWeeklyHours(readWeeklyHours(currentProfile.weeklyHours), startsAt, endsAt)) {
+        throw new BadRequestException('That time is no longer available');
+      }
+      const blocked = await tx.providerTimeOff.findFirst({
+        where: { providerId: input.providerId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
+      });
+      if (blocked) throw new BadRequestException('That time is no longer available');
 
       const conflict = await tx.booking.findFirst({
         where: {
@@ -189,6 +216,93 @@ export class BookingsService {
 
     const { status } = await this.paymentStatus.resolve({ bookingId });
     return { status };
+  }
+
+  async reschedule(
+    bookingId: string,
+    clientId: string,
+    input: RescheduleBookingInput,
+  ): Promise<BookingRowDto> {
+    const startsAt = new Date(input.startsAt);
+    const minimum = Date.now() + FREE_CANCELLATION_WINDOW_HOURS * 60 * 60_000;
+    if (
+      !Number.isFinite(startsAt.getTime()) ||
+      startsAt.getTime() < minimum ||
+      startsAt.getTime() > Date.now() + 30 * 24 * 60 * 60_000
+    ) {
+      throw new BadRequestException('Choose a new time between two hours and 30 days from now');
+    }
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        provider: { select: { userId: true } },
+        service: { select: { durationMinutes: true } },
+      },
+    });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.clientId !== clientId) throw new ForbiddenException();
+    if (
+      booking.matchRequestId ||
+      !['awaiting_provider', 'confirmed'].includes(booking.status) ||
+      booking.startsAt.getTime() < minimum
+    ) {
+      throw new BadRequestException('This booking can no longer be rescheduled');
+    }
+    if (booking.startsAt.getTime() === startsAt.getTime()) return this.toRowById(bookingId);
+    const endsAt = new Date(startsAt.getTime() + booking.service.durationMinutes * 60_000);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${booking.providerId}))`;
+      const current = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
+      if (
+        !['awaiting_provider', 'confirmed'].includes(current.status) ||
+        current.startsAt.getTime() < minimum
+      ) {
+        throw new BadRequestException('This booking can no longer be rescheduled');
+      }
+      const profile = await tx.providerProfile.findUniqueOrThrow({
+        where: { id: booking.providerId },
+        select: { weeklyHours: true },
+      });
+      if (!isWithinWeeklyHours(readWeeklyHours(profile.weeklyHours), startsAt, endsAt)) {
+        throw new BadRequestException('That time is outside this stylist’s working hours');
+      }
+      const conflict = await tx.booking.findFirst({
+        where: {
+          providerId: booking.providerId,
+          id: { not: bookingId },
+          startsAt: { lt: endsAt },
+          endsAt: { gt: startsAt },
+          status: { notIn: [...NON_BLOCKING_STATUSES] },
+        },
+      });
+      const blocked = await tx.providerTimeOff.findFirst({
+        where: {
+          providerId: booking.providerId,
+          startsAt: { lt: endsAt },
+          endsAt: { gt: startsAt },
+        },
+      });
+      if (conflict || blocked) throw new BadRequestException('That time is no longer available');
+      await tx.booking.update({
+        where: { id: bookingId },
+        data: {
+          startsAt,
+          endsAt,
+          status: 'awaiting_provider',
+          confirmedByClient: false,
+          confirmedByProvider: false,
+        },
+      });
+    });
+    const row = await this.toRowById(bookingId);
+    this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
+    this.socketEmitter.emitToUser(booking.provider.userId, 'booking.updated', row);
+    void this.push.sendToUser(booking.provider.userId, {
+      title: 'Booking time changed',
+      body: `Booking ${booking.reference} moved to ${row.whenLabel}. Please confirm the new time.`,
+      data: { type: 'booking.updated', bookingId },
+    });
+    return row;
   }
 
   async listForClient(clientId: string): Promise<BookingRowDto[]> {

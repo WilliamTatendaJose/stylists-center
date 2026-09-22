@@ -1,6 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { PAYMENT_GATEWAY, type PaymentGatewayPort } from './payment-gateway.port';
+import {
+  PAYMENT_GATEWAY,
+  POLLABLE_PROVIDERS,
+  type PaymentGatewayPort,
+} from './payment-gateway.port';
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 import { recordSubscriptionPaymentStatus } from './subscription-payment';
 
@@ -25,11 +29,11 @@ export interface PaymentStatusResult {
 
 /**
  * Answers "did this actually get paid?" for a booking, order, or
- * subscription, asking Paynow directly when the answer isn't already settled.
+ * subscription, asking the gateway directly when the answer isn't already settled.
  *
  * Every checkout in this app used to be treated as successful the moment it
  * was *initiated* — the client opened a browser and the app moved straight to
- * its success screen. Paynow's callback is the authoritative answer, but it
+ * its success screen. The gateway's callback is the authoritative answer, but it
  * cannot reach a server without a public URL and, even in production, arrives
  * some time after the customer approves. Polling closes that gap; the
  * callback still handles the case where nobody is watching the screen.
@@ -49,7 +53,11 @@ export class PaymentStatusService {
       orderBy: { createdAt: 'desc' },
     });
     if (!payment) return { status: 'none', changed: false };
-    if (TERMINAL.has(payment.status) || payment.provider !== 'paynow' || !payment.externalRef) {
+    if (
+      TERMINAL.has(payment.status) ||
+      !POLLABLE_PROVIDERS.has(payment.provider) ||
+      !payment.externalRef
+    ) {
       return { status: payment.status, changed: false };
     }
 
@@ -58,10 +66,10 @@ export class PaymentStatusService {
       polled = await this.gateway.pollStatus(payment.externalRef);
     } catch (error) {
       // This endpoint is polled every few seconds by a waiting screen. A
-      // Paynow blip must read as "still waiting", not as a failed request —
+      // gateway blip must read as "still waiting", not as a failed request —
       // the payment itself is unaffected either way.
       this.logger.warn(
-        `Paynow poll failed for payment ${payment.id}: ${error instanceof Error ? error.message : String(error)}`,
+        `Gateway poll failed for payment ${payment.id}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return { status: payment.status, changed: false };
     }

@@ -10,8 +10,13 @@ import {
   type OrderRowDto,
   type ProductDetailDto,
   type ProductPageDto,
+  type ProductCategory,
+  type ProductSort,
   type ProviderOrderDto,
   type ProviderProductDto,
+  type MarkOrderReadyInput,
+  type CreateProductReviewInput,
+  type ProductReviewsDto,
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { useSessionStore } from '../../state/index.js';
@@ -26,13 +31,30 @@ const PRODUCTS_KEY = ['market', 'products'] as const;
  * to the same max distance as the rest of the app. A buyer collects in
  * person, so distance is as much a property of a product as its price.
  */
-export function useProducts(debouncedQuery = '') {
+export interface MarketFilters {
+  category?: ProductCategory;
+  minPriceUsdCents?: number;
+  maxPriceUsdCents?: number;
+  sort?: ProductSort;
+}
+
+export function useProducts(debouncedQuery = '', filters: MarketFilters = {}) {
   const location = useSessionStore((s) => s.location);
   const maxDistanceKm = useSessionStore((s) => s.maxDistanceKm);
   const term = debouncedQuery.trim();
 
   return useInfiniteQuery({
-    queryKey: [...PRODUCTS_KEY, term, location.lat, location.lng, maxDistanceKm],
+    queryKey: [
+      ...PRODUCTS_KEY,
+      term,
+      location.lat,
+      location.lng,
+      maxDistanceKm,
+      filters.category,
+      filters.minPriceUsdCents,
+      filters.maxPriceUsdCents,
+      filters.sort,
+    ],
     initialPageParam: 0,
     getNextPageParam: (last: ProductPageDto) => last.nextOffset,
     queryFn: ({ pageParam }) =>
@@ -44,6 +66,14 @@ export function useProducts(debouncedQuery = '') {
           limit: String(PRODUCT_PAGE_SIZE),
           offset: String(pageParam),
           ...(term.length >= 2 ? { q: term } : {}),
+          ...(filters.category ? { category: filters.category } : {}),
+          ...(filters.minPriceUsdCents !== undefined
+            ? { minPriceUsdCents: String(filters.minPriceUsdCents) }
+            : {}),
+          ...(filters.maxPriceUsdCents !== undefined
+            ? { maxPriceUsdCents: String(filters.maxPriceUsdCents) }
+            : {}),
+          sort: filters.sort ?? 'nearest',
         }).toString()}`,
       ),
   });
@@ -65,10 +95,44 @@ export function useProduct(id: string | undefined) {
   });
 }
 
+export function useProductReviews(productId: string | undefined) {
+  return useQuery({
+    enabled: !!productId,
+    queryKey: ['market', 'product-reviews', productId],
+    queryFn: () => apiFetch<ProductReviewsDto>(`/v1/market/products/${productId}/reviews`),
+  });
+}
+
+export function useReviewProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      orderId,
+      productId,
+      input,
+    }: {
+      orderId: string;
+      productId: string;
+      input: CreateProductReviewInput;
+    }) =>
+      apiFetch(`/v1/market/orders/${orderId}/products/${productId}/review`, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: (_review, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ORDERS_KEY });
+      void queryClient.invalidateQueries({
+        queryKey: ['market', 'product-reviews', variables.productId],
+      });
+    },
+  });
+}
+
 export function useMyOrders() {
   return useQuery({
     queryKey: ORDERS_KEY,
     queryFn: () => apiFetch<OrderRowDto[]>('/v1/market/orders'),
+    refetchInterval: 30_000,
   });
 }
 
@@ -213,8 +277,8 @@ export function useDeleteProviderProduct() {
 export function useProviderMarkOrderReady() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (orderId: string) =>
-      apiFetch<void>(`/v1/provider/orders/${orderId}/ready`, { method: 'POST' }),
+    mutationFn: ({ orderId, input }: { orderId: string; input: MarkOrderReadyInput }) =>
+      apiFetch<void>(`/v1/provider/orders/${orderId}/ready`, { method: 'POST', body: input }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: PROVIDER_ORDERS_KEY });
     },

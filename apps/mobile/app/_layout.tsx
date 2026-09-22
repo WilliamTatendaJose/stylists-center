@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
+import { AppState, Platform, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { focusManager } from '@tanstack/react-query';
 import {
   useFonts,
   Archivo_400Regular,
@@ -45,6 +46,13 @@ const styles = StyleSheet.create({
  * resolves.
  */
 export default function RootLayout() {
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      focusManager.setFocused(state === 'active');
+    });
+    return () => subscription.remove();
+  }, []);
   const [fontsLoaded, fontError] = useFonts({
     Archivo_400Regular,
     Archivo_600SemiBold,

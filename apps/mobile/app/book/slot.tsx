@@ -8,12 +8,15 @@ import type { DateStripItem } from '@sc/ui';
 import { useProvider, useProviderSlots } from '../../src/api/hooks/useProviders.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
+import { useRescheduleBooking } from '../../src/api/hooks/useBookings.js';
+import { describeError } from '../../src/api/errorMessage.js';
+import { isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function buildDateStrip(): DateStripItem[] {
   const now = Date.now();
-  return Array.from({ length: 4 }, (_, i) => {
+  return Array.from({ length: 14 }, (_, i) => {
     const iso = new Date(now + i * DAY_MS).toISOString();
     return {
       value: formatInHarare(iso, 'yyyy-MM-dd'),
@@ -41,6 +44,10 @@ export default function ChooseSlot() {
   const serviceId = useBookingDraftStore((s) => s.serviceId);
   const setService = useBookingDraftStore((s) => s.setService);
   const setSlot = useBookingDraftStore((s) => s.setSlot);
+  const rescheduleBookingId = useBookingDraftStore((s) => s.rescheduleBookingId);
+  const resetDraft = useBookingDraftStore((s) => s.reset);
+  const reschedule = useRescheduleBooking();
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const { data: provider } = useProvider(providerId ?? undefined);
   const dates = useMemo(buildDateStrip, []);
@@ -77,6 +84,21 @@ export default function ChooseSlot() {
 
   const continueToPayment = () => {
     if (!canContinue) return;
+    if (rescheduleBookingId && time) {
+      setSubmitError(null);
+      reschedule.mutate(
+        { bookingId: rescheduleBookingId, input: { startsAt: isoFromHarareSlot(date, time) } },
+        {
+          onSuccess: () => {
+            resetDraft();
+            router.replace('/(tabs)/bookings');
+          },
+          onError: (reason) =>
+            setSubmitError(describeError(reason, "Couldn't move this booking. Try another time.")),
+        },
+      );
+      return;
+    }
     router.push('/book/payment');
   };
 
@@ -87,7 +109,7 @@ export default function ChooseSlot() {
           title="Choose a slot"
           subtitle={
             <Text variant="meta" color="neutral600">
-              Step 1 of 2
+              {rescheduleBookingId ? 'Choose a new time' : 'Step 1 of 2'}
             </Text>
           }
           onBack={onBack}
@@ -104,11 +126,17 @@ export default function ChooseSlot() {
             </Text>
           </View>
           <Button
-            label="Continue to payment"
+            label={
+              rescheduleBookingId
+                ? reschedule.isPending
+                  ? 'Saving…'
+                  : 'Request new time'
+                : 'Continue to payment'
+            }
             block
             size="lg"
             arrow
-            disabled={!canContinue}
+            disabled={!canContinue || reschedule.isPending}
             onPress={continueToPayment}
           />
         </View>
@@ -126,6 +154,7 @@ export default function ChooseSlot() {
               description={`${String(service.durationMinutes)} min · ${formatUsd(service.priceUsdCents)}`}
               selected={service.id === serviceId}
               onPress={() => {
+                if (rescheduleBookingId) return;
                 // A slot that fits one service may overlap an existing booking
                 // once the client chooses a longer service.
                 setService(service.id);
@@ -148,9 +177,14 @@ export default function ChooseSlot() {
           Time
         </Text>
         <TimeGrid slots={slotsResponse?.slots ?? []} value={time} onChange={chooseTime} />
+        {submitError ? (
+          <Text variant="meta" color="accent700" accessibilityRole="alert" style={styles.note}>
+            {submitError}
+          </Text>
+        ) : null}
         <Text variant="meta" color="neutral600" style={styles.note}>
-          Greyed slots are already taken. {provider?.displayName ?? 'The stylist'} confirms or
-          declines within the hour.
+          Greyed slots are unavailable. {provider?.displayName ?? 'The stylist'} confirms or
+          declines {rescheduleBookingId ? 'the new time' : 'within the hour'}.
         </Text>
       </View>
     </Screen>

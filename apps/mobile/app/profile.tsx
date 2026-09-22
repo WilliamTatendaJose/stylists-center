@@ -38,6 +38,7 @@ import { useBack } from '../src/navigation/useBack.js';
 import { PhotoPicker } from '../src/components/PhotoPicker.js';
 import { ServerConnectionPanel } from '../src/components/ServerConnectionPanel.js';
 import { RoleSwitcher } from '../src/components/RoleSwitcher.js';
+import { NotificationPreferences } from '../src/components/NotificationPreferences.js';
 
 const VERIFICATION_LABEL: Record<'unverified' | 'pending' | 'verified', string> = {
   verified: 'Verified professional',
@@ -216,6 +217,10 @@ export default function Profile() {
             </View>
             <ChevronRight size={20} color={colors.neutral700} />
           </Card>
+        </ProfileSection>
+
+        <ProfileSection label="Notifications">
+          <NotificationPreferences />
         </ProfileSection>
 
         <ProfileSection label="Appearance">

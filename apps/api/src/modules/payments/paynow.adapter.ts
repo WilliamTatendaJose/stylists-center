@@ -14,6 +14,7 @@ import type {
   PaymentIntentResult,
   PaymentPollStatus,
 } from './payment-gateway.port';
+import { toLocalPhone } from './phone-format';
 
 const INITIATE_URL = 'https://www.paynow.co.zw/interface/initiatetransaction';
 const MOBILE_INITIATE_URL = 'https://www.paynow.co.zw/interface/remotetransaction';
@@ -223,9 +224,4 @@ export class PaynowAdapter implements PaymentGatewayPort {
 
 function formatCents(cents: number): string {
   return (cents / 100).toFixed(2);
-}
-
-/** Paynow's mobile transaction API expects a local "0771234567" number, not the app's stored E.164 "+263771234567". */
-function toLocalPhone(e164: string): string {
-  return e164.startsWith('+263') ? `0${e164.slice(4)}` : e164;
 }

@@ -95,11 +95,16 @@ function OrderStatusRow({
  */
 export default function MarketPaying() {
   const { colors } = useTheme();
-  const params = useLocalSearchParams<{ orders?: string; instructions?: string }>();
+  const params = useLocalSearchParams<{
+    orders?: string;
+    instructions?: string;
+    remainingCount?: string;
+  }>();
   const orders = useMemo(() => parseOrders(params.orders), [params.orders]);
   const [statuses, setStatuses] = useState<Record<string, string>>({});
   const [timedOut, setTimedOut] = useState(false);
   const hostedFallback = orders.some((order) => order.requiresHostedCheckout);
+  const remainingCount = Number(params.remainingCount ?? 0);
 
   const onStatus = useCallback((orderId: string, status: string) => {
     setStatuses((prev) => (prev[orderId] === status ? prev : { ...prev, [orderId]: status }));
@@ -135,6 +140,7 @@ export default function MarketPaying() {
             totalUsdCents: o.totalUsdCents,
           })),
         ),
+        ...(remainingCount > 0 ? { remainingCount: String(remainingCount) } : {}),
       },
     });
   };
@@ -188,6 +194,19 @@ export default function MarketPaying() {
           onStatus={onStatus}
         />
       ))}
+      {remainingCount > 0 ? (
+        <View>
+          <Text variant="meta" color="neutral700">
+            {remainingCount} seller {remainingCount === 1 ? 'order could not' : 'orders could not'}{' '}
+            be placed. Those items are still in your cart.
+          </Text>
+          <Button
+            label="Review remaining cart"
+            variant="secondary"
+            onPress={() => router.replace('/market/cart')}
+          />
+        </View>
+      ) : null}
     </Screen>
   );
 }

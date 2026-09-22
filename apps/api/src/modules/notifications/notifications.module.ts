@@ -1,5 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { PushService } from './push.service';
+import { JobsModule } from '../jobs/jobs.module';
+import { ReminderService } from './reminder.service';
+import { ReminderProcessor } from './reminder.processor';
 
 /**
  * Global for the same reason the realtime emitter is reachable everywhere:
@@ -9,7 +12,8 @@ import { PushService } from './push.service';
  */
 @Global()
 @Module({
-  providers: [PushService],
-  exports: [PushService],
+  imports: [JobsModule],
+  providers: [PushService, ReminderService, ReminderProcessor],
+  exports: [PushService, ReminderService],
 })
 export class NotificationsModule {}

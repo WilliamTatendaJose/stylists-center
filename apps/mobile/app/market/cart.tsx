@@ -77,6 +77,7 @@ export default function Cart() {
   const remove = useCartStore((s) => s.remove);
   const removeSeller = useCartStore((s) => s.removeSeller);
   const clear = useCartStore((s) => s.clear);
+  const getCheckoutKey = useCartStore((s) => s.getCheckoutKey);
 
   const createOrder = useCreateOrder();
   const { data: me } = useMe();
@@ -131,6 +132,7 @@ export default function Cart() {
         createOrder
           .mutateAsync({
             providerId: group.providerId,
+            checkoutKey: getCheckoutKey(group.providerId),
             paymentMethod,
             items: group.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
             ...(paymentMethod === 'ecocash' ? { payerPhone: payerPhone.trim() } : {}),
@@ -161,15 +163,12 @@ export default function Cart() {
       removeSeller(group.providerId);
     }
 
-    if (Object.keys(nextErrors).length > 0) {
-      // At least one seller failed: stay here. The cart now shows only the
-      // sellers still pending, each with its own error, ready to retry —
-      // re-fetching this same screen re-derives `groups` from what is left.
+    const remainingCount = Object.keys(nextErrors).length;
+    if (remainingCount > 0 && succeeded.length === 0) {
       setSellerErrors(nextErrors);
       return;
     }
-
-    clear();
+    if (remainingCount === 0) clear();
 
     // In-app EcoCash starts one phone prompt per order. Every order waits on
     // its real result rather than treating a successful API request as paid.
@@ -191,6 +190,7 @@ export default function Cart() {
         pathname: '/market/paying',
         params: {
           orders: JSON.stringify(pendingOrders),
+          ...(remainingCount ? { remainingCount: String(remainingCount) } : {}),
           ...(firstInstructions ? { instructions: firstInstructions } : {}),
         },
       });
@@ -207,6 +207,7 @@ export default function Cart() {
             totalUsdCents: created.totalUsdCents,
           })),
         ),
+        ...(remainingCount ? { remainingCount: String(remainingCount) } : {}),
       },
     });
   };

@@ -1,5 +1,5 @@
 import type { BookingRowDto } from '@sc/shared';
-import { canCancelBooking, formatBookingWhen } from '@sc/shared';
+import { canCancelBooking, formatBookingWhen, FREE_CANCELLATION_WINDOW_HOURS } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 
 export type BookingWithRelations = Prisma.BookingGetPayload<{
@@ -13,6 +13,7 @@ export function toBookingRowDto(
   return {
     id: booking.id,
     providerId: booking.providerId,
+    serviceId: booking.serviceId,
     counterpartyName: booking.provider.displayName,
     tint: booking.provider.tint,
     initials: booking.provider.initials,
@@ -36,5 +37,9 @@ export function toBookingRowDto(
     canTravel: booking.status === 'confirmed',
     canRate: booking.status === 'completed' && !alreadyRated,
     canCancel: canCancelBooking(booking.status),
+    canReschedule:
+      (booking.status === 'awaiting_provider' || booking.status === 'confirmed') &&
+      booking.matchRequestId === null &&
+      booking.startsAt.getTime() - Date.now() >= FREE_CANCELLATION_WINDOW_HOURS * 60 * 60_000,
   };
 }

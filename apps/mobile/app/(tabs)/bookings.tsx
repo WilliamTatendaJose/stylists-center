@@ -41,6 +41,7 @@ import { useCreateReport } from '../../src/api/hooks/useReports.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
+import { useBookingDraftStore } from '../../src/state/useBookingDraftStore.js';
 
 const STARS = [1, 2, 3, 4, 5];
 
@@ -77,6 +78,8 @@ interface BookingCardProps {
   onCancel: () => void;
   onOnMyWay: () => void;
   onDirections: () => void;
+  onReschedule: () => void;
+  onBookAgain: () => void;
 }
 
 function BookingCard({
@@ -88,6 +91,8 @@ function BookingCard({
   onCancel,
   onOnMyWay,
   onDirections,
+  onReschedule,
+  onBookAgain,
 }: BookingCardProps) {
   const { colors } = useTheme();
   const reconcile = needsCashReconciliation(booking);
@@ -199,6 +204,12 @@ function BookingCard({
       {booking.canCancel ? (
         <Button label="Cancel booking" variant="ghost" block onPress={onCancel} />
       ) : null}
+      {booking.canReschedule ? (
+        <Button label="Change time" variant="secondary" block onPress={onReschedule} />
+      ) : null}
+      {['completed', 'declined', 'cancelled'].includes(booking.status) ? (
+        <Button label="Book this service again" variant="ghost" block onPress={onBookAgain} />
+      ) : null}
     </Card>
   );
 }
@@ -211,6 +222,9 @@ export default function Bookings() {
   const createReview = useCreateReview();
   const createReport = useCreateReport();
   const cancelBooking = useCancelBooking();
+  const startReschedule = useBookingDraftStore((s) => s.startReschedule);
+  const setProvider = useBookingDraftStore((s) => s.setProvider);
+  const setService = useBookingDraftStore((s) => s.setService);
 
   // A provider confirming an appointment now updates this screen live.
   useBookingUpdates();
@@ -435,6 +449,15 @@ export default function Bookings() {
                   }}
                   onDirections={() => {
                     goDirections(booking);
+                  }}
+                  onReschedule={() => {
+                    startReschedule(booking.id, booking.providerId, booking.serviceId);
+                    router.push('/book/slot');
+                  }}
+                  onBookAgain={() => {
+                    setProvider(booking.providerId);
+                    setService(booking.serviceId);
+                    router.push('/book/slot');
                   }}
                 />
               ))}

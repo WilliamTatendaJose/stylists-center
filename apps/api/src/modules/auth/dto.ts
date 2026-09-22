@@ -7,6 +7,7 @@ import {
   registerPushTokenSchema,
   selectAccountTypeSchema,
   verificationSubmissionSchema,
+  notificationPreferencesSchema,
 } from '@sc/shared';
 
 /**
@@ -22,3 +23,4 @@ export class SelectAccountTypeDto extends createZodDto(selectAccountTypeSchema) 
 export class UpdateProfileDto extends createZodDto(updateProfileSchema) {}
 export class RegisterPushTokenDto extends createZodDto(registerPushTokenSchema) {}
 export class VerificationSubmissionDto extends createZodDto(verificationSubmissionSchema) {}
+export class NotificationPreferencesDto extends createZodDto(notificationPreferencesSchema) {}

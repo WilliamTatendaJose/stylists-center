@@ -34,13 +34,16 @@ export const createBookingSchema = z.object({
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
+export const rescheduleBookingSchema = z.object({ startsAt: z.iso.datetime() });
+export type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
+
 export const createBookingResponseSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   status: bookingStatusSchema,
-  /** Present when Paynow returned a hosted checkout page instead of a phone prompt; the client must open it to complete checkout. */
+  /** Present when the gateway returned a hosted checkout page instead of a phone prompt; the client must open it to complete checkout. */
   checkoutUrl: z.url().optional(),
-  /** Present when Paynow pushed an EcoCash prompt to the client's phone — show this text while polling payment-status. */
+  /** Present when the gateway pushed an EcoCash prompt to the client's phone — show this text while polling payment-status. */
   instructions: z.string().optional(),
 });
 export type CreateBookingResponse = z.infer<typeof createBookingResponseSchema>;
@@ -60,6 +63,7 @@ export const bookingRowSchema = z.object({
   id: z.uuid(),
   /** The provider's ProviderProfile id — lets a screen route to that provider's directions/chat/trip without a separate client-side id map. */
   providerId: z.uuid(),
+  serviceId: z.uuid(),
   counterpartyName: z.string(),
   tint: z.string(),
   initials: z.string(),
@@ -81,6 +85,7 @@ export const bookingRowSchema = z.object({
   canRate: z.boolean(),
   /** Whether this booking can still be called off. The server decides; the screen must not infer it from status. */
   canCancel: z.boolean(),
+  canReschedule: z.boolean(),
 });
 export type BookingRowDto = z.infer<typeof bookingRowSchema>;
 

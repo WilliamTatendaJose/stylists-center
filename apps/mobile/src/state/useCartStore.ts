@@ -23,6 +23,8 @@ export interface CartLine {
 
 export interface CartState {
   lines: CartLine[];
+  checkoutKeys: Record<string, string>;
+  getCheckoutKey: (providerId: string) => string;
   add: (
     seller: { providerId: string; providerName: string },
     line: Omit<CartLine, 'quantity' | 'providerId' | 'providerName'>,
@@ -39,6 +41,14 @@ export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       lines: [],
+      checkoutKeys: {},
+      getCheckoutKey: (providerId) => {
+        const existing = get().checkoutKeys[providerId];
+        if (existing) return existing;
+        const key = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2).padEnd(10, '0')}-${Math.random().toString(36).slice(2).padEnd(10, '0')}`;
+        set({ checkoutKeys: { ...get().checkoutKeys, [providerId]: key } });
+        return key;
+      },
 
       add: (seller, line, quantity = 1) => {
         const state = get();
@@ -52,7 +62,10 @@ export const useCartStore = create<CartState>()(
           MAX_ORDER_ITEM_QUANTITY,
         );
 
+        const checkoutKeys = { ...state.checkoutKeys };
+        delete checkoutKeys[seller.providerId];
         set({
+          checkoutKeys,
           lines: existing
             ? state.lines.map((l) =>
                 l.productId === line.productId ? { ...l, quantity: nextQuantity } : l,
@@ -70,6 +83,7 @@ export const useCartStore = create<CartState>()(
       },
 
       setQuantity: (productId, quantity) => {
+        const providerId = get().lines.find((line) => line.productId === productId)?.providerId;
         const lines = get()
           .lines.map((l) =>
             l.productId === productId
@@ -77,7 +91,9 @@ export const useCartStore = create<CartState>()(
               : l,
           )
           .filter((l) => l.quantity > 0);
-        set({ lines });
+        const checkoutKeys = { ...get().checkoutKeys };
+        if (providerId) delete checkoutKeys[providerId];
+        set({ lines, checkoutKeys });
       },
 
       remove: (productId) => {
@@ -85,11 +101,13 @@ export const useCartStore = create<CartState>()(
       },
 
       removeSeller: (providerId) => {
-        set({ lines: get().lines.filter((l) => l.providerId !== providerId) });
+        const checkoutKeys = { ...get().checkoutKeys };
+        delete checkoutKeys[providerId];
+        set({ lines: get().lines.filter((l) => l.providerId !== providerId), checkoutKeys });
       },
 
       clear: () => {
-        set({ lines: [] });
+        set({ lines: [], checkoutKeys: {} });
       },
     }),
     {
@@ -97,12 +115,15 @@ export const useCartStore = create<CartState>()(
       // lost sale, and this market's users restart often.
       name: 'sc-cart',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 2,
+      version: 3,
       // v1 carried one cart-level providerId/providerName and would crash
       // reading its lines as the new per-line shape; a mixed cart is not
       // recoverable from that old shape, so it starts empty instead of
       // throwing on the first launch after the update.
-      migrate: () => ({ lines: [] }),
+      migrate: (stored, version) =>
+        version === 2
+          ? { lines: (stored as Partial<CartState>).lines ?? [], checkoutKeys: {} }
+          : { lines: [], checkoutKeys: {} },
     },
   ),
 );

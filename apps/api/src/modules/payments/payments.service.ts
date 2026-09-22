@@ -4,7 +4,12 @@ import { nextSubscriptionPaidUntil } from '@sc/shared';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { ledgerStatus } from './ledger-status';
-import { PAYMENT_GATEWAY, type PaymentGatewayPort } from './payment-gateway.port';
+import {
+  PAYMENT_GATEWAY,
+  type PaymentConfirmation,
+  type PaymentGatewayPort,
+  type PaymentProvider,
+} from './payment-gateway.port';
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 import { Inject } from '@nestjs/common';
 import { recordSubscriptionPaymentStatus } from './subscription-payment';
@@ -35,11 +40,54 @@ export class PaymentsService {
     if (!reference || amountUsdCents === null)
       throw new ForbiddenException('Invalid Paynow callback');
 
+    await this.applyConfirmation('paynow', {
+      reference,
+      amountUsdCents,
+      status: ledgerStatus(fields.status),
+      ...(fields.paynowreference ? { externalRef: fields.paynowreference } : {}),
+    });
+  }
+
+  /**
+   * Pesepay posts this asynchronously, and signs none of it.
+   *
+   * So the body is read only far enough to learn which transaction moved; the
+   * status and the amount both come back from Pesepay's own authenticated API
+   * (see PesepayAdapter.confirmCallback). Anyone who can guess a reference can
+   * therefore make this endpoint re-check a payment, which is harmless — they
+   * cannot make it record an outcome Pesepay did not report.
+   */
+  async receivePesepayCallback(body: Record<string, unknown>): Promise<void> {
+    if (this.config.get('PAYMENT_PROVIDER', { infer: true }) !== 'pesepay') {
+      throw new NotFoundException();
+    }
+    if (!this.gateway.confirmCallback) {
+      throw new NotFoundException();
+    }
+    await this.applyConfirmation('pesepay', await this.gateway.confirmCallback(body));
+  }
+
+  /**
+   * Writes a confirmed gateway outcome into the ledger, whichever gateway and
+   * whichever route (signed callback or authenticated re-check) it arrived by.
+   *
+   * The amount is checked against what the booking/order/subscription actually
+   * costs before anything is written, so a callback can only ever confirm the
+   * payment this app asked for.
+   */
+  private async applyConfirmation(
+    provider: Extract<PaymentProvider, 'paynow' | 'pesepay'>,
+    // Paynow's callback may omit its own reference; Pesepay's re-check never does.
+    confirmation: Omit<PaymentConfirmation, 'externalRef'> & { externalRef?: string },
+  ): Promise<void> {
+    const label = provider === 'pesepay' ? 'Pesepay' : 'Paynow';
+    const { reference, amountUsdCents, status } = confirmation;
+
     const [booking, order] = await Promise.all([
       this.prisma.booking.findUnique({ where: { reference } }),
       this.prisma.order.findUnique({ where: { reference } }),
     ]);
-    if (booking && order) throw new NotFoundException('Unknown Paynow reference');
+    if (booking && order) throw new NotFoundException(`Unknown ${label} reference`);
 
     // A subscription has no booking/order row to resolve against — it is
     // identified only by the reference its Payment was initiated under.
@@ -53,16 +101,16 @@ export class PaymentsService {
 
     const expected =
       booking?.priceUsdCents ?? order?.totalUsdCents ?? subscriptionPayment?.amountUsdCents;
-    if (expected === undefined) throw new NotFoundException('Unknown Paynow reference');
+    if (expected === undefined) throw new NotFoundException(`Unknown ${label} reference`);
     if (expected !== amountUsdCents)
-      throw new ForbiddenException('Paynow callback amount mismatch');
+      throw new ForbiddenException(`${label} callback amount mismatch`);
 
-    if (subscriptionPayment?.subscriptionProviderId && reference) {
+    if (subscriptionPayment?.subscriptionProviderId) {
       await recordSubscriptionPaymentStatus(this.prisma, {
         providerProfileId: subscriptionPayment.subscriptionProviderId,
         reference,
-        status: ledgerStatus(fields.status),
-        ...(fields.paynowreference ? { externalRef: fields.paynowreference } : {}),
+        status,
+        ...(confirmation.externalRef ? { externalRef: confirmation.externalRef } : {}),
       });
       return;
     }
@@ -77,36 +125,35 @@ export class PaymentsService {
 
     const prior = await this.prisma.payment.findFirst({
       where: {
-        provider: 'paynow',
+        provider,
         ...subjectWhere,
       },
       orderBy: { createdAt: 'desc' },
     });
-    if (!prior) throw new NotFoundException('No Paynow payment was initiated');
+    if (!prior) throw new NotFoundException(`No ${label} payment was initiated`);
 
-    const status = ledgerStatus(fields.status);
-    if (prior.status === status) return; // Paynow retries successful callbacks.
-    // `released` is never a status Paynow itself reports (see ledgerStatus) —
-    // it only exists once a booking/order has completed and escrow was paid
-    // out internally. A Paynow callback arriving after that point is always a
-    // stale retry of an earlier status; applying it would insert a newer
-    // 'paid'/'held' row that outranks the release in every ordered-by-date
-    // lookup (e.g. ProviderService.getEarnings), making a paid-out job look
-    // pending again.
+    if (prior.status === status) return; // Both gateways retry successful callbacks.
+    // `released` is never a status a gateway itself reports (see ledgerStatus
+    // and pesepayLedgerStatus) — it only exists once a booking/order has
+    // completed and escrow was paid out internally. A callback arriving after
+    // that point is always a stale retry of an earlier status; applying it
+    // would insert a newer 'paid'/'held' row that outranks the release in
+    // every ordered-by-date lookup (e.g. ProviderService.getEarnings), making
+    // a paid-out job look pending again.
     if (prior.status === 'released') return;
     await this.prisma.payment.create({
       data: {
         ...subjectWhere,
-        provider: 'paynow',
+        provider,
         status,
         amountUsdCents,
         feeUsdCents: status === 'refunded' ? 0 : prior.feeUsdCents,
-        externalRef: fields.paynowreference ?? prior.externalRef,
+        externalRef: confirmation.externalRef ?? prior.externalRef,
         reference,
       },
     });
 
-    // Paynow refused it. This is the path that matters when nobody is
+    // The gateway refused it. This is the path that matters when nobody is
     // watching — the customer closed the app, so no poll will ever run.
     if (FAILURE_STATUSES.has(status)) {
       await voidUnpaidSubject(this.prisma, subjectWhere);

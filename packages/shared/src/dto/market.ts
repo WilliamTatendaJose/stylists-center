@@ -2,9 +2,22 @@ import { z } from 'zod';
 import { payerPhoneSchema, paymentMethodSchema } from './bookings.js';
 import { imageUrlSchema } from './uploads.js';
 
+export const productCategorySchema = z.enum([
+  'hair',
+  'wigs',
+  'nails',
+  'skincare',
+  'tools',
+  'other',
+]);
+export type ProductCategory = z.infer<typeof productCategorySchema>;
+export const productSortSchema = z.enum(['nearest', 'price_asc', 'price_desc', 'newest']);
+export type ProductSort = z.infer<typeof productSortSchema>;
+
 export const productRowSchema = z.object({
   id: z.uuid(),
   name: z.string(),
+  category: productCategorySchema,
   priceUsdCents: z.number().int(),
   stockQty: z.number().int(),
   imageUrls: z.array(imageUrlSchema).max(5),
@@ -15,6 +28,8 @@ export const productRowSchema = z.object({
   initials: z.string(),
   providerImageUrl: imageUrlSchema.optional(),
   verified: z.boolean(),
+  sellerRatingAvg: z.number(),
+  sellerCompletedCount: z.number().int(),
   areaName: z.string(),
   distanceKm: z.number(),
 });
@@ -22,6 +37,7 @@ export type ProductRowDto = z.infer<typeof productRowSchema>;
 
 export const productDetailSchema = productRowSchema.extend({
   description: z.string(),
+  pickupHours: z.string(),
 });
 export type ProductDetailDto = z.infer<typeof productDetailSchema>;
 
@@ -39,6 +55,7 @@ export const orderItemSchema = z.object({
   name: z.string(),
   priceUsdCents: z.number().int(),
   quantity: z.number().int(),
+  reviewed: z.boolean().optional(),
 });
 export type OrderItemDto = z.infer<typeof orderItemSchema>;
 
@@ -62,6 +79,11 @@ export const orderRowSchema = z.object({
   initials: z.string(),
   providerImageUrl: imageUrlSchema.optional(),
   areaName: z.string(),
+  pickupAddress: z.string(),
+  pickupHours: z.string(),
+  pickupLat: z.number(),
+  pickupLng: z.number(),
+  pickupNote: z.string().nullable(),
   items: z.array(orderItemSchema),
   /** Server-decided, so the button a buyer sees and the rule the API enforces cannot drift. */
   canCancel: z.boolean(),
@@ -75,6 +97,7 @@ export type OrderRowDto = z.infer<typeof orderRowSchema>;
  */
 export const createOrderSchema = z.object({
   providerId: z.uuid(),
+  checkoutKey: z.string().min(12).max(100),
   paymentMethod: paymentMethodSchema,
   items: z
     .array(
@@ -94,9 +117,9 @@ export const createOrderResponseSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   totalUsdCents: z.number().int(),
-  /** Present when Paynow returned a hosted checkout page rather than a phone prompt. */
+  /** Present when the gateway returned a hosted checkout page rather than a phone prompt. */
   checkoutUrl: z.url().optional(),
-  /** Present when Paynow pushed an EcoCash prompt to the buyer's phone — show this while polling payment-status. */
+  /** Present when the gateway pushed an EcoCash prompt to the buyer's phone — show this while polling payment-status. */
   instructions: z.string().optional(),
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
@@ -111,9 +134,11 @@ export type OrderPaymentStatusDto = z.infer<typeof orderPaymentStatusSchema>;
 export const providerProductSchema = z.object({
   id: z.uuid(),
   name: z.string(),
+  category: productCategorySchema,
   description: z.string(),
   priceUsdCents: z.number().int(),
   stockQty: z.number().int(),
+  version: z.number().int(),
   imageUrls: z.array(imageUrlSchema).max(5),
   active: z.boolean(),
 });
@@ -121,6 +146,7 @@ export type ProviderProductDto = z.infer<typeof providerProductSchema>;
 
 export const createProviderProductSchema = z.object({
   name: z.string().trim().min(2).max(80),
+  category: productCategorySchema.optional(),
   description: z.string().trim().min(2).max(500),
   priceUsdCents: z.number().int().min(100).max(1_000_000),
   stockQty: z.number().int().min(0).max(100_000),
@@ -129,7 +155,9 @@ export const createProviderProductSchema = z.object({
 export type CreateProviderProductInput = z.infer<typeof createProviderProductSchema>;
 
 /** Full editable storefront item. Keeping stock here lets a correction be made deliberately. */
-export const updateProviderProductSchema = createProviderProductSchema;
+export const updateProviderProductSchema = createProviderProductSchema.extend({
+  expectedVersion: z.number().int().min(0),
+});
 export type UpdateProviderProductInput = z.infer<typeof updateProviderProductSchema>;
 
 /** A quick stock increment for deliveries received after the item was listed. */
@@ -147,7 +175,34 @@ export const providerOrderSchema = z.object({
   paymentMethod: paymentMethodSchema,
   totalUsdCents: z.number().int(),
   createdAt: z.iso.datetime(),
+  pickupNote: z.string().nullable(),
+  paymentCleared: z.boolean(),
   items: z.array(orderItemSchema),
   canMarkReady: z.boolean(),
 });
 export type ProviderOrderDto = z.infer<typeof providerOrderSchema>;
+
+export const markOrderReadySchema = z.object({
+  pickupNote: z.string().trim().max(160).optional(),
+});
+export type MarkOrderReadyInput = z.infer<typeof markOrderReadySchema>;
+
+export const createProductReviewSchema = z.object({
+  rating: z.number().int().min(1).max(5),
+  text: z.string().trim().max(500).optional(),
+});
+export type CreateProductReviewInput = z.infer<typeof createProductReviewSchema>;
+
+export const productReviewSchema = z.object({
+  id: z.uuid(),
+  buyerName: z.string(),
+  rating: z.number().int().min(1).max(5),
+  text: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+export const productReviewsSchema = z.object({
+  averageRating: z.number(),
+  count: z.number().int(),
+  reviews: z.array(productReviewSchema),
+});
+export type ProductReviewsDto = z.infer<typeof productReviewsSchema>;

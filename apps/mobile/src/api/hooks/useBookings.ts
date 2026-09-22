@@ -7,6 +7,7 @@ import type {
   CreateBookingInput,
   CreateBookingResponse,
   CreateReviewInput,
+  RescheduleBookingInput,
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { getSocket } from '../../realtime/socket.js';
@@ -31,6 +32,20 @@ export function useCancelBooking() {
   return useMutation({
     mutationFn: (bookingId: string) =>
       apiFetch<BookingRowDto>(`/v1/bookings/${bookingId}/cancel`, { method: 'POST' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: BOOKINGS_KEY });
+    },
+  });
+}
+
+export function useRescheduleBooking() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ bookingId, input }: { bookingId: string; input: RescheduleBookingInput }) =>
+      apiFetch<BookingRowDto>(`/v1/bookings/${bookingId}/reschedule`, {
+        method: 'POST',
+        body: input,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: BOOKINGS_KEY });
     },

@@ -6,6 +6,9 @@ import {
   MAX_BROWSE_RADIUS_KM,
   MIN_BROWSE_RADIUS_KM,
   PRODUCT_PAGE_SIZE,
+  productCategorySchema,
+  productSortSchema,
+  createProductReviewSchema,
 } from '@sc/shared';
 
 const latLng = {
@@ -30,6 +33,10 @@ const productsQuerySchema = z.object({
     })
     .optional(),
   q: z.string().trim().min(2).max(60).optional(),
+  category: productCategorySchema.optional(),
+  minPriceUsdCents: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  maxPriceUsdCents: z.coerce.number().int().min(0).max(1_000_000).optional(),
+  sort: productSortSchema.default('nearest'),
 });
 export class ProductsQueryDto extends createZodDto(productsQuerySchema) {}
 
@@ -37,3 +44,4 @@ const productDetailQuerySchema = z.object(latLng);
 export class ProductDetailQueryDto extends createZodDto(productDetailQuerySchema) {}
 
 export class CreateOrderDto extends createZodDto(createOrderSchema) {}
+export class CreateProductReviewDto extends createZodDto(createProductReviewSchema) {}

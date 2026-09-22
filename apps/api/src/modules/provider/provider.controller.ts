@@ -24,6 +24,9 @@ import {
   UpdateProviderServiceDto,
   UpdateProviderProductDto,
   RestockProviderProductDto,
+  MarkOrderReadyDto,
+  UpdateWeeklyHoursDto,
+  CreateProviderTimeOffDto,
 } from './dto';
 import {
   ImageStorageService,
@@ -68,6 +71,26 @@ export class ProviderController {
   @Patch('profile')
   updateProfile(@CurrentProvider() providerId: string, @Body() dto: UpdateProviderProfileDto) {
     return this.provider.updateProfile(providerId, dto);
+  }
+
+  @Get('calendar')
+  calendar(@CurrentProvider() providerId: string) {
+    return this.provider.getCalendar(providerId);
+  }
+
+  @Patch('calendar')
+  updateCalendar(@CurrentProvider() providerId: string, @Body() dto: UpdateWeeklyHoursDto) {
+    return this.provider.updateCalendar(providerId, dto);
+  }
+
+  @Post('calendar/time-off')
+  addTimeOff(@CurrentProvider() providerId: string, @Body() dto: CreateProviderTimeOffDto) {
+    return this.provider.addTimeOff(providerId, dto);
+  }
+
+  @Delete('calendar/time-off/:id')
+  removeTimeOff(@CurrentProvider() providerId: string, @Param('id') id: string) {
+    return this.provider.removeTimeOff(providerId, id);
   }
 
   @Post('services')
@@ -124,8 +147,12 @@ export class ProviderController {
   }
 
   @Post('orders/:id/ready')
-  markOrderReady(@Param('id') id: string, @CurrentProvider() providerId: string) {
-    return this.provider.markOrderReady(id, providerId);
+  markOrderReady(
+    @Param('id') id: string,
+    @CurrentProvider() providerId: string,
+    @Body() dto: MarkOrderReadyDto,
+  ) {
+    return this.provider.markOrderReady(id, providerId, dto);
   }
 
   @Post('availability')

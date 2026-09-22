@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Package, ShoppingBag } from 'lucide-react-native';
-import { formatUsd, ORDER_STATUS_LABELS } from '@sc/shared';
+import { formatUsd, ORDER_STATUS_LABELS, type ProductCategory } from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
   Badge,
@@ -79,7 +79,65 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   orderActions: { gap: space.s, marginTop: space.m },
+  categoryChips: { gap: space.s, paddingVertical: space.s },
+  categoryChip: {
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: space.m,
+    paddingVertical: space.s,
+  },
 });
+
+const categoryOptions: { value: ProductCategory; label: string }[] = [
+  { value: 'hair', label: 'Hair' },
+  { value: 'wigs', label: 'Wigs' },
+  { value: 'nails', label: 'Nails' },
+  { value: 'skincare', label: 'Skincare' },
+  { value: 'tools', label: 'Tools' },
+  { value: 'other', label: 'Other' },
+];
+
+function CategoryPicker({
+  value,
+  onChange,
+}: {
+  value: ProductCategory;
+  onChange: (value: ProductCategory) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={styles.field}>
+      <Text variant="meta" color="neutral700">
+        Category
+      </Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryChips}
+      >
+        {categoryOptions.map((option) => (
+          <Pressable
+            key={option.value}
+            accessibilityRole="radio"
+            accessibilityState={{ selected: value === option.value }}
+            onPress={() => onChange(option.value)}
+            style={[
+              styles.categoryChip,
+              {
+                borderColor: value === option.value ? colors.accent : colors.divider,
+                backgroundColor: value === option.value ? colors.accent : colors.surface,
+              },
+            ]}
+          >
+            <Text variant="meta" color={value === option.value ? colors.bg : colors.text}>
+              {option.label}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
 
 type ShopMode = 'buy' | 'sell';
 const ORDER_HISTORY_PREVIEW_COUNT = 2;
@@ -108,19 +166,23 @@ export default function ProviderShop() {
   const startConversation = useStartOrderConversation();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [category, setCategory] = useState<ProductCategory>('other');
   const [price, setPrice] = useState('');
   const [stock, setStock] = useState('1');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editCategory, setEditCategory] = useState<ProductCategory>('other');
   const [editPrice, setEditPrice] = useState('');
   const [editStock, setEditStock] = useState('');
+  const [editVersion, setEditVersion] = useState(0);
   const [editImageUrls, setEditImageUrls] = useState<string[]>([]);
   const [restockingProductId, setRestockingProductId] = useState<string | null>(null);
   const [restockQuantity, setRestockQuantity] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [showAllOrderHistory, setShowAllOrderHistory] = useState(false);
+  const [pickupNotes, setPickupNotes] = useState<Record<string, string>>({});
   const incomingOrders =
     orders?.filter(
       (order) => order.status === 'reserved' || order.status === 'ready_for_collection',
@@ -145,6 +207,7 @@ export default function ProviderShop() {
       {
         name: name.trim(),
         description: description.trim(),
+        category,
         priceUsdCents: Math.round(Number(price) * 100),
         stockQty: Math.floor(Number(stock)),
         imageUrls,
@@ -153,6 +216,7 @@ export default function ProviderShop() {
         onSuccess: () => {
           setName('');
           setDescription('');
+          setCategory('other');
           setPrice('');
           setStock('1');
           setImageUrls([]);
@@ -178,8 +242,10 @@ export default function ProviderShop() {
     setRestockingProductId(null);
     setEditName(product.name);
     setEditDescription(product.description);
+    setEditCategory(product.category);
     setEditPrice((product.priceUsdCents / 100).toFixed(2));
     setEditStock(String(product.stockQty));
+    setEditVersion(product.version);
     setEditImageUrls(product.imageUrls);
   };
 
@@ -201,8 +267,10 @@ export default function ProviderShop() {
         input: {
           name: editName.trim(),
           description: editDescription.trim(),
+          category: editCategory,
           priceUsdCents: Math.round(Number(editPrice) * 100),
           stockQty: Math.floor(Number(editStock)),
+          expectedVersion: editVersion,
           imageUrls: editImageUrls,
         },
       },
@@ -349,11 +417,27 @@ export default function ProviderShop() {
                 <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
                   <Text variant="meta" color="neutral700">
                     {order.status === 'reserved'
-                      ? 'Pack this order, then tell the buyer when it is ready to collect.'
+                      ? order.paymentCleared
+                        ? 'Pack this order, then tell the buyer when it is ready to collect.'
+                        : 'Waiting for the buyer’s payment to clear before you prepare this order.'
                       : 'The buyer has been told it is ready. They confirm once they have it.'}
                   </Text>
                 </View>
                 <View style={styles.orderActions}>
+                  {order.canMarkReady ? (
+                    <TextField
+                      label="Collection time or instructions"
+                      placeholder="For example, ready today after 4 pm"
+                      value={pickupNotes[order.id] ?? ''}
+                      onChangeText={(value) => {
+                        setPickupNotes((current) => ({ ...current, [order.id]: value }));
+                      }}
+                    />
+                  ) : order.pickupNote ? (
+                    <Text variant="meta" color="neutral700">
+                      {order.pickupNote}
+                    </Text>
+                  ) : null}
                   <Button
                     label={startConversation.isPending ? 'Opening…' : 'Message buyer'}
                     variant="secondary"
@@ -370,13 +454,19 @@ export default function ProviderShop() {
                       disabled={markOrderReady.isPending}
                       onPress={() => {
                         setError(null);
-                        markOrderReady.mutate(order.id, {
-                          onSuccess: () => {
-                            setError(null);
+                        markOrderReady.mutate(
+                          {
+                            orderId: order.id,
+                            input: { pickupNote: pickupNotes[order.id]?.trim() || undefined },
                           },
-                          onError: (reason) =>
-                            setError(describeError(reason, "Couldn't update that order.")),
-                        });
+                          {
+                            onSuccess: () => {
+                              setError(null);
+                            },
+                            onError: (reason) =>
+                              setError(describeError(reason, "Couldn't update that order.")),
+                          },
+                        );
                       }}
                     />
                   ) : null}
@@ -517,6 +607,7 @@ export default function ProviderShop() {
                         onChangeText={setEditDescription}
                       />
                     </View>
+                    <CategoryPicker value={editCategory} onChange={setEditCategory} />
                     <View style={styles.row}>
                       <View style={styles.grow}>
                         <TextField
@@ -580,6 +671,7 @@ export default function ProviderShop() {
                 placeholder="What buyers should know"
               />
             </View>
+            <CategoryPicker value={category} onChange={setCategory} />
             <View style={styles.row}>
               <View style={styles.grow}>
                 <TextField

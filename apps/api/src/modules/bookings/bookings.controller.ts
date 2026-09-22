@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { BookingsService } from './bookings.service';
-import { CreateBookingDto, CreateReviewDto } from './dto';
+import { CreateBookingDto, CreateReviewDto, RescheduleBookingDto } from './dto';
 
 @Controller('bookings')
 @UseGuards(JwtAuthGuard)
@@ -32,6 +32,15 @@ export class BookingsController {
   @Post(':id/cancel')
   cancel(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.bookings.cancel(id, user.id);
+  }
+
+  @Post(':id/reschedule')
+  reschedule(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Body() dto: RescheduleBookingDto,
+  ) {
+    return this.bookings.reschedule(id, user.id, dto);
   }
 
   @Post(':id/reviews')

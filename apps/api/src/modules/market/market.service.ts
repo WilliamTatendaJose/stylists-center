@@ -15,11 +15,16 @@ import {
   type OrderRowDto,
   type ProductDetailDto,
   type ProductPageDto,
+  type ProductCategory,
+  type ProductSort,
+  type CreateProductReviewInput,
+  type ProductReviewsDto,
 } from '@sc/shared';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
 import { PaymentStatusService } from '../payments/payment-status.service';
+import { PushService } from '../notifications/push.service';
 import { Inject } from '@nestjs/common';
 import { toOrderRow, toProductDetail, toProductRow, type ProductGeoRow } from './mappers';
 
@@ -29,6 +34,7 @@ export class MarketService {
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
     private readonly paymentStatus: PaymentStatusService,
+    private readonly push: PushService,
   ) {}
 
   /**
@@ -44,10 +50,32 @@ export class MarketService {
     lng: number;
     radiusKm?: number | null;
     searchTerm?: string;
+    category?: ProductCategory;
+    minPriceUsdCents?: number;
+    maxPriceUsdCents?: number;
+    sort?: ProductSort;
     limit: number;
     offset: number;
   }): Promise<ProductPageDto> {
-    const { lat, lng, radiusKm = null, searchTerm, limit, offset } = params;
+    const {
+      lat,
+      lng,
+      radiusKm = null,
+      searchTerm,
+      category,
+      minPriceUsdCents,
+      maxPriceUsdCents,
+      sort = 'nearest',
+      limit,
+      offset,
+    } = params;
+    if (
+      minPriceUsdCents !== undefined &&
+      maxPriceUsdCents !== undefined &&
+      minPriceUsdCents > maxPriceUsdCents
+    ) {
+      throw new BadRequestException('Minimum price cannot exceed maximum price');
+    }
     const point = Prisma.sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`;
 
     const radiusFilter =
@@ -60,19 +88,36 @@ export class MarketService {
       term && term.length > 0
         ? Prisma.sql`AND (p.name ILIKE ${`%${term}%`} OR p.description ILIKE ${`%${term}%`} OR word_similarity(${term}, p.name) >= 0.35)`
         : Prisma.empty;
+    const categoryFilter = category ? Prisma.sql`AND p.category = ${category}` : Prisma.empty;
+    const minPriceFilter =
+      minPriceUsdCents === undefined
+        ? Prisma.empty
+        : Prisma.sql`AND p."priceUsdCents" >= ${minPriceUsdCents}`;
+    const maxPriceFilter =
+      maxPriceUsdCents === undefined
+        ? Prisma.empty
+        : Prisma.sql`AND p."priceUsdCents" <= ${maxPriceUsdCents}`;
+    const sortClause =
+      sort === 'price_asc'
+        ? Prisma.sql`p."priceUsdCents" ASC, pr.location <-> ${point}`
+        : sort === 'price_desc'
+          ? Prisma.sql`p."priceUsdCents" DESC, pr.location <-> ${point}`
+          : sort === 'newest'
+            ? Prisma.sql`p."createdAt" DESC`
+            : Prisma.sql`pr.location <-> ${point}, p.name`;
 
     // limit + 1 to detect another page without a second COUNT query that
     // could disagree with the page it describes.
     const rows = await this.prisma.$queryRaw<ProductGeoRow[]>`
       SELECT
-        p.id, p.name, p.description, p."priceUsdCents", p."stockQty", p."imageUrls",
+        p.id, p.name, p.description, p.category, p."priceUsdCents", p."stockQty", p."imageUrls",
         pr.id AS "providerId", pr."displayName" AS "providerName",
-        pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName",
+        pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName", pr."workingHoursLabel" AS "pickupHours", pr."ratingAvg" AS "sellerRatingAvg", pr."completedCount" AS "sellerCompletedCount",
         ST_Distance(pr.location, ${point}) / 1000 AS "distanceKm"
       FROM "Product" p
       JOIN "ProviderProfile" pr ON pr.id = p."providerId"
-      WHERE p.active = true AND p."stockQty" > 0 ${radiusFilter} ${searchFilter}
-      ORDER BY pr.location <-> ${point}, p.name
+      WHERE p.active = true AND p."stockQty" > 0 ${radiusFilter} ${searchFilter} ${categoryFilter} ${minPriceFilter} ${maxPriceFilter}
+      ORDER BY ${sortClause}, p.id
       LIMIT ${limit + 1} OFFSET ${offset}
     `;
 
@@ -87,9 +132,9 @@ export class MarketService {
     const point = Prisma.sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`;
     const rows = await this.prisma.$queryRaw<ProductGeoRow[]>`
       SELECT
-        p.id, p.name, p.description, p."priceUsdCents", p."stockQty", p."imageUrls",
+        p.id, p.name, p.description, p.category, p."priceUsdCents", p."stockQty", p."imageUrls",
         pr.id AS "providerId", pr."displayName" AS "providerName",
-        pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName",
+        pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName", pr."workingHoursLabel" AS "pickupHours", pr."ratingAvg" AS "sellerRatingAvg", pr."completedCount" AS "sellerCompletedCount",
         ST_Distance(pr.location, ${point}) / 1000 AS "distanceKm"
       FROM "Product" p
       JOIN "ProviderProfile" pr ON pr.id = p."providerId"
@@ -114,7 +159,38 @@ export class MarketService {
    * seller edits the price a second later.
    */
   async createOrder(buyerId: string, input: CreateOrderInput): Promise<CreateOrderResponse> {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Serialize retries for this buyer/request before touching stock or the
+      // payment gateway. A second request waits for the first to commit.
+      await tx.$queryRaw`
+        SELECT pg_advisory_xact_lock(hashtextextended(${`${buyerId}:${input.checkoutKey}`}, 0))
+      `;
+      const fingerprint = JSON.stringify({
+        providerId: input.providerId,
+        paymentMethod: input.paymentMethod,
+        payerPhone: input.payerPhone ?? null,
+        items: [...input.items].sort((a, b) => a.productId.localeCompare(b.productId)),
+      });
+      const previous = await tx.order.findUnique({
+        where: { buyerId_checkoutKey: { buyerId, checkoutKey: input.checkoutKey } },
+      });
+      if (previous) {
+        if (previous.checkoutFingerprint !== fingerprint) {
+          throw new BadRequestException('This checkout was changed; please start a new checkout');
+        }
+        return {
+          created: false as const,
+          response: {
+            id: previous.id,
+            reference: previous.reference,
+            totalUsdCents: previous.totalUsdCents,
+            ...(previous.checkoutUrl ? { checkoutUrl: previous.checkoutUrl } : {}),
+            ...(previous.checkoutInstructions
+              ? { instructions: previous.checkoutInstructions }
+              : {}),
+          },
+        };
+      }
       const productIds = input.items.map((i) => i.productId);
       if (new Set(productIds).size !== productIds.length) {
         throw new BadRequestException('The same product appears more than once');
@@ -135,6 +211,7 @@ export class MarketService {
         SELECT id, name, "priceUsdCents", "stockQty", "providerId", active
         FROM "Product"
         WHERE id IN (${Prisma.join(productIds)})
+        ORDER BY id
         FOR UPDATE
       `;
 
@@ -165,7 +242,7 @@ export class MarketService {
       for (const line of lines) {
         await tx.product.update({
           where: { id: line.product.id },
-          data: { stockQty: { decrement: line.quantity } },
+          data: { stockQty: { decrement: line.quantity }, version: { increment: 1 } },
         });
       }
 
@@ -179,6 +256,16 @@ export class MarketService {
         SELECT nextval('order_reference_seq')
       `;
       const sequence = sequenceRows[0]?.nextval ?? 1n;
+      const pickup = await tx.providerProfile.findUniqueOrThrow({
+        where: { id: input.providerId },
+        select: {
+          userId: true,
+          areaName: true,
+          workingHoursLabel: true,
+          latitude: true,
+          longitude: true,
+        },
+      });
 
       const order = await tx.order.create({
         data: {
@@ -186,6 +273,12 @@ export class MarketService {
           buyerId,
           providerId: input.providerId,
           paymentMethod: input.paymentMethod,
+          checkoutKey: input.checkoutKey,
+          checkoutFingerprint: fingerprint,
+          pickupAddress: pickup.areaName,
+          pickupHours: pickup.workingHoursLabel,
+          pickupLat: pickup.latitude,
+          pickupLng: pickup.longitude,
           totalUsdCents,
           items: {
             create: lines.map((l) => ({
@@ -231,16 +324,32 @@ export class MarketService {
         });
         checkoutUrl = intent.checkoutUrl;
         instructions = intent.instructions;
+        await tx.order.update({
+          where: { id: order.id },
+          data: { checkoutUrl: checkoutUrl ?? null, checkoutInstructions: instructions ?? null },
+        });
       }
 
       return {
-        id: order.id,
-        reference: order.reference,
-        totalUsdCents,
-        ...(checkoutUrl ? { checkoutUrl } : {}),
-        ...(instructions ? { instructions } : {}),
+        created: true as const,
+        sellerUserId: pickup.userId,
+        response: {
+          id: order.id,
+          reference: order.reference,
+          totalUsdCents,
+          ...(checkoutUrl ? { checkoutUrl } : {}),
+          ...(instructions ? { instructions } : {}),
+        },
       };
     });
+    if (result.created) {
+      void this.push.sendToUser(result.sellerUserId, {
+        title: 'New marketplace order',
+        body: `Order ${result.response.reference} is waiting in your shop.`,
+        data: { type: 'market.order.created', orderId: result.response.id },
+      });
+    }
+    return result.response;
   }
 
   /** Polls Paynow for an in-flight order payment — the cart's waiting screen calls this. */
@@ -253,29 +362,101 @@ export class MarketService {
   async listOrders(buyerId: string): Promise<OrderRowDto[]> {
     const orders = await this.prisma.order.findMany({
       where: { buyerId },
-      include: { provider: true, items: true },
+      include: { provider: true, items: true, productReviews: true },
       orderBy: { createdAt: 'desc' },
     });
     return orders.map(toOrderRow);
   }
 
+  async getProductReviews(productId: string): Promise<ProductReviewsDto> {
+    const [summary, reviews] = await Promise.all([
+      this.prisma.productReview.aggregate({
+        where: { productId },
+        _avg: { rating: true },
+        _count: { id: true },
+      }),
+      this.prisma.productReview.findMany({
+        where: { productId },
+        include: { buyer: { select: { displayName: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+    ]);
+    return {
+      averageRating: summary._avg.rating ?? 0,
+      count: summary._count.id,
+      reviews: reviews.map((review) => ({
+        id: review.id,
+        buyerName: review.buyer.displayName,
+        rating: review.rating,
+        text: review.text,
+        createdAt: review.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async reviewProduct(
+    orderId: string,
+    productId: string,
+    buyerId: string,
+    input: CreateProductReviewInput,
+  ) {
+    const order = await this.requireOwnOrder(orderId, buyerId);
+    if (order.status !== 'collected') {
+      throw new BadRequestException('Collect the order before reviewing its products');
+    }
+    const item = await this.prisma.orderItem.findFirst({ where: { orderId, productId } });
+    if (!item) throw new NotFoundException('Product was not in this order');
+    const reviewText = input.text?.trim();
+    const review = await this.prisma.productReview.upsert({
+      where: { orderId_productId: { orderId, productId } },
+      create: {
+        orderId,
+        productId,
+        buyerId,
+        rating: input.rating,
+        text: reviewText?.length ? reviewText : null,
+      },
+      update: {},
+      include: { buyer: { select: { displayName: true } } },
+    });
+    return {
+      id: review.id,
+      buyerName: review.buyer.displayName,
+      rating: review.rating,
+      text: review.text,
+      createdAt: review.createdAt.toISOString(),
+    };
+  }
+
   /** Buyer confirms they physically have the goods — the moment escrow is released. */
   async collectOrder(orderId: string, buyerId: string): Promise<OrderRowDto> {
     const order = await this.requireOwnOrder(orderId, buyerId);
+    if (order.status === 'collected') return this.rowById(orderId);
     if (!canCollectOrder(order.status)) {
       throw new BadRequestException(`Cannot collect an order that is ${order.status}`);
     }
 
-    if (order.paymentMethod === 'ecocash') {
-      const funded = await this.prisma.payment.findFirst({
-        where: { orderId, status: { in: ['paid', 'held'] } },
+    const changed = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.order.updateMany({
+        where: { id: orderId, buyerId, status: 'ready_for_collection' },
+        data: { status: 'collected' },
       });
-      if (!funded) throw new BadRequestException('Payment has not cleared yet');
-    }
-
-    await this.prisma.order.update({ where: { id: orderId }, data: { status: 'collected' } });
-    if (order.paymentMethod === 'ecocash') {
-      await this.settleEscrow(orderId, 'released', true);
+      if (result.count === 0) return false;
+      if (order.paymentMethod === 'ecocash') {
+        const funded = await tx.payment.findFirst({
+          where: { orderId, status: { in: ['paid', 'held'] } },
+        });
+        if (!funded) throw new BadRequestException('Payment has not cleared yet');
+        await this.settleEscrow(tx, orderId, 'released', true);
+      }
+      return true;
+    });
+    if (!changed) {
+      const latest = await this.requireOwnOrder(orderId, buyerId);
+      if (latest.status !== 'collected') {
+        throw new BadRequestException(`Cannot collect an order that is ${latest.status}`);
+      }
     }
     return this.rowById(orderId);
   }
@@ -288,19 +469,29 @@ export class MarketService {
       throw new BadRequestException(`Cannot cancel an order that is ${order.status}`);
     }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.order.update({ where: { id: orderId }, data: { status: 'cancelled' } });
+    const changed = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.order.updateMany({
+        where: { id: orderId, buyerId, status: { in: ['reserved', 'ready_for_collection'] } },
+        data: { status: 'cancelled' },
+      });
+      if (result.count === 0) return false;
       const items = await tx.orderItem.findMany({ where: { orderId } });
       for (const item of items) {
         await tx.product.update({
           where: { id: item.productId },
-          data: { stockQty: { increment: item.quantity } },
+          data: { stockQty: { increment: item.quantity }, version: { increment: 1 } },
         });
       }
+      if (order.paymentMethod === 'ecocash') {
+        await this.settleEscrow(tx, orderId, 'refunded', false);
+      }
+      return true;
     });
-
-    if (order.paymentMethod === 'ecocash') {
-      await this.settleEscrow(orderId, 'refunded', false);
+    if (!changed) {
+      const latest = await this.requireOwnOrder(orderId, buyerId);
+      if (latest.status !== 'cancelled') {
+        throw new BadRequestException(`Cannot cancel an order that is ${latest.status}`);
+      }
     }
     return this.rowById(orderId);
   }
@@ -318,17 +509,18 @@ export class MarketService {
    * nothing was delivered, so the platform keeps nothing.
    */
   private async settleEscrow(
+    tx: Prisma.TransactionClient,
     orderId: string,
     status: 'released' | 'refunded',
     keepsFee: boolean,
   ): Promise<void> {
-    const held = await this.prisma.payment.findFirst({
+    const held = await tx.payment.findFirst({
       where: { orderId, status: { in: ['paid', 'held'] } },
       orderBy: { createdAt: 'desc' },
     });
     if (!held) return;
 
-    await this.prisma.payment.create({
+    await tx.payment.create({
       data: {
         orderId,
         provider: held.provider,
@@ -343,7 +535,7 @@ export class MarketService {
   private async rowById(orderId: string): Promise<OrderRowDto> {
     const order = await this.prisma.order.findUniqueOrThrow({
       where: { id: orderId },
-      include: { provider: true, items: true },
+      include: { provider: true, items: true, productReviews: true },
     });
     return toOrderRow(order);
   }

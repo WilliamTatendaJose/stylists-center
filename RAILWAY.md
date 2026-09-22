@@ -109,12 +109,22 @@ ADMIN_WEB_ORIGIN=https://<admin service's public domain>
 FIREBASE_PROJECT_ID=style-center-5162a
 FIREBASE_CLIENT_EMAIL=...iam.gserviceaccount.com  # required for admin user CRUD and revocation checks
 FIREBASE_PRIVATE_KEY=...   # required with client email; keep escaped \\n sequences
-PAYMENT_PROVIDER=paynow   # Paynow's test integration IDs reject transactions with an email field — never add one to the checkout request
+PAYMENT_PROVIDER=paynow   # or pesepay — only the chosen gateway's variables below are required
+
+# If PAYMENT_PROVIDER=paynow. Paynow's test integration IDs reject transactions
+# with an email field — never add one to the checkout request.
 PAYNOW_INTEGRATION_ID=...
 PAYNOW_INTEGRATION_KEY=...
 PAYNOW_RETURN_URL=https://<api public domain>/v1/payments/paynow/return
 PAYNOW_RESULT_URL=https://<api public domain>/v1/payments/paynow/callback
 PAYNOW_AUTH_EMAIL=<a login email on the Paynow merchant account>   # required for the EcoCash phone-prompt checkout
+
+# If PAYMENT_PROVIDER=pesepay. Set the same two URLs on the Pesepay dashboard.
+PESEPAY_INTEGRATION_KEY=...
+PESEPAY_ENCRYPTION_KEY=...   # exactly 32 characters — the AES-256 key for every request and response body
+PESEPAY_RETURN_URL=https://<api public domain>/v1/payments/pesepay/return
+PESEPAY_RESULT_URL=https://<api public domain>/v1/payments/pesepay/callback
+PESEPAY_SANDBOX=false   # true points at api.test.sandbox.pesepay.com and moves no real money
 COIN_USD_CENTS=20
 CASH_OUT_MIN_USD_CENTS=500
 ```

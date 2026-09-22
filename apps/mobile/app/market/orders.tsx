@@ -1,5 +1,5 @@
 import { Fragment, useState } from 'react';
-import { RefreshControl, StyleSheet, View } from 'react-native';
+import { Linking, RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatUsd, ORDER_STATUS_LABELS, type OrderRowDto } from '@sc/shared';
 import { space } from '@sc/tokens';
@@ -13,9 +13,15 @@ import {
   Card,
   Sheet,
   EmptyPanel,
+  TextField,
   useTheme,
 } from '@sc/ui';
-import { useCancelOrder, useCollectOrder, useMyOrders } from '../../src/api/hooks/useMarket.js';
+import {
+  useCancelOrder,
+  useCollectOrder,
+  useMyOrders,
+  useReviewProduct,
+} from '../../src/api/hooks/useMarket.js';
 import { useStartOrderConversation } from '../../src/api/hooks/useChat.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
@@ -50,11 +56,20 @@ export default function Orders() {
   const collectOrder = useCollectOrder();
   const cancelOrder = useCancelOrder();
   const startConversation = useStartOrderConversation();
+  const reviewProduct = useReviewProduct();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [cancelTarget, setCancelTarget] = useState<OrderRowDto | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [showAllOrderHistory, setShowAllOrderHistory] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<{
+    orderId: string;
+    productId: string;
+    name: string;
+  } | null>(null);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewError, setReviewError] = useState<string | null>(null);
   const activeOrders = orders.filter(
     (order) => order.status === 'reserved' || order.status === 'ready_for_collection',
   );
@@ -185,9 +200,27 @@ export default function Orders() {
 
               <View style={styles.itemsBlock}>
                 {order.items.map((item) => (
-                  <Text key={item.productId} variant="meta" color="neutral700">
-                    {item.quantity} × {item.name}
-                  </Text>
+                  <View key={item.productId}>
+                    <Text variant="meta" color="neutral700">
+                      {item.quantity} × {item.name}
+                    </Text>
+                    {order.status === 'collected' && !item.reviewed ? (
+                      <Button
+                        label={`Review ${item.name}`}
+                        variant="ghost"
+                        onPress={() => {
+                          setReviewTarget({
+                            orderId: order.id,
+                            productId: item.productId,
+                            name: item.name,
+                          });
+                          setReviewRating(0);
+                          setReviewText('');
+                          setReviewError(null);
+                        }}
+                      />
+                    ) : null}
+                  </View>
                 ))}
               </View>
 
@@ -195,9 +228,29 @@ export default function Orders() {
                 <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
                   <Text variant="meta" color="neutral700">
                     {order.status === 'reserved'
-                      ? 'The seller is preparing your order. Message them to agree a collection time.'
-                      : `Ready to collect from ${order.areaName}. Confirm only when the items are in your hands.`}
+                      ? 'The seller is preparing your order.'
+                      : 'Ready to collect. Confirm only when the items are in your hands.'}
                   </Text>
+                  <Text variant="meta" color="neutral700">
+                    Collect at: {order.pickupAddress}
+                  </Text>
+                  <Text variant="meta" color="neutral700">
+                    Hours: {order.pickupHours}
+                  </Text>
+                  {order.pickupNote ? (
+                    <Text variant="meta" color="neutral700">
+                      Seller note: {order.pickupNote}
+                    </Text>
+                  ) : null}
+                  <Button
+                    label="Open directions"
+                    variant="ghost"
+                    onPress={() => {
+                      void Linking.openURL(
+                        `https://www.google.com/maps/search/?api=1&query=${order.pickupLat},${order.pickupLng}`,
+                      );
+                    }}
+                  />
                 </View>
               ) : null}
 
@@ -307,6 +360,58 @@ export default function Orders() {
             }}
           />
         </View>
+      </Sheet>
+      <Sheet open={!!reviewTarget} onClose={() => setReviewTarget(null)}>
+        <Text variant="cardTitle" style={styles.sheetTitle}>
+          Review {reviewTarget?.name}
+        </Text>
+        <Text variant="meta" color="neutral700">
+          Your review will help other buyers choose this product.
+        </Text>
+        <View style={styles.sheetActions}>
+          {[1, 2, 3, 4, 5].map((rating) => (
+            <Button
+              key={rating}
+              label={`${rating} star${rating === 1 ? '' : 's'}`}
+              variant={reviewRating === rating ? 'primary' : 'secondary'}
+              onPress={() => setReviewRating(rating)}
+            />
+          ))}
+        </View>
+        <TextField
+          label="Your experience (optional)"
+          value={reviewText}
+          onChangeText={setReviewText}
+          placeholder="How was the item?"
+        />
+        {reviewError ? (
+          <Text variant="meta" color={colors.accent700}>
+            {reviewError}
+          </Text>
+        ) : null}
+        <Button
+          label={reviewProduct.isPending ? 'Posting…' : 'Post review'}
+          block
+          disabled={!reviewTarget || reviewRating === 0 || reviewProduct.isPending}
+          onPress={() => {
+            if (!reviewTarget || !reviewRating) return;
+            reviewProduct.mutate(
+              {
+                orderId: reviewTarget.orderId,
+                productId: reviewTarget.productId,
+                input: {
+                  rating: reviewRating,
+                  ...(reviewText.trim() ? { text: reviewText.trim() } : {}),
+                },
+              },
+              {
+                onSuccess: () => setReviewTarget(null),
+                onError: (error) =>
+                  setReviewError(describeError(error, "Couldn't post your review.")),
+              },
+            );
+          }}
+        />
       </Sheet>
     </>
   );

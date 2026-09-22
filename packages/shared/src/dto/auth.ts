@@ -51,8 +51,16 @@ export const meSchema = z.object({
   verificationStatus: z.enum(['unverified', 'pending', 'verified']),
   /** False until `displayName` has been changed away from its sign-up placeholder (the phone number itself). */
   profileComplete: z.boolean(),
+  bookingRemindersEnabled: z.boolean(),
+  pickupRemindersEnabled: z.boolean(),
 });
 export type Me = z.infer<typeof meSchema>;
+
+export const notificationPreferencesSchema = z.object({
+  bookingRemindersEnabled: z.boolean(),
+  pickupRemindersEnabled: z.boolean(),
+});
+export type NotificationPreferencesInput = z.infer<typeof notificationPreferencesSchema>;
 
 export const updateProfileSchema = z.object({
   displayName: z.string().trim().min(2).max(60),

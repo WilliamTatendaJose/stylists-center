@@ -56,11 +56,15 @@ function parseOrders(raw: string | undefined): PlacedOrder[] {
  * reference/providerName/total triple.
  */
 export default function OrderDone() {
-  const { orders: ordersParam } = useLocalSearchParams<{ orders?: string }>();
+  const { orders: ordersParam, remainingCount: remainingCountParam } = useLocalSearchParams<{
+    orders?: string;
+    remainingCount?: string;
+  }>();
   const marketHome = useMarketHome();
   const orders = parseOrders(ordersParam);
   const grandTotal = orders.reduce((sum, o) => sum + o.totalUsdCents, 0);
   const multi = orders.length > 1;
+  const remainingCount = Number(remainingCountParam ?? 0);
 
   return (
     <Screen theme="accent">
@@ -95,6 +99,21 @@ export default function OrderDone() {
       ) : null}
 
       <View style={styles.actions}>
+        {remainingCount > 0 ? (
+          <>
+            <Text variant="body" color={color.onAccent.text}>
+              {remainingCount} seller{' '}
+              {remainingCount === 1 ? 'order could not' : 'orders could not'} be placed. Those items
+              are still in your cart.
+            </Text>
+            <Button
+              label="Review remaining cart"
+              variant="whiteOnAccent"
+              block
+              onPress={() => router.replace('/market/cart')}
+            />
+          </>
+        ) : null}
         <Button
           label="See my orders"
           variant="whiteOnAccent"

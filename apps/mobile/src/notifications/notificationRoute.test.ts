@@ -22,6 +22,15 @@ describe('notificationRoute', () => {
     );
   });
 
+  it('routes marketplace updates to the correct side of the shop', () => {
+    expect(notificationRoute({ type: 'market.order.created', orderId: 'o-1' })).toBe(
+      '/(provider)/shop',
+    );
+    expect(notificationRoute({ type: 'market.order.ready', orderId: 'o-1' })).toBe(
+      '/market/orders',
+    );
+  });
+
   it('ignores a known type whose id is missing, rather than routing somewhere broken', () => {
     expect(notificationRoute({ type: 'message.created' })).toBeNull();
     expect(notificationRoute({ type: 'booking.updated', bookingId: 42 })).toBeNull();

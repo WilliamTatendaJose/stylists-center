@@ -17,7 +17,9 @@ export interface BookingDraftState {
   time: string | null;
   paymentMethod: PaymentMethod;
   matchId: string | null;
+  rescheduleBookingId: string | null;
   setProvider: (providerId: string, matchId?: string | null) => void;
+  startReschedule: (bookingId: string, providerId: string, serviceId: string) => void;
   setService: (serviceId: string) => void;
   setSlot: (date: string, time: string) => void;
   setPaymentMethod: (method: PaymentMethod) => void;
@@ -31,11 +33,15 @@ const INITIAL = {
   time: null,
   paymentMethod: 'ecocash' as PaymentMethod,
   matchId: null,
+  rescheduleBookingId: null,
 };
 
 export const useBookingDraftStore = create<BookingDraftState>((set) => ({
   ...INITIAL,
-  setProvider: (providerId, matchId = null) => set({ providerId, matchId }),
+  setProvider: (providerId, matchId = null) =>
+    set({ providerId, matchId, rescheduleBookingId: null }),
+  startReschedule: (rescheduleBookingId, providerId, serviceId) =>
+    set({ rescheduleBookingId, providerId, serviceId, matchId: null, date: null, time: null }),
   setService: (serviceId) => set({ serviceId }),
   setSlot: (date, time) => set({ date, time }),
   setPaymentMethod: (paymentMethod) => set({ paymentMethod }),

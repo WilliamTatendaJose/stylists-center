@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Share, StyleSheet, Switch, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import {
   CheckCircle2,
   Clock3,
@@ -46,6 +46,7 @@ import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 import { providerShareLink } from '../../src/sharing/shareLinks.js';
+import { NotificationPreferences } from '../../src/components/NotificationPreferences.js';
 import { useAddressAutocomplete } from '../../src/location/useAddressAutocomplete.js';
 import {
   ProfileHero,
@@ -416,6 +417,12 @@ export default function ProviderProfile() {
               divided
             />
             <Button
+              label="Manage calendar and time off"
+              variant="secondary"
+              block
+              onPress={() => router.push('/provider-calendar' as Href)}
+            />
+            <Button
               label="Edit public details"
               variant="secondary"
               block
@@ -542,6 +549,10 @@ export default function ProviderProfile() {
             </Card>
           </ProfileSection>
         ) : null}
+
+        <ProfileSection label="Notifications">
+          <NotificationPreferences />
+        </ProfileSection>
 
         <ProfileSection label="Appearance">
           <Card bordered style={styles.appearanceCard}>

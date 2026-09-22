@@ -141,6 +141,8 @@ model User {
   verificationNote String?
   verificationSubmittedAt DateTime?
   tokenVersion       Int                @default(0)
+  bookingRemindersEnabled Boolean        @default(true)
+  pickupRemindersEnabled  Boolean        @default(true)
   /// Set by the admin console when access is suspended. Firebase is disabled
   /// at the same time, while this database flag invalidates app JWTs immediately.
   disabledAt         DateTime?
@@ -171,6 +173,7 @@ model User {
   refreshTokenRecords RefreshToken[]
   auditLogEntries     AuditLog[]
   ordersAsBuyer       Order[]             @relation("OrderBuyer")
+  productReviews      ProductReview[]
   pushTokens          DevicePushToken[]
 
   @@index([cityId])
@@ -205,6 +208,8 @@ model ProviderProfile {
   priceDisplay       PriceDisplay @default(list)
   fromPriceUsdCents  Int?
   workingHoursLabel  String
+  /// Null preserves legacy profiles until the stylist configures a weekly calendar.
+  weeklyHours        Json?
   /** Provider-controlled "I'm taking work right now". The only thing that makes Home's "Available now" list actually mean anything. */
   acceptingBookings  Boolean      @default(true)
   verified           Boolean      @default(false)
@@ -225,6 +230,7 @@ model ProviderProfile {
   services             Service[]
   offers               MatchOffer[]
   bookings             Booking[]
+  timeOff              ProviderTimeOff[]
   trips                Trip[]
   products             Product[]
   orders               Order[]
@@ -235,6 +241,18 @@ model ProviderProfile {
   @@index([cityId])
   // The trigram (GIN) and partial availability indexes are declared in the
   // hand-written migration — Prisma's schema language cannot express either.
+}
+
+model ProviderTimeOff {
+  id         String          @id @default(uuid())
+  providerId String
+  provider   ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  startsAt   DateTime
+  endsAt     DateTime
+  note       String?         @db.VarChar(120)
+  createdAt  DateTime        @default(now())
+
+  @@index([providerId, startsAt, endsAt])
 }
 
 model Service {
@@ -367,7 +385,7 @@ model Payment {
   order                  Order?           @relation(fields: [orderId], references: [id])
   subscriptionProviderId String?
   subscriptionProvider   ProviderProfile? @relation("SubscriptionPayments", fields: [subscriptionProviderId], references: [id])
-  provider       String // 'ecocash' (FakeEcoCashAdapter in M1) — a string, not an enum, so a second gateway is a new value, not a migration
+  provider       String // 'fake-ecocash' | 'paynow' | 'pesepay' — a string, not an enum, so a further gateway is a new value, not a migration
   status         String // held | released | refunded | failed
   amountUsdCents Int
   feeUsdCents    Int      @default(0)
@@ -419,9 +437,11 @@ model Product {
   provider      ProviderProfile @relation(fields: [providerId], references: [id])
   name          String
   description   String
+  category      String          @default("other")
   priceUsdCents Int
   /// Authoritative stock. Reserved atomically at checkout, restored on cancellation.
   stockQty      Int             @default(0)
+  version       Int             @default(0)
   imageUrls     String[]        @default([])
   /// A delisted product stays for order history; it just stops being sellable.
   active        Boolean         @default(true)
@@ -429,6 +449,7 @@ model Product {
   updatedAt     DateTime        @updatedAt
 
   orderItems OrderItem[]
+  productReviews ProductReview[]
 
   @@index([providerId])
   @@index([active])
@@ -444,6 +465,16 @@ model Order {
   provider          ProviderProfile @relation(fields: [providerId], references: [id])
   status            OrderStatus   @default(reserved)
   paymentMethod     PaymentMethod
+  /// Buyer-scoped request key: retrying a timed-out checkout returns the same order.
+  checkoutKey       String?
+  checkoutFingerprint String?
+  checkoutUrl       String?
+  checkoutInstructions String?
+  pickupAddress     String?
+  pickupHours       String?
+  pickupLat         Float?
+  pickupLng         Float?
+  pickupNote        String?
   /// Sum of the item snapshots, stored so a later price change cannot rewrite history.
   totalUsdCents     Int
   createdAt         DateTime      @default(now())
@@ -451,8 +482,10 @@ model Order {
 
   items    OrderItem[]
   payments Payment[]
+  productReviews ProductReview[]
 
   @@index([buyerId])
+  @@unique([buyerId, checkoutKey])
   @@index([providerId])
 }
 
@@ -468,6 +501,23 @@ model OrderItem {
   quantity      Int
 
   @@index([orderId])
+}
+
+/// A product rating can only come from a buyer after collecting that product.
+model ProductReview {
+  id        String   @id @default(uuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id])
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  buyerId   String
+  buyer     User     @relation(fields: [buyerId], references: [id])
+  rating    Int
+  text      String?
+  createdAt DateTime @default(now())
+
+  @@unique([orderId, productId])
+  @@index([productId, createdAt])
 }
 
 model Review {

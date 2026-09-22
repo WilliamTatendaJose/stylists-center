@@ -15,6 +15,7 @@ import {
   type ActiveRole,
   type AuthTokens,
   type Me,
+  type NotificationPreferencesInput,
   type RegisterPushTokenInput,
   type UpdateProfileInput,
   type VerificationDto,
@@ -254,7 +255,17 @@ export class AuthService {
       hasProviderProfile: !!user.providerProfile,
       verificationStatus: user.verificationStatus,
       profileComplete: isProfileComplete(user.displayName, user.email ?? user.phone ?? ''),
+      bookingRemindersEnabled: user.bookingRemindersEnabled,
+      pickupRemindersEnabled: user.pickupRemindersEnabled,
     };
+  }
+
+  async updateNotificationPreferences(
+    userId: string,
+    input: NotificationPreferencesInput,
+  ): Promise<Me> {
+    await this.prisma.user.update({ where: { id: userId }, data: input });
+    return this.me(userId);
   }
 
   /** `PATCH /v1/me` — replaces the sign-up placeholder `displayName` with a real one. */

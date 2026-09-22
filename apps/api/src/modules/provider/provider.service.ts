@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -28,11 +29,16 @@ import {
   type ProviderOfferDto,
   type ProviderManagementProfileDto,
   type ProviderOrderDto,
+  type MarkOrderReadyInput,
+  type ProductCategory,
   type ProviderProductDto,
   type ProviderSubscriptionDto,
   type ServiceDto,
   type UpdateProviderProfileInput,
   type UpdateProviderServiceInput,
+  type ProviderCalendarDto,
+  type UpdateWeeklyHoursInput,
+  type CreateProviderTimeOffInput,
 } from '@sc/shared';
 import { ConfigService } from '@nestjs/config';
 import { Optional } from '@nestjs/common';
@@ -47,6 +53,8 @@ import { PaymentStatusService } from '../payments/payment-status.service';
 import { applySubscriptionPayment } from '../payments/payments.service';
 import { toBookingRowDto } from '../bookings/mappers';
 import { expireStaleBookingRequests } from '../bookings/booking-expiry';
+import { isWithinWeeklyHours, readWeeklyHours } from '../providers/calendar-policy';
+import { ReminderService } from '../notifications/reminder.service';
 
 /** Statuses a stylist still has something to do about, plus recent history for context. */
 const VISIBLE_STATUSES = ['awaiting_provider', 'confirmed', 'completed'] as const;
@@ -76,6 +84,7 @@ export class ProviderService {
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
     private readonly paymentStatus: PaymentStatusService,
     @Optional() private readonly config?: ConfigService<Env, true>,
+    @Optional() private readonly reminders?: ReminderService,
   ) {}
 
   /** One request for the whole Jobs screen — availability, live offers, and the work itself. */
@@ -114,6 +123,93 @@ export class ProviderService {
         imageUrls,
       })),
     };
+  }
+
+  async getCalendar(providerId: string): Promise<ProviderCalendarDto> {
+    const [profile, blocks] = await Promise.all([
+      this.prisma.providerProfile.findUniqueOrThrow({
+        where: { id: providerId },
+        select: { weeklyHours: true },
+      }),
+      this.prisma.providerTimeOff.findMany({
+        where: { providerId, endsAt: { gt: new Date() } },
+        orderBy: { startsAt: 'asc' },
+      }),
+    ]);
+    return {
+      weeklyHours: readWeeklyHours(profile.weeklyHours),
+      configured: profile.weeklyHours !== null,
+      timeOff: blocks.map((block) => ({
+        id: block.id,
+        startsAt: block.startsAt.toISOString(),
+        endsAt: block.endsAt.toISOString(),
+        note: block.note,
+      })),
+    };
+  }
+
+  async updateCalendar(
+    providerId: string,
+    input: UpdateWeeklyHoursInput,
+  ): Promise<ProviderCalendarDto> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${providerId}))`;
+      const futureBookings = await tx.booking.findMany({
+        where: {
+          providerId,
+          startsAt: { gt: new Date() },
+          status: { notIn: ['cancelled', 'declined'] },
+        },
+        select: { startsAt: true, endsAt: true },
+      });
+      if (
+        futureBookings.some(
+          (booking) => !isWithinWeeklyHours(input.weeklyHours, booking.startsAt, booking.endsAt),
+        )
+      ) {
+        throw new BadRequestException(
+          'Existing bookings fall outside these hours. Keep those hours until the bookings are completed or cancelled.',
+        );
+      }
+      await tx.providerProfile.update({
+        where: { id: providerId },
+        data: { weeklyHours: input.weeklyHours },
+      });
+    });
+    return this.getCalendar(providerId);
+  }
+
+  async addTimeOff(
+    providerId: string,
+    input: CreateProviderTimeOffInput,
+  ): Promise<ProviderCalendarDto> {
+    const startsAt = new Date(input.startsAt);
+    const endsAt = new Date(input.endsAt);
+    if (startsAt <= new Date() || endsAt.getTime() - startsAt.getTime() > 30 * 24 * 60 * 60_000) {
+      throw new BadRequestException('Choose a future time off period of up to 30 days');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${providerId}))`;
+      const booking = await tx.booking.findFirst({
+        where: {
+          providerId,
+          startsAt: { lt: endsAt },
+          endsAt: { gt: startsAt },
+          status: { notIn: ['cancelled', 'declined'] },
+        },
+      });
+      if (booking) throw new BadRequestException('A booking already exists during this time');
+      await tx.providerTimeOff.create({
+        data: { providerId, startsAt, endsAt, note: input.note ?? null },
+      });
+    });
+    return this.getCalendar(providerId);
+  }
+
+  async removeTimeOff(providerId: string, id: string): Promise<ProviderCalendarDto> {
+    const deleted = await this.prisma.providerTimeOff.deleteMany({ where: { id, providerId } });
+    if (!deleted.count) throw new NotFoundException('Time off not found');
+    return this.getCalendar(providerId);
   }
 
   async updateProfile(
@@ -215,12 +311,24 @@ export class ProviderService {
       orderBy: { createdAt: 'desc' },
     });
     return products.map(
-      ({ id, name, description, priceUsdCents, stockQty, imageUrls, active }) => ({
+      ({
         id,
         name,
+        category,
         description,
         priceUsdCents,
         stockQty,
+        version,
+        imageUrls,
+        active,
+      }) => ({
+        id,
+        name,
+        category: category as ProductCategory,
+        description,
+        priceUsdCents,
+        stockQty,
+        version,
         imageUrls,
         active,
       }),
@@ -231,7 +339,10 @@ export class ProviderService {
     providerProfileId: string,
     input: CreateProviderProductInput,
   ): Promise<ProviderProductDto> {
-    return this.prisma.product.create({ data: { providerId: providerProfileId, ...input } });
+    const product = await this.prisma.product.create({
+      data: { providerId: providerProfileId, ...input, category: input.category ?? 'other' },
+    });
+    return { ...product, category: product.category as ProductCategory };
   }
 
   async updateProduct(
@@ -240,7 +351,18 @@ export class ProviderService {
     input: UpdateProviderProductInput,
   ): Promise<ProviderProductDto> {
     await this.requireOwnProduct(productId, providerProfileId);
-    return this.prisma.product.update({ where: { id: productId }, data: input });
+    const { category, expectedVersion, ...changes } = input;
+    const updated = await this.prisma.product.updateMany({
+      where: { id: productId, providerId: providerProfileId, version: expectedVersion },
+      data: { ...changes, ...(category ? { category } : {}), version: { increment: 1 } },
+    });
+    if (updated.count === 0) {
+      throw new ConflictException(
+        'This item changed while you were editing. Reload it and try again.',
+      );
+    }
+    const product = await this.prisma.product.findUniqueOrThrow({ where: { id: productId } });
+    return { ...product, category: product.category as ProductCategory };
   }
 
   async restockProduct(
@@ -249,21 +371,25 @@ export class ProviderService {
     quantity: number,
   ): Promise<ProviderProductDto> {
     await this.requireOwnProduct(productId, providerProfileId);
-    return this.prisma.product.update({
+    const product = await this.prisma.product.update({
       where: { id: productId },
-      data: { stockQty: { increment: quantity }, active: true },
+      data: { stockQty: { increment: quantity }, version: { increment: 1 }, active: true },
     });
+    return { ...product, category: product.category as ProductCategory };
   }
 
   async deleteProduct(productId: string, providerProfileId: string): Promise<void> {
     await this.requireOwnProduct(productId, providerProfileId);
-    await this.prisma.product.update({ where: { id: productId }, data: { active: false } });
+    await this.prisma.product.update({
+      where: { id: productId },
+      data: { active: false, version: { increment: 1 } },
+    });
   }
 
   async getOrders(providerProfileId: string): Promise<ProviderOrderDto[]> {
     const orders = await this.prisma.order.findMany({
       where: { providerId: providerProfileId },
-      include: { buyer: true, items: true },
+      include: { buyer: true, items: true, payments: true },
       orderBy: { createdAt: 'desc' },
     });
     return orders.map((order) => ({
@@ -274,18 +400,29 @@ export class ProviderService {
       paymentMethod: order.paymentMethod,
       totalUsdCents: order.totalUsdCents,
       createdAt: order.createdAt.toISOString(),
+      pickupNote: order.pickupNote,
+      paymentCleared:
+        order.paymentMethod === 'cash' ||
+        order.payments.some((payment) => payment.status === 'paid' || payment.status === 'held'),
       items: order.items.map((item) => ({
         productId: item.productId,
         name: item.nameSnapshot,
         priceUsdCents: item.priceUsdCents,
         quantity: item.quantity,
       })),
-      canMarkReady: order.status === 'reserved',
+      canMarkReady:
+        order.status === 'reserved' &&
+        (order.paymentMethod === 'cash' ||
+          order.payments.some((payment) => payment.status === 'paid' || payment.status === 'held')),
     }));
   }
 
   /** Seller confirms packing is complete; the buyer still controls final collection and escrow release. */
-  async markOrderReady(orderId: string, providerProfileId: string): Promise<void> {
+  async markOrderReady(
+    orderId: string,
+    providerProfileId: string,
+    input: MarkOrderReadyInput = {},
+  ): Promise<void> {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException('Order not found');
     if (order.providerId !== providerProfileId) throw new ForbiddenException();
@@ -293,11 +430,26 @@ export class ProviderService {
     if (order.status !== 'reserved') {
       throw new BadRequestException(`Cannot prepare an order that is ${order.status}`);
     }
+    if (order.paymentMethod === 'ecocash') {
+      const funded = await this.prisma.payment.findFirst({
+        where: { orderId, status: { in: ['paid', 'held'] } },
+      });
+      if (!funded) throw new BadRequestException('Payment has not cleared yet');
+    }
 
-    await this.prisma.order.updateMany({
+    const pickupNote = input.pickupNote?.trim();
+    const updated = await this.prisma.order.updateMany({
       where: { id: orderId, providerId: providerProfileId, status: 'reserved' },
-      data: { status: 'ready_for_collection' },
+      data: { status: 'ready_for_collection', pickupNote: pickupNote?.length ? pickupNote : null },
     });
+    if (updated.count > 0) {
+      void this.reminders?.schedulePickup(orderId, new Date());
+      void this.push.sendToUser(order.buyerId, {
+        title: 'Your order is ready',
+        body: `Order ${order.reference} is ready for collection.`,
+        data: { type: 'market.order.ready', orderId },
+      });
+    }
   }
 
   private async listBookings(providerProfileId: string): Promise<ProviderBookingRowDto[]> {
@@ -384,6 +536,7 @@ export class ProviderService {
       where: { id: bookingId },
       data: { status: 'confirmed' },
     });
+    void this.reminders?.scheduleBooking(bookingId, booking.startsAt);
     await this.notifyClient(bookingId, booking.clientId);
   }
 

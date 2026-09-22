@@ -25,6 +25,7 @@ import {
   RegisterPushTokenDto,
   SelectAccountTypeDto,
   VerificationSubmissionDto,
+  NotificationPreferencesDto,
 } from './dto';
 
 @Controller('auth')
@@ -71,6 +72,15 @@ export class MeController {
   @Patch()
   updateProfile(@CurrentUser() user: { id: string }, @Body() dto: UpdateProfileDto) {
     return this.auth.updateProfile(user.id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Patch('notification-preferences')
+  notificationPreferences(
+    @CurrentUser() user: { id: string },
+    @Body() dto: NotificationPreferencesDto,
+  ) {
+    return this.auth.updateNotificationPreferences(user.id, dto);
   }
 
   @UseGuards(JwtAuthGuard)

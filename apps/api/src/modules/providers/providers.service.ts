@@ -9,6 +9,7 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { toProviderListRow } from '../geo/mappers';
+import { isWithinWeeklyHours, readWeeklyHours } from './calendar-policy';
 
 /**
  * Candidate slot times offered for a booking, half-hour increments across a
@@ -185,7 +186,7 @@ export class ProvidersService {
   ): Promise<ProviderSlotsResponse> {
     const service = await this.prisma.service.findFirst({
       where: { id: serviceId, providerId },
-      select: { durationMinutes: true },
+      select: { durationMinutes: true, provider: { select: { weeklyHours: true } } },
     });
     if (!service) throw new NotFoundException('Service not found for this provider');
 
@@ -205,23 +206,37 @@ export class ProvidersService {
     // Read every appointment that could overlap a candidate, not just one
     // with the same start timestamp. `endsAt` is a snapshot, so a later menu
     // edit cannot change the schedule already promised to clients.
-    const bookings = await this.prisma.booking.findMany({
-      where: {
-        providerId,
-        startsAt: { lt: lastCandidate.endsAt },
-        endsAt: { gt: firstCandidate.instant },
-        status: { notIn: [...NON_BLOCKING_STATUSES] },
-      },
-      select: { startsAt: true, endsAt: true },
-    });
+    const [bookings, timeOff] = await Promise.all([
+      this.prisma.booking.findMany({
+        where: {
+          providerId,
+          startsAt: { lt: lastCandidate.endsAt },
+          endsAt: { gt: firstCandidate.instant },
+          status: { notIn: [...NON_BLOCKING_STATUSES] },
+        },
+        select: { startsAt: true, endsAt: true },
+      }),
+      this.prisma.providerTimeOff.findMany({
+        where: {
+          providerId,
+          startsAt: { lt: lastCandidate.endsAt },
+          endsAt: { gt: firstCandidate.instant },
+        },
+        select: { startsAt: true, endsAt: true },
+      }),
+    ]);
+    const weeklyHours = readWeeklyHours(service.provider.weeklyHours);
 
     return {
       date,
       slots: candidates.map(({ time, instant, endsAt }) => ({
         time,
         available:
+          instant > new Date() &&
           endsAt <= dayClose &&
-          bookings.every((booking) => booking.startsAt >= endsAt || booking.endsAt <= instant),
+          isWithinWeeklyHours(weeklyHours, instant, endsAt) &&
+          bookings.every((booking) => booking.startsAt >= endsAt || booking.endsAt <= instant) &&
+          timeOff.every((block) => block.startsAt >= endsAt || block.endsAt <= instant),
       })),
     };
   }

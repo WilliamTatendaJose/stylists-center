@@ -92,6 +92,59 @@ export const providerSlotsResponseSchema = z.object({
 });
 export type ProviderSlotsResponse = z.infer<typeof providerSlotsResponseSchema>;
 
+const clockTimeSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+export const weeklyIntervalSchema = z
+  .object({
+    dayOfWeek: z.number().int().min(0).max(6), // Sunday = 0, in Harare local time
+    opensAt: clockTimeSchema,
+    closesAt: clockTimeSchema,
+  })
+  .refine((value) => value.opensAt < value.closesAt, 'Closing time must be after opening time');
+export type WeeklyInterval = z.infer<typeof weeklyIntervalSchema>;
+export const weeklyHoursSchema = z
+  .array(weeklyIntervalSchema)
+  .max(28)
+  .superRefine((intervals, context) => {
+    const sorted = [...intervals].sort(
+      (a, b) => a.dayOfWeek - b.dayOfWeek || a.opensAt.localeCompare(b.opensAt),
+    );
+    for (let index = 1; index < sorted.length; index += 1) {
+      const previous = sorted[index - 1];
+      const current = sorted[index];
+      if (
+        previous &&
+        current &&
+        previous.dayOfWeek === current.dayOfWeek &&
+        previous.closesAt > current.opensAt
+      ) {
+        context.addIssue({ code: 'custom', message: 'Working intervals cannot overlap' });
+        break;
+      }
+    }
+  });
+export const updateWeeklyHoursSchema = z.object({ weeklyHours: weeklyHoursSchema });
+export type UpdateWeeklyHoursInput = z.infer<typeof updateWeeklyHoursSchema>;
+export const providerTimeOffSchema = z.object({
+  id: z.uuid(),
+  startsAt: z.iso.datetime(),
+  endsAt: z.iso.datetime(),
+  note: z.string().nullable(),
+});
+export const providerCalendarSchema = z.object({
+  weeklyHours: weeklyHoursSchema,
+  configured: z.boolean(),
+  timeOff: z.array(providerTimeOffSchema),
+});
+export type ProviderCalendarDto = z.infer<typeof providerCalendarSchema>;
+export const createProviderTimeOffSchema = z
+  .object({
+    startsAt: z.iso.datetime(),
+    endsAt: z.iso.datetime(),
+    note: z.string().trim().max(120).optional(),
+  })
+  .refine((value) => value.startsAt < value.endsAt, 'End must be after start');
+export type CreateProviderTimeOffInput = z.infer<typeof createProviderTimeOffSchema>;
+
 export const geoSearchQuerySchema = z.object({
   location: latLngSchema,
   radiusKm: z.number().positive(),

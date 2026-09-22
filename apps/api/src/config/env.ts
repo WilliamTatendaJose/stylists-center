@@ -38,9 +38,10 @@ export const envSchema = z
     FIREBASE_CLIENT_EMAIL: z.email().optional(),
     FIREBASE_PRIVATE_KEY: z.string().min(20).optional(),
 
-    // Paynow is the selected collection provider. It remains optional in
-    // development so the fake adapter keeps local and integration tests free.
-    PAYMENT_PROVIDER: z.enum(['fake', 'paynow']).default('fake'),
+    // Which collection gateway is live. Credentials stay optional in
+    // development so the fake adapter keeps local and integration tests free;
+    // production requires the set belonging to whichever gateway is selected.
+    PAYMENT_PROVIDER: z.enum(['fake', 'paynow', 'pesepay']).default('fake'),
     PAYNOW_INTEGRATION_ID: z.string().min(1).optional(),
     PAYNOW_INTEGRATION_KEY: z.string().min(20).optional(),
     PAYNOW_RETURN_URL: z.url().optional(),
@@ -50,6 +51,21 @@ export const envSchema = z
     // browser. That endpoint requires authemail — in test mode it must match
     // one of the merchant account's own login emails, not the customer's.
     PAYNOW_AUTH_EMAIL: z.email().optional(),
+
+    // Pesepay. Unlike Paynow it signs nothing: every request and response body
+    // is AES-256-CBC encrypted under PESEPAY_ENCRYPTION_KEY, whose first 16
+    // bytes double as the IV — hence the exact 32-character length, which is
+    // both what AES-256 needs and what Pesepay issues.
+    PESEPAY_INTEGRATION_KEY: z.string().min(1).optional(),
+    PESEPAY_ENCRYPTION_KEY: z.string().length(32).optional(),
+    PESEPAY_RETURN_URL: z.url().optional(),
+    PESEPAY_RESULT_URL: z.url().optional(),
+    /** Point the adapter at api.test.sandbox.pesepay.com, where the test cards and numbers move no real money. */
+    PESEPAY_SANDBOX: z.stringbool().default(false),
+    /** The currency Pesepay transacts in. Must match how this app stores money (integer USD cents). */
+    PESEPAY_CURRENCY_CODE: z.string().min(3).default('USD'),
+    /** Payment method for the in-app phone prompt. PZW211 is EcoCash USD; PZW201 EcoCash ZWL, PZW212 Innbucks. */
+    PESEPAY_MOBILE_METHOD_CODE: z.string().min(1).default('PZW211'),
 
     COIN_USD_CENTS: z.coerce.number().int().positive().default(20),
     /** Referral commission paid after a referred user's first completed booking. */
@@ -100,25 +116,36 @@ export const envSchema = z
           });
         }
       }
-      if (env.PAYMENT_PROVIDER !== 'paynow') {
+      if (env.PAYMENT_PROVIDER === 'fake') {
         ctx.addIssue({
           code: 'custom',
           path: ['PAYMENT_PROVIDER'],
-          message: 'PAYMENT_PROVIDER must be paynow in production.',
+          message: 'PAYMENT_PROVIDER must be paynow or pesepay in production.',
         });
       }
-      for (const key of [
-        'PAYNOW_INTEGRATION_ID',
-        'PAYNOW_INTEGRATION_KEY',
-        'PAYNOW_RETURN_URL',
-        'PAYNOW_RESULT_URL',
-        'PAYNOW_AUTH_EMAIL',
-      ] as const) {
+      // Only the selected gateway's credentials are demanded — requiring both
+      // would make it impossible to deploy with an account for just one.
+      const gatewayKeys =
+        env.PAYMENT_PROVIDER === 'pesepay'
+          ? ([
+              'PESEPAY_INTEGRATION_KEY',
+              'PESEPAY_ENCRYPTION_KEY',
+              'PESEPAY_RETURN_URL',
+              'PESEPAY_RESULT_URL',
+            ] as const)
+          : ([
+              'PAYNOW_INTEGRATION_ID',
+              'PAYNOW_INTEGRATION_KEY',
+              'PAYNOW_RETURN_URL',
+              'PAYNOW_RESULT_URL',
+              'PAYNOW_AUTH_EMAIL',
+            ] as const);
+      for (const key of gatewayKeys) {
         if (!env[key]) {
           ctx.addIssue({
             code: 'custom',
             path: [key],
-            message: `${key} is required in production for Paynow.`,
+            message: `${key} is required in production for ${env.PAYMENT_PROVIDER}.`,
           });
         }
       }
