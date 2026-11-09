@@ -16,9 +16,20 @@ export const envSchema = z
     DATABASE_URL: z.url(),
     REDIS_URL: z.url(),
 
-    // Origin-relative image URLs are stored in Postgres; this is the durable
-    // directory that backs /uploads. Mount it as a persistent volume in prod.
+    // Where uploads live. Postgres stores origin-relative /uploads/<name> URLs
+    // either way; UploadsController serves them from the chosen backend.
+    //  - local: files under UPLOAD_DIR (needs a persistent volume in prod).
+    //  - s3:    a private S3-compatible bucket — Cloudflare R2, AWS S3, or a
+    //           Railway bucket — downloaded via short-lived presigned links.
+    STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
     UPLOAD_DIR: z.string().min(1).default('uploads'),
+    /** R2: https://<account id>.r2.cloudflarestorage.com. Leave unset for AWS S3. */
+    S3_ENDPOINT: z.url().optional(),
+    /** R2 always uses "auto"; AWS needs the bucket's real region. */
+    S3_REGION: z.string().min(1).default('auto'),
+    S3_BUCKET: z.string().min(1).optional(),
+    S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
 
     JWT_ACCESS_SECRET: z.string().min(32),
     JWT_REFRESH_PEPPER: z.string().min(32),
@@ -146,6 +157,17 @@ export const envSchema = z
             code: 'custom',
             path: [key],
             message: `${key} is required in production for ${env.PAYMENT_PROVIDER}.`,
+          });
+        }
+      }
+    }
+    if (env.STORAGE_DRIVER === 's3') {
+      for (const key of ['S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: `${key} is required when STORAGE_DRIVER=s3.`,
           });
         }
       }

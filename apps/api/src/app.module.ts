@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env';
 import { PrismaModule } from './modules/prisma/prisma.module';
 import { RedisModule } from './modules/redis/redis.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { HealthModule } from './modules/health/health.module';
 import { AppLinksModule } from './modules/app-links/app-links.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -51,6 +52,7 @@ import { AdminUsersModule } from './modules/admin-users/admin-users.module';
     }),
     PrismaModule,
     RedisModule,
+    StorageModule,
     HealthModule,
     AppLinksModule,
     AuditModule,
