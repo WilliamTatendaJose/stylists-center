@@ -12,6 +12,12 @@ export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(4000),
+    /**
+     * Reverse proxies between the internet and this server: 1 on Railway (its
+     * edge proxy). 0 when the API is exposed directly, so X-Forwarded-For is
+     * ignored and can't be spoofed to dodge rate limits.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
 
     DATABASE_URL: z.url(),
     REDIS_URL: z.url(),

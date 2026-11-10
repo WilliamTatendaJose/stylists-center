@@ -9,6 +9,7 @@ const TEST_DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://sc:sc@localh
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
+  TRUST_PROXY_HOPS: 1,
   DATABASE_URL: TEST_DATABASE_URL,
   REDIS_URL: 'redis://localhost:6380',
   STORAGE_DRIVER: 'local',
