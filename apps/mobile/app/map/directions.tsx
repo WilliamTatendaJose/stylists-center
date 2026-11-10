@@ -1,6 +1,5 @@
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { formatUsd } from '@sc/shared';
 import { Screen, ScreenHeader, Text, Avatar, StatTile, ScMap, Button } from '@sc/ui';
 import { color, radius, space } from '@sc/tokens';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
@@ -21,7 +20,8 @@ const styles = StyleSheet.create({
   section: { marginBottom: space.xxl },
   sectionLabel: { marginBottom: space.m },
   stepRow: { flexDirection: 'row', gap: space.m, marginBottom: space.m },
-  stepDistance: { width: 34 },
+  // Wide enough for "1.2 km" / "180 m" on one line; 34pt broke them in two.
+  stepDistance: { width: 64 },
   stepText: { flex: 1 },
   note: { marginTop: space.s },
   footerRow: { flexDirection: 'row', gap: space.s },
@@ -149,7 +149,6 @@ export default function Directions() {
       <View style={styles.statRow}>
         <StatTile value={`${route.distanceKm.toFixed(1)} km`} caption="Distance" />
         <StatTile value={`${route.etaMinutes} min`} caption="Driving" />
-        <StatTile value={formatUsd(route.kombiFareUsdCents)} caption="Kombi" />
       </View>
 
       <View style={styles.section}>
