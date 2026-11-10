@@ -12,7 +12,9 @@ import {
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminUsersService } from './admin-users.service';
 import { CreateAdminUserDto, UpdateAdminUserDto } from './dto';
+import { AdminRoles } from '../admin-auth/admin-roles';
 
+@AdminRoles('support')
 @Controller('admin/users')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminUsersController {

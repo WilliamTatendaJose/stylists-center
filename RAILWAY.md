@@ -298,32 +298,80 @@ does nothing.
 
 ## Admin access and password resets
 
-There are three cases, from most to least common:
+There are four cases, from most to least common:
 
-| Situation                                       | What to do                                                                                                                 |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| A staff member forgot their password            | Another admin opens **Staff → Reset password** in the console. The new password signs out that person's existing sessions. |
-| A mobile user (client or stylist) forgot theirs | They tap **Forgot password** on the sign-in screen. Firebase emails them a reset link. Nothing to do on the server.        |
-| No admin can sign in at all                     | Break-glass, below.                                                                                                        |
+| Situation                                        | What to do                                                                                                                                           |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You want to change your own password             | **Your account** (your name, bottom left) → Password. Needs your current password; signs you out on every other device.                              |
+| A staff member forgot their password             | An owner opens **Staff → Reset password**. The new password signs out that person's existing sessions.                                               |
+| A staff member lost the phone with their 2FA app | An owner opens **Staff → Reset 2FA**. They're signed out and can set it up again from their account page. (Or they use one of their recovery codes.) |
+| A mobile user (client or stylist) forgot theirs  | They tap **Forgot password** on the sign-in screen. Firebase emails them a reset link. Nothing to do on the server.                                  |
+| No owner can sign in at all                      | Break-glass, below.                                                                                                                                  |
 
 **Fresh or locked-out database, no shell needed.** On the `api` service set
 `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` (12+ characters) and
-redeploy. On boot, if there is no enabled admin (the database is empty, or
-every admin is disabled or deleted), that account is created or restored. If
-any enabled admin exists, the variables do nothing, so leaving them set can't
-undo a password changed later. Delete them once you've signed in and changed
-the password anyway, so a stale credential isn't sitting in the dashboard.
+redeploy. On boot, if there is no usable owner (the database is empty, or
+every owner is disabled or deleted), that account is created, restored or
+promoted to owner. If a usable owner exists, the variables do nothing, so
+leaving them set can't undo a password changed later. Delete them once
+you've signed in and changed the password anyway, so a stale credential
+isn't sitting in the dashboard.
 
 **Locked out of a specific account, with a shell:**
 
 ```bash
 railway ssh --service api
-pnpm admin:reset-password owner@example.com            # prompts, input hidden
-pnpm admin:reset-password new@example.com --create     # creates it if missing
+pnpm admin:reset-password owner@example.com             # prompts, input hidden
+pnpm admin:reset-password owner@example.com --clear-mfa # also turns off 2FA (lost phone)
+pnpm admin:reset-password new@example.com --create      # creates an owner if missing
 ```
 
 This needs 12+ characters, re-enables the account, and signs out every
 session it had.
+
+## Admin console security
+
+**Roles.** Every admin has one:
+
+| Role    | Can use                                                                             |
+| ------- | ----------------------------------------------------------------------------------- |
+| owner   | Everything, including Staff and the Audit log                                       |
+| finance | Overview, Lookup, Providers (read), Subscriptions, Payments, Cash-outs, CSV exports |
+| support | Overview, Lookup, Reports, Bans, Reviews, Providers, Users, Verifications, Catalog  |
+
+The API enforces this (`apps/api/src/modules/admin-auth/admin-roles.ts`); a
+test fails if any admin route is added without a role decision. Admins who
+existed before roles were introduced are owners. There must always be at
+least one enabled owner, and nobody can change their own role.
+
+**Two-factor sign-in.** Each admin turns it on from **Your account** with an
+authenticator app (Google Authenticator, Microsoft Authenticator, 1Password…)
+and gets 10 one-time recovery codes. Once every admin has set it up, make it
+mandatory:
+
+```
+ADMIN_MFA_REQUIRED=true
+```
+
+With that on, an admin without 2FA can only reach their account page until
+they enrol. TOTP secrets are encrypted with a key derived from
+`ADMIN_JWT_REFRESH_PEPPER`. **Rotating that pepper turns off everyone's 2FA**
+(their stored secrets can no longer be read): after a rotation, clear each
+admin's 2FA (Staff → Reset 2FA, or `--clear-mfa`) and have them enrol again.
+
+**Brute-force protection.** Sign-in is limited to 10 attempts a minute per
+client IP, and 5 wrong passwords (or 5 wrong 2FA codes) lock that account's
+sign-in for 15 minutes, even with the right password. The limits key on the
+real client IP, which relies on `TRUST_PROXY_HOPS=1` (the default), matching
+Railway's single edge proxy. Set it to `0` only if the API is ever exposed
+with no proxy in front.
+
+**CSV exports.** Finance and owners can download the payments ledger,
+recorded payouts and cash-outs for a date range (Payments and Cash-outs
+pages). Dates are Harare days, inclusive, up to a year at a time. Each export
+is written to the audit log with who took it. Cells that a spreadsheet would
+treat as a formula (starting `=`, `+`, `-`, `@`) get a leading apostrophe, so
+phone numbers appear as `'+263…`.
 
 ## Verify
 
@@ -415,6 +463,12 @@ in this repo has been set up for it yet.
 
 ## Known gaps, deliberately not solved here
 
+- **No emailed password-reset links for admins.** There's no email provider
+  configured. Admins change their own password from Your account; an owner
+  resets someone else's; break-glass covers the rest.
+- **The Payments page computes payout balances in memory** from every
+  released payment, then pages the result. Fine for now; if that page gets
+  slow, move the balance calculation into a SQL aggregate.
 - **Backups are daily, not point-in-time.** A disk loss can cost up to a
   day of bookings and wallet movements. Moving to a managed Postgres with
   PITR is the next step once that window is unacceptable.

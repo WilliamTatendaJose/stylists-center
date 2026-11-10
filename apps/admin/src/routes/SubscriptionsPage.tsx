@@ -1,8 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { DollarSign, Users, Wallet } from 'lucide-react';
 import { formatUsd } from '@sc/shared';
 import type { AdminProviderRowDto } from '@sc/shared';
-import { useExtendSubscription, useProviders, useUpdateProvider } from '../api/providers';
+import {
+  useExtendSubscription,
+  useProviders,
+  useSubscriptionSummary,
+  useUpdateProvider,
+} from '../api/providers';
+import { Pager, SearchBox } from '../components/Pager';
 import { ApiError } from '../api/client';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
@@ -93,21 +99,15 @@ function SubscriptionRow({ provider }: { provider: AdminProviderRowDto }) {
 
 export function SubscriptionsPage() {
   const [filter, setFilter] = useState<'active' | 'lapsed' | undefined>(undefined);
-  const { data: providers, isLoading, isError } = useProviders();
-
-  const filtered = useMemo(() => {
-    if (!providers) return providers;
-    if (filter === 'active') return providers.filter((p) => p.subscriptionActive);
-    if (filter === 'lapsed') return providers.filter((p) => !p.subscriptionActive);
-    return providers;
-  }, [providers, filter]);
-
-  const activeCount = providers?.filter((p) => p.subscriptionActive).length ?? 0;
-  const lapsedCount = (providers?.length ?? 0) - activeCount;
-  const mrrUsdCents =
-    providers
-      ?.filter((p) => p.subscriptionActive)
-      .reduce((sum, p) => sum + p.subscriptionPriceUsdCents, 0) ?? 0;
+  const [offset, setOffset] = useState(0);
+  const [q, setQ] = useState('');
+  // Totals come from the server across every provider, not from the visible page.
+  const { data: summary } = useSubscriptionSummary();
+  const { data, isLoading, isError } = useProviders({ subscription: filter, q, offset });
+  const filtered = data?.items;
+  const activeCount = summary?.activeCount ?? 0;
+  const lapsedCount = summary?.lapsedCount ?? 0;
+  const mrrUsdCents = summary?.mrrUsdCents ?? 0;
 
   return (
     <div>
@@ -136,6 +136,7 @@ export function SubscriptionsPage() {
               type="button"
               onClick={() => {
                 setFilter(f.value);
+                setOffset(0);
               }}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 filter === f.value
@@ -149,6 +150,15 @@ export function SubscriptionsPage() {
         </div>
       </div>
 
+      <div className="mb-4">
+        <SearchBox
+          placeholder="Search name, phone or email"
+          onSearch={(value) => {
+            setQ(value);
+            setOffset(0);
+          }}
+        />
+      </div>
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
       {isError ? (
         <p className="text-sm text-accent-700 dark:text-dark-accent">
@@ -164,6 +174,9 @@ export function SubscriptionsPage() {
           <SubscriptionRow key={provider.id} provider={provider} />
         ))}
       </div>
+      {data ? (
+        <Pager offset={offset} shown={data.items.length} total={data.total} onChange={setOffset} />
+      ) : null}
     </div>
   );
 }

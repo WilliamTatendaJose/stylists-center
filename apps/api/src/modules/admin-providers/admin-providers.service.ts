@@ -8,6 +8,8 @@ import {
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImageStorageService } from '../provider/image-storage.service';
+import type { AdminSubscriptionSummaryDto, Paged } from '@sc/shared';
+import { toPage, type PageRequest } from '../../common/paging';
 
 const PROVIDER_INCLUDE = {
   user: {
@@ -41,16 +43,68 @@ export class AdminProvidersService {
     private readonly images: ImageStorageService,
   ) {}
 
-  async list(verified?: boolean): Promise<AdminProviderRowDto[]> {
-    const providers = await this.prisma.providerProfile.findMany({
-      where: {
-        user: { deletedAt: null },
-        ...(verified !== undefined ? { verified } : {}),
-      },
-      include: PROVIDER_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-    });
-    return providers.map(toRow);
+  async list(input: {
+    verified?: boolean | undefined;
+    subscription?: 'active' | 'lapsed' | undefined;
+    q?: string | undefined;
+    page: PageRequest;
+  }): Promise<Paged<AdminProviderRowDto>> {
+    const now = new Date();
+    const filters: Prisma.ProviderProfileWhereInput[] = [{ user: { deletedAt: null } }];
+    if (input.verified !== undefined) filters.push({ verified: input.verified });
+    // Same rule as isSubscriptionActive: paid until a moment still in the future.
+    if (input.subscription === 'active') filters.push({ subscriptionPaidUntil: { gt: now } });
+    if (input.subscription === 'lapsed') {
+      filters.push({
+        OR: [{ subscriptionPaidUntil: null }, { subscriptionPaidUntil: { lte: now } }],
+      });
+    }
+    if (input.q) {
+      filters.push({
+        OR: [
+          { displayName: { contains: input.q, mode: 'insensitive' } },
+          { user: { phone: { contains: input.q } } },
+          { user: { email: { contains: input.q, mode: 'insensitive' } } },
+        ],
+      });
+    }
+    const searched: Prisma.ProviderProfileWhereInput = { AND: filters };
+    const [providers, total] = await this.prisma.$transaction([
+      this.prisma.providerProfile.findMany({
+        where: searched,
+        include: PROVIDER_INCLUDE,
+        // id breaks ties so rows created in the same instant page deterministically.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: input.page.limit,
+        skip: input.page.offset,
+      }),
+      this.prisma.providerProfile.count({ where: searched }),
+    ]);
+    return toPage(providers.map(toRow), total, input.page);
+  }
+
+  /** Totals across every provider, so the Subscriptions header doesn't depend on which page is shown. */
+  async subscriptionSummary(): Promise<AdminSubscriptionSummaryDto> {
+    const now = new Date();
+    const notDeleted = { user: { deletedAt: null } };
+    const [active, lapsedCount] = await this.prisma.$transaction([
+      this.prisma.providerProfile.aggregate({
+        where: { ...notDeleted, subscriptionPaidUntil: { gt: now } },
+        _count: { _all: true },
+        _sum: { subscriptionPriceUsdCents: true },
+      }),
+      this.prisma.providerProfile.count({
+        where: {
+          ...notDeleted,
+          OR: [{ subscriptionPaidUntil: null }, { subscriptionPaidUntil: { lte: now } }],
+        },
+      }),
+    ]);
+    return {
+      activeCount: active._count._all,
+      lapsedCount,
+      mrrUsdCents: active._sum.subscriptionPriceUsdCents ?? 0,
+    };
   }
 
   async get(id: string): Promise<AdminProviderRowDto> {

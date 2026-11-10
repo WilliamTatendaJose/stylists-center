@@ -13,6 +13,12 @@ export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().positive().default(4000),
+    /**
+     * Reverse proxies between the internet and this server: 1 on Railway (its
+     * edge proxy). 0 when the API is exposed directly, so X-Forwarded-For is
+     * ignored and can't be spoofed to dodge rate limits.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
 
     DATABASE_URL: z.url(),
     REDIS_URL: z.url(),
@@ -48,6 +54,12 @@ export const envSchema = z
     // First admin account, created on boot only while no enabled admin exists
     // (an empty or fully locked-out database). Ignored otherwise, so it never
     // overwrites a password changed later. See RAILWAY.md → "Admin access".
+    /**
+     * When true, admins without authenticator-app 2FA can only reach their
+     * account page until they enrol. Off by default so turning it on is a
+     * deliberate step once every admin knows it's coming.
+     */
+    ADMIN_MFA_REQUIRED: z.stringbool().default(false),
     ADMIN_BOOTSTRAP_EMAIL: z.email().optional(),
     ADMIN_BOOTSTRAP_PASSWORD: z.string().min(12).optional(),
 

@@ -14,6 +14,8 @@ import { ProviderService } from './provider.service';
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
+  TRUST_PROXY_HOPS: 1,
+  ADMIN_MFA_REQUIRED: false,
   DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://sc:sc@localhost:5433/sc_test',
   REDIS_URL: 'redis://localhost:6380',
   STORAGE_DRIVER: 'local',

@@ -4,6 +4,34 @@ import { imageUrlSchema } from './uploads.js';
 import { verificationStatusSchema } from './verification.js';
 
 /**
+ * One page of an admin list. Every list endpoint that can grow with the
+ * business returns this shape, taking `limit` (default 50, max 200),
+ * `offset`, and where it makes sense `q` for search.
+ */
+export function pagedSchema<T extends z.ZodType>(item: T) {
+  return z.object({
+    items: z.array(item),
+    total: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+    offset: z.number().int().nonnegative(),
+  });
+}
+export interface Paged<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Subscription totals across every provider, for the Subscriptions page header. */
+export const adminSubscriptionSummarySchema = z.object({
+  activeCount: z.number().int().nonnegative(),
+  lapsedCount: z.number().int().nonnegative(),
+  mrrUsdCents: z.number().int().nonnegative(),
+});
+export type AdminSubscriptionSummaryDto = z.infer<typeof adminSubscriptionSummarySchema>;
+
+/**
  * Admin console DTOs (apps/admin). Deliberately separate from the client/
  * provider DTOs in auth.ts — an admin session is a different identity with
  * a different login flow (email + password, not phone + OTP), so nothing
@@ -16,10 +44,19 @@ export const adminLoginSchema = z.object({
 });
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 
+/** owner: everything. finance: money. support: users and trust. See admin-roles.ts in the API. */
+export const adminRoleSchema = z.enum(['owner', 'finance', 'support']);
+export type AdminRoleName = z.infer<typeof adminRoleSchema>;
+
 export const adminIdentitySchema = z.object({
   id: z.uuid(),
   email: z.email(),
   displayName: z.string(),
+  role: adminRoleSchema,
+  /** Whether this account signs in with an authenticator-app code as well as its password. */
+  mfaEnabled: z.boolean(),
+  /** True when ADMIN_MFA_REQUIRED is on and this account hasn't enrolled yet: only account setup is allowed. */
+  mfaSetupRequired: z.boolean(),
 });
 export type AdminIdentity = z.infer<typeof adminIdentitySchema>;
 
@@ -29,6 +66,59 @@ export const adminSessionSchema = z.object({
   admin: adminIdentitySchema,
 });
 export type AdminSession = z.infer<typeof adminSessionSchema>;
+
+/** Password accepted, but the account has 2FA: finish with POST /admin/auth/login/mfa. */
+export const adminMfaChallengeSchema = z.object({
+  mfaRequired: z.literal(true),
+  mfaToken: z.string(),
+});
+export type AdminMfaChallenge = z.infer<typeof adminMfaChallengeSchema>;
+export type AdminLoginResult = AdminSession | AdminMfaChallenge;
+
+/** A 6-digit authenticator code, or one of the account's one-time recovery codes. */
+export const adminMfaCodeSchema = z.string().trim().min(6).max(20);
+
+export const adminMfaLoginSchema = z.object({
+  mfaToken: z.string().min(1),
+  code: adminMfaCodeSchema,
+});
+export type AdminMfaLoginInput = z.infer<typeof adminMfaLoginSchema>;
+
+export const adminMfaSetupSchema = z.object({
+  /** For manual entry in the authenticator app. */
+  secret: z.string(),
+  /** otpauth:// URL, rendered as a QR code by the console. */
+  otpauthUrl: z.string(),
+});
+export type AdminMfaSetup = z.infer<typeof adminMfaSetupSchema>;
+
+export const adminMfaEnableSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/),
+});
+export type AdminMfaEnableInput = z.infer<typeof adminMfaEnableSchema>;
+
+export const adminRecoveryCodesSchema = z.object({ recoveryCodes: z.array(z.string()) });
+export type AdminRecoveryCodes = z.infer<typeof adminRecoveryCodesSchema>;
+
+export const adminMfaDisableSchema = z.object({
+  password: z.string().min(1),
+  code: adminMfaCodeSchema,
+});
+export type AdminMfaDisableInput = z.infer<typeof adminMfaDisableSchema>;
+
+export const adminChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(12, 'Use at least 12 characters').max(200),
+  })
+  .refine((input) => input.newPassword !== input.currentPassword, {
+    message: 'Choose a password different from your current one',
+    path: ['newPassword'],
+  });
+export type AdminChangePasswordInput = z.infer<typeof adminChangePasswordSchema>;
 
 export const adminAccessTokenSchema = z.object({
   accessToken: z.string(),
@@ -349,7 +439,9 @@ export const adminStaffRowSchema = z.object({
   id: z.uuid(),
   email: z.email(),
   displayName: z.string(),
+  role: adminRoleSchema,
   disabled: z.boolean(),
+  mfaEnabled: z.boolean(),
   createdAt: z.iso.datetime(),
   deletedAt: z.iso.datetime().nullable(),
 });
@@ -358,6 +450,7 @@ export type AdminStaffRowDto = z.infer<typeof adminStaffRowSchema>;
 export const createStaffSchema = z.object({
   email: z.email(),
   displayName: z.string().trim().min(1).max(200),
+  role: adminRoleSchema,
   password: z.string().min(8).max(200),
 });
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
@@ -365,12 +458,14 @@ export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export const updateStaffSchema = z
   .object({
     displayName: z.string().trim().min(1).max(200).optional(),
+    role: adminRoleSchema.optional(),
     disabled: z.boolean().optional(),
     password: z.string().min(8).max(200).optional(),
   })
   .refine(
     (input) =>
       input.displayName !== undefined ||
+      input.role !== undefined ||
       input.disabled !== undefined ||
       input.password !== undefined,
     { message: 'Provide at least one field to update' },

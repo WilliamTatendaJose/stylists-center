@@ -7,6 +7,7 @@ interface Admin {
   email: string;
   passwordHash: string;
   displayName: string;
+  role: string;
   disabled: boolean;
   deletedAt: Date | null;
   tokenVersion: number;
@@ -23,6 +24,7 @@ function fakeDb(admins: Partial<Admin>[] = [], tokens: RefreshToken[] = []) {
     email: `a${String(i)}@example.com`,
     passwordHash: 'x:y',
     displayName: 'Admin',
+    role: 'owner',
     disabled: false,
     deletedAt: null,
     tokenVersion: 0,
@@ -41,10 +43,14 @@ function fakeDb(admins: Partial<Admin>[] = [], tokens: RefreshToken[] = []) {
     rows,
     tokens,
     adminUser: {
-      count: ({ where }: { where: { disabled: boolean; deletedAt: null } }) =>
+      count: ({ where }: { where: { role?: string; disabled: boolean; deletedAt: null } }) =>
         Promise.resolve(
-          rows.filter((r) => r.disabled === where.disabled && r.deletedAt === where.deletedAt)
-            .length,
+          rows.filter(
+            (r) =>
+              (where.role === undefined || r.role === where.role) &&
+              r.disabled === where.disabled &&
+              r.deletedAt === where.deletedAt,
+          ).length,
         ),
       findUnique: ({ where }: { where: { email: string } }) => Promise.resolve(find(where) ?? null),
       create: ({ data }: { data: Partial<Admin> }) => {
@@ -97,6 +103,12 @@ describe('bootstrapFirstAdmin', () => {
     expect(db.rows[0]?.passwordHash).toBe('kept:hash');
   });
 
+  it('creates an owner when only non-owner admins are usable', async () => {
+    const db = fakeDb([{ email: 'support@example.com', role: 'support' }]);
+    expect(await bootstrapFirstAdmin(db, 'owner@example.com', STRONG)).toBe('created');
+    expect(db.rows.find((r) => r.email === 'owner@example.com')?.role).toBe('owner');
+  });
+
   it('restores the named account when every admin is disabled or deleted', async () => {
     const db = fakeDb([
       { email: 'owner@example.com', disabled: true, deletedAt: new Date() },
@@ -126,6 +138,18 @@ describe('resetAdminPassword', () => {
     expect(db.rows[0]?.disabled).toBe(false);
     expect(db.rows[0]?.tokenVersion).toBe(1);
     expect(tokens.map((t) => t.revoked)).toEqual([true, false]);
+  });
+
+  it('clears 2FA only when asked', async () => {
+    const db = fakeDb([{ email: 'owner@example.com' }]);
+    const row = db.rows[0] as unknown as Record<string, unknown>;
+    row.totpEnabledAt = new Date();
+    row.totpSecret = 'sealed';
+    await resetAdminPassword(db, 'owner@example.com', STRONG);
+    expect(row.totpEnabledAt).toBeInstanceOf(Date);
+    await resetAdminPassword(db, 'owner@example.com', STRONG, { clearMfa: true });
+    expect(row.totpEnabledAt).toBeNull();
+    expect(row.totpSecret).toBeNull();
   });
 
   it('refuses a short password and an unknown account unless asked to create it', async () => {

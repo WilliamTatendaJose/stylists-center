@@ -8,6 +8,8 @@ import {
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImageStorageService } from '../provider/image-storage.service';
+import type { Paged } from '@sc/shared';
+import { toPage, type PageRequest } from '../../common/paging';
 
 const VERIFICATION_USER_INCLUDE = {
   providerProfile: { select: { id: true } },
@@ -24,16 +26,35 @@ export class AdminVerificationsService {
     private readonly images: ImageStorageService,
   ) {}
 
-  async list(status?: VerificationStatus): Promise<AdminVerificationRowDto[]> {
-    const users = await this.prisma.user.findMany({
-      where: {
-        ...(status ? { verificationStatus: status } : {}),
-        verificationSubmittedAt: { not: null },
-      },
-      include: VERIFICATION_USER_INCLUDE,
-      orderBy: { verificationSubmittedAt: 'desc' },
-    });
-    return users.map(toRow);
+  async list(input: {
+    status?: VerificationStatus | undefined;
+    q?: string | undefined;
+    page: PageRequest;
+  }): Promise<Paged<AdminVerificationRowDto>> {
+    const where: Prisma.UserWhereInput = {
+      ...(input.status ? { verificationStatus: input.status } : {}),
+      verificationSubmittedAt: { not: null },
+      ...(input.q
+        ? {
+            OR: [
+              { displayName: { contains: input.q, mode: 'insensitive' } },
+              { email: { contains: input.q, mode: 'insensitive' } },
+              { phone: { contains: input.q } },
+            ],
+          }
+        : {}),
+    };
+    const [users, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        include: VERIFICATION_USER_INCLUDE,
+        orderBy: [{ verificationSubmittedAt: 'desc' }, { id: 'desc' }],
+        take: input.page.limit,
+        skip: input.page.offset,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return toPage(users.map(toRow), total, input.page);
   }
 
   async review(id: string, input: ReviewVerificationInput): Promise<AdminVerificationRowDto> {

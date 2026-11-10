@@ -3,11 +3,15 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { AdminIdentity, AdminSession } from '@sc/shared';
+import { AdminMfaService } from './admin-mfa.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { AdminRole } from '../../generated/prisma';
 import type { Env } from '../../config/env';
-import { verifyPassword } from './password';
+import { hashPassword, verifyPassword } from './password';
 
 const ACCESS_TOKEN_TTL = '15m';
+/** How long the password step stays good while the user fetches their phone. */
+const MFA_CHALLENGE_TTL = '5m';
 const REFRESH_TOKEN_TTL_MS = 12 * 60 * 60 * 1000; // 12h — a staff shift, not a month.
 
 interface IssuedRefreshToken {
@@ -36,9 +40,14 @@ export class AdminAuthService {
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
+    private readonly mfa: AdminMfaService,
   ) {}
 
-  async login(email: string, password: string): Promise<AdminSession & IssuedRefreshTokenWrapper> {
+  /**
+   * Password step. Accounts without 2FA get a session straight away; accounts
+   * with it get a short-lived challenge token to redeem at completeMfaLogin.
+   */
+  async login(email: string, password: string): Promise<LoginOutcome> {
     const admin = await this.prisma.adminUser.findUnique({ where: { email } });
     // A uniform message regardless of which check failed — a login screen
     // that says "no such account" for a bad email but "wrong password" for a
@@ -54,14 +63,77 @@ export class AdminAuthService {
       throw new UnauthorizedException('Incorrect email or password');
     }
 
+    if (admin.totpEnabledAt) {
+      const mfaToken = await this.jwt.signAsync(
+        { sub: admin.id, ver: admin.tokenVersion },
+        { secret: this.mfaChallengeSecret(), expiresIn: MFA_CHALLENGE_TTL },
+      );
+      return { kind: 'mfa', adminId: admin.id, mfaToken };
+    }
+    return { kind: 'session', ...(await this.startSession(admin)) };
+  }
+
+  /** Reads the challenge token without checking the code, so callers can rate-limit per account first. */
+  async readMfaChallenge(mfaToken: string): Promise<{ adminId: string; ver: number }> {
+    try {
+      const payload = await this.jwt.verifyAsync<{ sub: string; ver: number }>(mfaToken, {
+        secret: this.mfaChallengeSecret(),
+      });
+      return { adminId: payload.sub, ver: payload.ver };
+    } catch {
+      throw new UnauthorizedException('Sign-in timed out. Enter your password again.');
+    }
+  }
+
+  /** Second step: the challenge token plus an authenticator or recovery code. */
+  async completeMfaLogin(
+    mfaToken: string,
+    code: string,
+  ): Promise<AdminSession & IssuedRefreshTokenWrapper> {
+    const payload = await this.readMfaChallenge(mfaToken);
+    const admin = await this.prisma.adminUser.findUnique({ where: { id: payload.adminId } });
+    if (
+      !admin?.totpEnabledAt ||
+      admin.disabled ||
+      admin.deletedAt ||
+      admin.tokenVersion !== payload.ver
+    ) {
+      throw new UnauthorizedException('Sign-in timed out. Enter your password again.');
+    }
+    if (!(await this.mfa.verifySignInCode(admin.id, code))) {
+      throw new UnauthorizedException("That code didn't match");
+    }
+    return this.startSession(admin);
+  }
+
+  private async startSession(admin: AdminRow): Promise<AdminSession & IssuedRefreshTokenWrapper> {
     const accessToken = await this.signAccessToken(admin.id, admin.tokenVersion);
     const refreshToken = await this.issueRefreshToken(admin.id, randomUUID());
-
     return {
       accessToken,
-      admin: toIdentity(admin),
+      admin: this.toIdentity(admin),
       refreshToken: refreshToken.raw,
       refreshTokenExpiresAt: refreshToken.expiresAt,
+    };
+  }
+
+  /**
+   * A different signing secret from access tokens, so a challenge token (which
+   * only proves the password) can never be presented as a session.
+   */
+  private mfaChallengeSecret(): string {
+    return `${this.config.get('ADMIN_JWT_ACCESS_SECRET', { infer: true })}:mfa-challenge`;
+  }
+
+  toIdentity(admin: AdminRow): AdminIdentity {
+    const mfaEnabled = admin.totpEnabledAt !== null;
+    return {
+      id: admin.id,
+      email: admin.email,
+      displayName: admin.displayName,
+      role: admin.role,
+      mfaEnabled,
+      mfaSetupRequired: !mfaEnabled && this.config.get('ADMIN_MFA_REQUIRED', { infer: true }),
     };
   }
 
@@ -107,6 +179,34 @@ export class AdminAuthService {
     };
   }
 
+  /**
+   * Changes your own password. Every existing session for the account ends
+   * (tokenVersion bump + refresh tokens revoked), and the caller gets a fresh
+   * session so the tab they did it from stays signed in.
+   */
+  async changePassword(
+    adminId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<AdminSession & IssuedRefreshTokenWrapper> {
+    const admin = await this.prisma.adminUser.findUniqueOrThrow({ where: { id: adminId } });
+    if (!(await verifyPassword(currentPassword, admin.passwordHash))) {
+      throw new UnauthorizedException('Your current password is incorrect');
+    }
+    const passwordHash = await hashPassword(newPassword);
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.adminRefreshToken.updateMany({
+        where: { adminUserId: adminId, revoked: false },
+        data: { revoked: true },
+      }),
+      this.prisma.adminUser.update({
+        where: { id: adminId },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+      }),
+    ]);
+    return this.startSession(updated);
+  }
+
   async logout(refreshTokenRaw: string): Promise<void> {
     const tokenHash = this.hashRefreshToken(refreshTokenRaw);
     await this.prisma.adminRefreshToken.updateMany({
@@ -117,10 +217,12 @@ export class AdminAuthService {
 
   async me(adminId: string): Promise<AdminIdentity> {
     const admin = await this.prisma.adminUser.findUniqueOrThrow({ where: { id: adminId } });
-    return toIdentity(admin);
+    return this.toIdentity(admin);
   }
 
-  async verifyAccessToken(token: string): Promise<{ id: string }> {
+  async verifyAccessToken(
+    token: string,
+  ): Promise<{ id: string; mfaEnabled: boolean; role: AdminRole }> {
     let payload: { sub: string; ver: number };
     try {
       payload = await this.jwt.verifyAsync<{ sub: string; ver: number }>(token, {
@@ -138,7 +240,7 @@ export class AdminAuthService {
       throw new UnauthorizedException('Session no longer valid');
     }
 
-    return { id: admin.id };
+    return { id: admin.id, mfaEnabled: admin.totpEnabledAt !== null, role: admin.role };
   }
 
   private async issueRefreshToken(
@@ -178,6 +280,15 @@ interface IssuedRefreshTokenWrapper {
   refreshTokenExpiresAt: Date;
 }
 
-function toIdentity(admin: { id: string; email: string; displayName: string }): AdminIdentity {
-  return { id: admin.id, email: admin.email, displayName: admin.displayName };
+interface AdminRow {
+  id: string;
+  email: string;
+  displayName: string;
+  role: AdminRole;
+  tokenVersion: number;
+  totpEnabledAt: Date | null;
 }
+
+export type LoginOutcome =
+  | ({ kind: 'session' } & AdminSession & IssuedRefreshTokenWrapper)
+  | { kind: 'mfa'; adminId: string; mfaToken: string };

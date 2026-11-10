@@ -1,13 +1,16 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AdminCashOutRowDto, RecordCashOutSettlementInput } from '@sc/shared';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { AdminCashOutRowDto, Paged, RecordCashOutSettlementInput } from '@sc/shared';
 import { apiFetch } from './client';
+import { listQuery, type ListParams } from './paging';
 
 const CASH_OUTS_KEY = ['admin', 'wallet', 'cash-outs'] as const;
 
-export function useCashOuts() {
+export function useCashOuts(params: ListParams = {}) {
   return useQuery({
-    queryKey: CASH_OUTS_KEY,
-    queryFn: () => apiFetch<AdminCashOutRowDto[]>('/v1/admin/wallet/cash-outs'),
+    queryKey: [...CASH_OUTS_KEY, params],
+    queryFn: () =>
+      apiFetch<Paged<AdminCashOutRowDto>>(`/v1/admin/wallet/cash-outs${listQuery({ ...params })}`),
+    placeholderData: keepPreviousData,
   });
 }
 
