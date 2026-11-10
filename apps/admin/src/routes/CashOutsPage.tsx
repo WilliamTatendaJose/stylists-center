@@ -7,6 +7,7 @@ import { Pager, SearchBox } from '../components/Pager';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
 import { TextField } from '../components/ui/Field';
+import { CsvExport } from '../components/CsvExport';
 
 function SettleCashOutForm({
   cashOut,
@@ -118,6 +119,7 @@ export function CashOutsPage() {
         real-world transfer (EcoCash, cash, bank) has actually happened.
       </p>
 
+      <CsvExport kinds={['cash-outs']} />
       <div className="mb-4">
         <SearchBox
           placeholder="Search name or phone"

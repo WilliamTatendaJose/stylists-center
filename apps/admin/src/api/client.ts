@@ -47,6 +47,8 @@ interface ApiFetchOptions {
   body?: unknown;
   /** false for /admin/auth/login and /admin/auth/refresh themselves, which run before an access token exists. */
   auth?: boolean;
+  /** Return the body as a Blob (file downloads) instead of parsing JSON. */
+  blob?: boolean;
 }
 
 function extractMessage(text: string, status: number, statusText: string): string {
@@ -98,7 +100,7 @@ async function refreshAccessToken(): Promise<string | null> {
  * touches directly.
  */
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { method = 'GET', body, auth = true } = options;
+  const { method = 'GET', body, auth = true, blob = false } = options;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
   if (auth) {
@@ -142,6 +144,7 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   // failure even though the request had already gone through server-side.
   // Any empty body means "nothing to parse" now, regardless of which success
   // status carried it.
+  if (blob) return (await res.blob()) as T;
   const text = await res.text();
   if (!text) return undefined as T;
   return JSON.parse(text) as T;

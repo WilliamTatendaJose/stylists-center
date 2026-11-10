@@ -10,6 +10,7 @@ import { Card } from '../components/ui/Card';
 import { StatTile } from '../components/ui/StatTile';
 import { TextField } from '../components/ui/Field';
 import { Pager, SearchBox } from '../components/Pager';
+import { CsvExport } from '../components/CsvExport';
 
 function RecordPayoutForm({
   provider,
@@ -181,6 +182,7 @@ export function PaymentsPage() {
 
       <h2 className="mb-3 font-semibold text-neutral-900 dark:text-dark-text">Provider balances</h2>
 
+      <CsvExport kinds={['payments', 'payouts']} />
       <div className="mb-4">
         <SearchBox
           placeholder="Search provider or phone"

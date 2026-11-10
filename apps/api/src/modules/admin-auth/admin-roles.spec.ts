@@ -15,6 +15,7 @@ import { AdminTrustController } from '../admin-trust/admin-trust.controller';
 import { AdminUsersController } from '../admin-users/admin-users.controller';
 import { AdminVerificationsController } from '../admin-verifications/admin-verifications.controller';
 import { AdminWalletController } from '../admin-wallet/admin-wallet.controller';
+import { AdminExportsController } from '../admin-exports/admin-exports.controller';
 
 const CONTROLLERS = [
   AdminAuditController,
@@ -30,6 +31,7 @@ const CONTROLLERS = [
   AdminUsersController,
   AdminVerificationsController,
   AdminWalletController,
+  AdminExportsController,
 ];
 
 /** Every admin route that deliberately has no role restriction. Adding one is a decision: say so here. */
@@ -123,6 +125,9 @@ describe('admin role matrix', () => {
       'POST admin/payments/providers/:providerId/payouts',
       'POST admin/wallet/cash-outs/:transactionId/settle',
       'POST admin/providers/:id/subscription/extend',
+      'GET admin/exports/payments.csv',
+      'GET admin/exports/payouts.csv',
+      'GET admin/exports/cash-outs.csv',
     ]) {
       expect([can('finance', key), can('support', key)]).toEqual([true, false]);
     }
