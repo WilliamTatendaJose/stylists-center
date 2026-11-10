@@ -362,8 +362,11 @@ export class MarketService {
   async listOrders(buyerId: string): Promise<OrderRowDto[]> {
     const orders = await this.prisma.order.findMany({
       where: { buyerId },
+      // toOrderRow is typed against the full relation rows, so the include
+      // stays; the cap is what bounds the payload.
       include: { provider: true, items: true, productReviews: true },
       orderBy: { createdAt: 'desc' },
+      take: 100,
     });
     return orders.map(toOrderRow);
   }

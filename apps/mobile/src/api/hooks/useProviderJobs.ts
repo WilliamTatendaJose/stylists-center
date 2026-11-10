@@ -28,7 +28,7 @@ export function useProviderEarnings() {
   return useQuery({
     queryKey: ['provider', 'earnings'],
     queryFn: () => apiFetch<ProviderEarningsDto>('/v1/provider/earnings'),
-    refetchInterval: JOBS_POLL_MS,
+    // No poll: useProviderJobsRealtime invalidates this key on socket events.
     refetchOnMount: 'always',
   });
 }

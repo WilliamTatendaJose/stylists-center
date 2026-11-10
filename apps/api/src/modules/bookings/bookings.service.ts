@@ -309,8 +309,11 @@ export class BookingsService {
     await expireStaleBookingRequests(this.prisma, { clientId });
     const bookings = await this.prisma.booking.findMany({
       where: { clientId },
+      // toBookingRowDto is typed against the full provider/service rows, so
+      // the include stays; the cap is what bounds the payload.
       include: { provider: true, service: true },
       orderBy: { startsAt: 'desc' },
+      take: 100,
     });
 
     const reviewed = await this.prisma.review.findMany({

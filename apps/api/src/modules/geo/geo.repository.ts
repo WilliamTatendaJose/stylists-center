@@ -111,7 +111,7 @@ export class GeoRepository {
      * against "Hair Braiding". Plain `similarity` compares whole strings and
      * would rate that pair near zero, which is exactly the miss this fixes.
      */
-    const textScore = hasTerm
+    const textScoreExpr = hasTerm
       ? Prisma.sql`GREATEST(
           word_similarity(${term}, p."displayName"),
           word_similarity(${term}, c.name),
@@ -122,6 +122,19 @@ export class GeoRepository {
           ), 0)
         )`
       : Prisma.sql`0`;
+
+    // The score feeds both the fuzzy-match filter and the relevance ordering.
+    // Inlining the expression in each place made Postgres evaluate the four
+    // word_similarity calls (and the Service subquery) more than once per
+    // row, so it is computed once in a LATERAL join and referenced as a
+    // column. `OFFSET 0` is deliberate: without it the planner pulls the
+    // trivial subquery up and substitutes the expression back into every
+    // reference, undoing the point of the join. With no search term there is
+    // no join and the (constant 0) score is used as before.
+    const textScoreJoin = hasTerm
+      ? Prisma.sql`CROSS JOIN LATERAL (SELECT ${textScoreExpr} AS "textScore" OFFSET 0) ts`
+      : Prisma.empty;
+    const textScore = hasTerm ? Prisma.sql`ts."textScore"` : textScoreExpr;
 
     /**
      * A row matches if it contains the term outright (ILIKE, now index-backed
@@ -185,6 +198,7 @@ export class GeoRepository {
       FROM "ProviderProfile" p
       JOIN "User" u ON u.id = p."userId"
       JOIN "Category" c ON c.id = p."categoryId"
+      ${textScoreJoin}
       WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL
       ${radiusFilter} ${categoryFilter} ${availabilityFilter} ${searchFilter}
       ${orderBy}

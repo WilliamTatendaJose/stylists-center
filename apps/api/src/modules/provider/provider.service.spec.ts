@@ -225,6 +225,82 @@ describe('ProviderService management', () => {
     });
   });
 
+  it('totals earnings from the newest ledger row per order and lists one entry each', async () => {
+    const before = await provider.getEarnings(providerId);
+    const stamp = String(Date.now());
+    const makeOrder = async (suffix: string) =>
+      prisma.order.create({
+        data: {
+          reference: `PE-${stamp}-${suffix}`,
+          buyerId,
+          providerId,
+          paymentMethod: 'ecocash',
+          totalUsdCents: 1000,
+        },
+      });
+    const [released, held, refunded] = await Promise.all([
+      makeOrder('A'),
+      makeOrder('B'),
+      makeOrder('C'),
+    ]);
+    const at = (msAgo: number) => new Date(Date.now() - msAgo);
+    await prisma.payment.createMany({
+      data: [
+        // A: held, then released net of a 100c fee -> counts 900 as released only.
+        {
+          orderId: released.id,
+          provider: 'fake-ecocash',
+          status: 'held',
+          amountUsdCents: 1000,
+          createdAt: at(5000),
+        },
+        {
+          orderId: released.id,
+          provider: 'fake-ecocash',
+          status: 'released',
+          amountUsdCents: 1000,
+          feeUsdCents: 100,
+          createdAt: at(4000),
+        },
+        // B: still held -> 500 pending.
+        {
+          orderId: held.id,
+          provider: 'fake-ecocash',
+          status: 'held',
+          amountUsdCents: 500,
+          createdAt: at(3000),
+        },
+        // C: held then refunded -> counts toward neither total.
+        {
+          orderId: refunded.id,
+          provider: 'fake-ecocash',
+          status: 'held',
+          amountUsdCents: 300,
+          createdAt: at(2000),
+        },
+        {
+          orderId: refunded.id,
+          provider: 'fake-ecocash',
+          status: 'refunded',
+          amountUsdCents: 300,
+          createdAt: at(1000),
+        },
+      ],
+    });
+
+    const after = await provider.getEarnings(providerId);
+    expect(after.releasedUsdCents - before.releasedUsdCents).toBe(900);
+    expect(after.pendingUsdCents - before.pendingUsdCents).toBe(500);
+
+    const mine = after.entries.filter((entry) => entry.reference.startsWith(`PE-${stamp}-`));
+    expect(mine.map((entry) => [entry.reference, entry.status, entry.kind])).toEqual([
+      [`PE-${stamp}-C`, 'refunded', 'order'],
+      [`PE-${stamp}-B`, 'held', 'order'],
+      [`PE-${stamp}-A`, 'released', 'order'],
+    ]);
+    expect(mine[0]).toMatchObject({ counterpartyName: 'Test Buyer', feeUsdCents: 0 });
+  });
+
   describe('subscription', () => {
     it('is inactive with no paidUntil for a provider who has never paid', async () => {
       const subscription = await provider.getSubscription(providerId);

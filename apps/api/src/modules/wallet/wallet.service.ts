@@ -11,6 +11,7 @@ import {
 } from '@sc/shared';
 import type { Env } from '../../config/env';
 import { walletRates } from '../../config/wallet-rates';
+import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -272,23 +273,17 @@ export class WalletService {
     agentId: string,
     coinUsdCents: number,
   ): Promise<void> {
+    // Every wallet read lands here, but a repair is almost never needed.
+    // Check without the lock first so the common case is two plain aggregates
+    // rather than a transaction holding FOR UPDATE on the user row.
+    if ((await this.missingReferralCoins(this.prisma, userId, agentId)) <= 0) return;
+
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
 
-      const [paidReferrals, creditedRewards] = await Promise.all([
-        tx.referral.aggregate({
-          where: { agentId, status: 'paid' },
-          _sum: { coinsAwarded: true },
-        }),
-        tx.walletTransaction.aggregate({
-          where: { userId, type: 'referral_coin' },
-          _sum: { coins: true },
-        }),
-      ]);
-      const paidCoins = paidReferrals._sum.coinsAwarded ?? 0;
-      const creditedCoins = creditedRewards._sum.coins ?? 0;
-      const missingCoins = paidCoins - creditedCoins;
-
+      // The unlocked check above can be stale: a concurrent read may have
+      // repaired it already. Re-check under the lock so we never credit twice.
+      const missingCoins = await this.missingReferralCoins(tx, userId, agentId);
       if (missingCoins <= 0) return;
 
       await tx.walletTransaction.create({
@@ -301,5 +296,24 @@ export class WalletService {
         },
       });
     });
+  }
+
+  /** Paid referral coins minus referral coins already credited to the wallet ledger. */
+  private async missingReferralCoins(
+    db: Pick<Prisma.TransactionClient, 'referral' | 'walletTransaction'>,
+    userId: string,
+    agentId: string,
+  ): Promise<number> {
+    const [paidReferrals, creditedRewards] = await Promise.all([
+      db.referral.aggregate({
+        where: { agentId, status: 'paid' },
+        _sum: { coinsAwarded: true },
+      }),
+      db.walletTransaction.aggregate({
+        where: { userId, type: 'referral_coin' },
+        _sum: { coins: true },
+      }),
+    ]);
+    return (paidReferrals._sum.coinsAwarded ?? 0) - (creditedRewards._sum.coins ?? 0);
   }
 }
