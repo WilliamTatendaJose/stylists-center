@@ -17,6 +17,7 @@ import { AdminAuthService } from './admin-auth.service';
 import { AdminJwtAuthGuard } from './admin-jwt-auth.guard';
 import { CurrentAdmin } from './current-admin.decorator';
 import {
+  AdminChangePasswordDto,
   AdminLoginDto,
   AdminMfaCodeDto,
   AdminMfaDisableDto,
@@ -74,6 +75,31 @@ export class AdminAuthController {
     let result: Awaited<ReturnType<AdminAuthService['completeMfaLogin']>>;
     try {
       result = await this.adminAuth.completeMfaLogin(dto.mfaToken, dto.code);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) await this.attempts.recordFailure(lockKey);
+      throw error;
+    }
+    await this.attempts.clear(lockKey);
+    setAdminRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt, this.isSecure());
+    return { accessToken: result.accessToken, admin: result.admin };
+  }
+
+  /** 5 tries a minute per IP; wrong current passwords also count toward a per-account lockout. */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('password')
+  @HttpCode(200)
+  @UseGuards(AdminJwtAuthGuard)
+  @AllowWithoutMfa()
+  async changePassword(
+    @CurrentAdmin() admin: { id: string },
+    @Body() dto: AdminChangePasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const lockKey = `password:${admin.id}`;
+    await this.attempts.assertNotLocked(lockKey);
+    let result: Awaited<ReturnType<AdminAuthService['changePassword']>>;
+    try {
+      result = await this.adminAuth.changePassword(admin.id, dto.currentPassword, dto.newPassword);
     } catch (error) {
       if (error instanceof UnauthorizedException) await this.attempts.recordFailure(lockKey);
       throw error;

@@ -44,6 +44,7 @@ const OPEN_TO_EVERY_ROLE = new Set([
   'POST admin/auth/mfa/enable',
   'POST admin/auth/mfa/recovery-codes',
   'POST admin/auth/mfa/disable',
+  'POST admin/auth/password',
   // read-only views every role needs
   'GET admin/overview',
   'GET admin/overview/trends',

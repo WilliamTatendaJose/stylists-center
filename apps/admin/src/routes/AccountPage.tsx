@@ -2,7 +2,13 @@ import { useEffect, useState, type SubmitEvent } from 'react';
 import QRCode from 'qrcode';
 import type { AdminMfaSetup } from '@sc/shared';
 import { useAuthStore } from '../state/authStore';
-import { useMfaDisable, useMfaEnable, useMfaSetup, useRegenerateRecoveryCodes } from '../api/auth';
+import {
+  useChangePassword,
+  useMfaDisable,
+  useMfaEnable,
+  useMfaSetup,
+  useRegenerateRecoveryCodes,
+} from '../api/auth';
 import { ApiError } from '../api/client';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
@@ -269,6 +275,88 @@ function ManageMfa({ onCodes }: { onCodes: (codes: string[]) => void }) {
   );
 }
 
+function ChangePassword() {
+  const change = useChangePassword();
+  const [current, setCurrent] = useState('');
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  const submit = (e: SubmitEvent) => {
+    e.preventDefault();
+    setError(null);
+    setDone(false);
+    if (next.length < 12) {
+      setError('Use at least 12 characters.');
+      return;
+    }
+    if (next !== confirm) {
+      setError("The new passwords don't match.");
+      return;
+    }
+    change.mutate(
+      { currentPassword: current, newPassword: next },
+      {
+        onSuccess: () => {
+          setCurrent('');
+          setNext('');
+          setConfirm('');
+          setDone(true);
+        },
+        onError: (err) => {
+          setError(errorText(err, 'Could not change your password.'));
+        },
+      },
+    );
+  };
+
+  return (
+    <form onSubmit={submit} className="mt-4 max-w-sm">
+      <TextField
+        label="Current password"
+        type="password"
+        required
+        autoComplete="current-password"
+        value={current}
+        onChange={(e) => {
+          setCurrent(e.target.value);
+        }}
+      />
+      <TextField
+        label="New password (12+ characters)"
+        type="password"
+        required
+        minLength={12}
+        autoComplete="new-password"
+        value={next}
+        onChange={(e) => {
+          setNext(e.target.value);
+        }}
+      />
+      <TextField
+        label="Repeat new password"
+        type="password"
+        required
+        autoComplete="new-password"
+        value={confirm}
+        onChange={(e) => {
+          setConfirm(e.target.value);
+        }}
+      />
+      {error ? <p className="mb-3 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
+      {done ? (
+        <p role="status" className="mb-3 text-sm text-neutral-700 dark:text-dark-muted">
+          Password changed. You&apos;ve been signed out everywhere else.
+        </p>
+      ) : null}
+      <Button type="submit" disabled={change.isPending}>
+        {change.isPending ? 'Saving…' : 'Change password'}
+      </Button>
+    </form>
+  );
+}
+
 export function AccountPage() {
   const admin = useAuthStore((s) => s.admin);
   const [codes, setCodes] = useState<string[] | null>(null);
@@ -317,6 +405,14 @@ export function AccountPage() {
         ) : (
           <EnrolMfa onCodes={setCodes} />
         )}
+      </Card>
+
+      <Card>
+        <h2 className="font-semibold text-neutral-900 dark:text-dark-text">Password</h2>
+        <p className="mt-1 text-sm text-neutral-600 dark:text-dark-muted">
+          Changing it signs you out on every other device.
+        </p>
+        <ChangePassword />
       </Card>
     </div>
   );

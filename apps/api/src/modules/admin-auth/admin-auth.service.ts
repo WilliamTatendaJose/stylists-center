@@ -7,7 +7,7 @@ import { AdminMfaService } from './admin-mfa.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AdminRole } from '../../generated/prisma';
 import type { Env } from '../../config/env';
-import { verifyPassword } from './password';
+import { hashPassword, verifyPassword } from './password';
 
 const ACCESS_TOKEN_TTL = '15m';
 /** How long the password step stays good while the user fetches their phone. */
@@ -177,6 +177,34 @@ export class AdminAuthService {
       refreshToken: refreshToken.raw,
       refreshTokenExpiresAt: refreshToken.expiresAt,
     };
+  }
+
+  /**
+   * Changes your own password. Every existing session for the account ends
+   * (tokenVersion bump + refresh tokens revoked), and the caller gets a fresh
+   * session so the tab they did it from stays signed in.
+   */
+  async changePassword(
+    adminId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<AdminSession & IssuedRefreshTokenWrapper> {
+    const admin = await this.prisma.adminUser.findUniqueOrThrow({ where: { id: adminId } });
+    if (!(await verifyPassword(currentPassword, admin.passwordHash))) {
+      throw new UnauthorizedException('Your current password is incorrect');
+    }
+    const passwordHash = await hashPassword(newPassword);
+    const [, updated] = await this.prisma.$transaction([
+      this.prisma.adminRefreshToken.updateMany({
+        where: { adminUserId: adminId, revoked: false },
+        data: { revoked: true },
+      }),
+      this.prisma.adminUser.update({
+        where: { id: adminId },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+      }),
+    ]);
+    return this.startSession(updated);
   }
 
   async logout(refreshTokenRaw: string): Promise<void> {

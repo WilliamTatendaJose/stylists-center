@@ -109,6 +109,17 @@ export const adminMfaDisableSchema = z.object({
 });
 export type AdminMfaDisableInput = z.infer<typeof adminMfaDisableSchema>;
 
+export const adminChangePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1),
+    newPassword: z.string().min(12, 'Use at least 12 characters').max(200),
+  })
+  .refine((input) => input.newPassword !== input.currentPassword, {
+    message: 'Choose a password different from your current one',
+    path: ['newPassword'],
+  });
+export type AdminChangePasswordInput = z.infer<typeof adminChangePasswordSchema>;
+
 export const adminAccessTokenSchema = z.object({
   accessToken: z.string(),
 });

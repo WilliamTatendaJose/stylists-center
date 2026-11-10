@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type {
+  AdminChangePasswordInput,
   AdminIdentity,
   AdminLoginInput,
   AdminLoginResult,
@@ -132,4 +133,19 @@ export async function bootstrapSession(): Promise<void> {
   } finally {
     finishBootstrapping();
   }
+}
+
+/**
+ * Changes your own password. Every other session for the account is signed
+ * out; this tab gets the fresh session the API returns, so it stays signed in.
+ */
+export function useChangePassword() {
+  const setSession = useAuthStore((s) => s.setSession);
+  return useMutation({
+    mutationFn: (input: AdminChangePasswordInput) =>
+      apiFetch<AdminSession>('/v1/admin/auth/password', { method: 'POST', body: input }),
+    onSuccess: (session) => {
+      setSession(session.accessToken, session.admin);
+    },
+  });
 }
