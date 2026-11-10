@@ -273,8 +273,18 @@ describe('BookingsService', () => {
     );
   });
 
-  function futureSlot(hoursFromNow: number): string {
-    return new Date(Date.now() + hoursFromNow * 60 * 60_000).toISOString();
+  /**
+   * A distinct, always-bookable slot: tomorrow at 08:00 Harare (06:00 UTC)
+   * plus `offsetHours`. Slots relative to *now* drifted outside the default
+   * 07:00-20:00 Harare working hours (LEGACY_WEEKLY_HOURS) whenever the suite
+   * ran later in the day, so which tests failed depended on the clock.
+   * Offsets up to 11 keep a 30-minute service inside the same working day.
+   */
+  function futureSlot(offsetHours: number): string {
+    const tomorrow = new Date();
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCHours(6, 0, 0, 0);
+    return new Date(tomorrow.getTime() + offsetHours * 60 * 60_000).toISOString();
   }
 
   it('creates a cash booking with a reference and no payment row', async () => {
