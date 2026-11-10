@@ -27,6 +27,7 @@ describe('MarketService order transitions', () => {
       }),
     };
     const transaction = {
+      $executeRaw: vi.fn(() => Promise.resolve(1)),
       $queryRaw: vi.fn(() => Promise.resolve([])),
       order: { findUnique: vi.fn(() => Promise.resolve(previous)) },
       product: { update: vi.fn() },
@@ -61,6 +62,7 @@ describe('MarketService order transitions', () => {
 
   it('refuses a seller buying their own products, before touching stock or payment', async () => {
     const transaction = {
+      $executeRaw: vi.fn(() => Promise.resolve(1)),
       $queryRaw: vi.fn(() => Promise.resolve([])),
       order: { findUnique: vi.fn(() => Promise.resolve(null)) },
       providerProfile: { findUnique: vi.fn(() => Promise.resolve({ userId: 'seller-user' })) },
