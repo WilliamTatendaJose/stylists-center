@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   detailsCard: { paddingHorizontal: space.l },
   cardAction: { marginTop: space.l },
   accountGap: { marginTop: space.s },
-  linkStack: { gap: space.xs },
+  linkStack: { gap: space.s },
   subscriptionTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -417,22 +417,25 @@ export default function ProviderProfile() {
               value={workingHoursLabel || 'Not set'}
               divided
             />
-            <Button
-              label="Manage calendar and time off"
-              variant="secondary"
-              block
-              onPress={() => router.push('/provider-calendar')}
-            />
-            <Button
-              label="Edit public details"
-              variant="secondary"
-              block
-              onPress={() => {
-                setError(null);
-                setAddressQuery('');
-                setDetailsSheetOpen(true);
-              }}
-            />
+            {/* Wrapped so the two buttons get a gap; stacked bare they touched. */}
+            <View style={[styles.linkStack, styles.accountGap]}>
+              <Button
+                label="Manage calendar and time off"
+                variant="secondary"
+                block
+                onPress={() => router.push('/provider-calendar')}
+              />
+              <Button
+                label="Edit public details"
+                variant="secondary"
+                block
+                onPress={() => {
+                  setError(null);
+                  setAddressQuery('');
+                  setDetailsSheetOpen(true);
+                }}
+              />
+            </View>
             {data ? (
               // Stacked, not side by side: at this label size "View as a client"
               // wrapped onto two lines in half the card's width.
