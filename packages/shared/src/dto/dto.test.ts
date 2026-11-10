@@ -153,6 +153,8 @@ describe('auth schemas', () => {
         hasProviderProfile: false,
         verificationStatus: 'unverified',
         profileComplete: true,
+        bookingRemindersEnabled: true,
+        pickupRemindersEnabled: true,
       }).success,
     ).toBe(true);
   });

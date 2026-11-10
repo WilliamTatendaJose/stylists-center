@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Share, StyleSheet, Switch, View } from 'react-native';
-import { router, type Href } from 'expo-router';
+import { router } from 'expo-router';
 import {
   CheckCircle2,
   Clock3,
@@ -420,7 +420,7 @@ export default function ProviderProfile() {
               label="Manage calendar and time off"
               variant="secondary"
               block
-              onPress={() => router.push('/provider-calendar' as Href)}
+              onPress={() => router.push('/provider-calendar')}
             />
             <Button
               label="Edit public details"

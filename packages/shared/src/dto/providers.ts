@@ -112,9 +112,8 @@ export const weeklyHoursSchema = z
       const previous = sorted[index - 1];
       const current = sorted[index];
       if (
-        previous &&
         current &&
-        previous.dayOfWeek === current.dayOfWeek &&
+        previous?.dayOfWeek === current.dayOfWeek &&
         previous.closesAt > current.opensAt
       ) {
         context.addIssue({ code: 'custom', message: 'Working intervals cannot overlap' });
