@@ -57,8 +57,11 @@ export class MarketService {
     sort?: ProductSort;
     limit: number;
     offset: number;
+    /** The shopper, whose own products are left out of what they can buy. */
+    viewerId?: string;
   }): Promise<ProductPageDto> {
     const {
+      viewerId,
       lat,
       lng,
       radiusKm = null,
@@ -90,6 +93,7 @@ export class MarketService {
         ? Prisma.sql`AND (p.name ILIKE ${`%${term}%`} OR p.description ILIKE ${`%${term}%`} OR word_similarity(${term}, p.name) >= 0.35)`
         : Prisma.empty;
     const categoryFilter = category ? Prisma.sql`AND p.category = ${category}` : Prisma.empty;
+    const selfFilter = viewerId ? Prisma.sql`AND pr."userId" <> ${viewerId}` : Prisma.empty;
     const minPriceFilter =
       minPriceUsdCents === undefined
         ? Prisma.empty
@@ -117,7 +121,7 @@ export class MarketService {
         ST_Distance(pr.location, ${point}) / 1000 AS "distanceKm"
       FROM "Product" p
       JOIN "ProviderProfile" pr ON pr.id = p."providerId"
-      WHERE p.active = true AND p."stockQty" > 0 ${radiusFilter} ${searchFilter} ${categoryFilter} ${minPriceFilter} ${maxPriceFilter}
+      WHERE p.active = true AND p."stockQty" > 0 ${radiusFilter} ${searchFilter} ${categoryFilter} ${selfFilter} ${minPriceFilter} ${maxPriceFilter}
       ORDER BY ${sortClause}, p.id
       LIMIT ${limit + 1} OFFSET ${offset}
     `;
@@ -170,6 +174,11 @@ export class MarketService {
         providerId: input.providerId,
         paymentMethod: input.paymentMethod,
         payerPhone: input.payerPhone ?? null,
+        // Only when not EcoCash, so checkouts fingerprinted before channels
+        // existed still match their own retries.
+        ...(input.payChannel && input.payChannel !== 'ecocash'
+          ? { payChannel: input.payChannel }
+          : {}),
         items: [...input.items].sort((a, b) => a.productId.localeCompare(b.productId)),
       });
       const previous = await tx.order.findUnique({
@@ -192,6 +201,16 @@ export class MarketService {
           },
         };
       }
+      // A seller buying their own stock would pay into their own escrow and
+      // collect it back as earnings — a way to fake sales and reviews.
+      const seller = await tx.providerProfile.findUnique({
+        where: { id: input.providerId },
+        select: { userId: true },
+      });
+      if (seller?.userId === buyerId) {
+        throw new BadRequestException("You can't buy your own products");
+      }
+
       const productIds = input.items.map((i) => i.productId);
       if (new Set(productIds).size !== productIds.length) {
         throw new BadRequestException('The same product appears more than once');

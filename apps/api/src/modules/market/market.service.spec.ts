@@ -59,6 +59,36 @@ describe('MarketService order transitions', () => {
     ).rejects.toThrow('This checkout was changed');
   });
 
+  it('refuses a seller buying their own products, before touching stock or payment', async () => {
+    const transaction = {
+      $queryRaw: vi.fn(() => Promise.resolve([])),
+      order: { findUnique: vi.fn(() => Promise.resolve(null)) },
+      providerProfile: { findUnique: vi.fn(() => Promise.resolve({ userId: 'seller-user' })) },
+      product: { update: vi.fn() },
+    };
+    const prisma = {
+      $transaction: vi.fn((run: (tx: typeof transaction) => Promise<unknown>) => run(transaction)),
+    };
+    const gateway = { createCheckout: vi.fn() };
+    const service = new MarketService(
+      prisma as unknown as PrismaService,
+      gateway as unknown as PaymentGatewayPort,
+      {} as PaymentStatusService,
+      { sendToUser: vi.fn() } as unknown as PushService,
+    );
+
+    await expect(
+      service.createOrder('seller-user', {
+        providerId: 'seller-1',
+        checkoutKey: 'own-stock-checkout',
+        paymentMethod: 'cash',
+        items: [{ productId: 'product-1', quantity: 1 }],
+      }),
+    ).rejects.toThrow("You can't buy your own products");
+    expect(transaction.product.update).not.toHaveBeenCalled();
+    expect(gateway.createCheckout).not.toHaveBeenCalled();
+  });
+
   it('restores stock once when two cancellation requests race', async () => {
     let status: 'reserved' | 'cancelled' = 'reserved';
     let stock = 0;

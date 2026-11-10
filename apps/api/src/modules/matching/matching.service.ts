@@ -92,6 +92,8 @@ export class MatchingService {
       // Fanning a request out to someone who has switched off is how a match
       // ends in silence and a five-minute expiry for the client.
       onlyAcceptingBookings: true,
+      // A stylist asking for a match must not be offered their own request.
+      excludeUserId: match.clientId,
     });
 
     const respondBy = new Date(Date.now() + OFFER_RESPONSE_TTL_SECONDS * 1000);

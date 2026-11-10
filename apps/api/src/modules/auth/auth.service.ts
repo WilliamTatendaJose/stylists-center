@@ -253,6 +253,7 @@ export class AuthService {
       selectedAccountType: user.selectedAccountType,
       onboardingComplete: user.onboardingCompletedAt !== null,
       hasProviderProfile: !!user.providerProfile,
+      providerProfileId: user.providerProfile?.id ?? null,
       verificationStatus: user.verificationStatus,
       profileComplete: isProfileComplete(user.displayName, user.email ?? user.phone ?? ''),
       bookingRemindersEnabled: user.bookingRemindersEnabled,

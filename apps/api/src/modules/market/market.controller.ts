@@ -18,8 +18,9 @@ export class MarketController {
   // Declared before ':id' — Nest matches in registration order, so a literal
   // segment must come first or the dynamic one swallows it.
   @Get('products')
-  listProducts(@Query() query: ProductsQueryDto) {
+  listProducts(@CurrentUser() user: { id: string }, @Query() query: ProductsQueryDto) {
     return this.market.listProducts({
+      viewerId: user.id,
       lat: query.lat,
       lng: query.lng,
       radiusKm: query.radiusKm ?? null,

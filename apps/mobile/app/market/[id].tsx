@@ -15,6 +15,7 @@ import {
   ImagePlaceholder,
 } from '@sc/ui';
 import { useProduct, useProductReviews } from '../../src/api/hooks/useMarket.js';
+import { useMe } from '../../src/api/hooks/useMe.js';
 import { useCartStore } from '../../src/state/index.js';
 import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
 import { apiAssetUrl } from '../../src/api/client.js';
@@ -42,6 +43,7 @@ export default function ProductDetail() {
   const onBack = useBack(marketHome);
   const { data: product, isError } = useProduct(id);
   const { data: reviews } = useProductReviews(id);
+  const { data: me } = useMe();
 
   const addToCart = useCartStore((s) => s.add);
   const [added, setAdded] = useState(false);
@@ -58,6 +60,9 @@ export default function ProductDetail() {
   }
 
   const soldOut = product.stockQty <= 0;
+  // The API refuses an order for your own stock; say so here instead of
+  // letting it fail at checkout.
+  const isOwnProduct = !!me?.providerProfileId && me.providerProfileId === product.providerId;
 
   const add = () => {
     addToCart(
@@ -89,10 +94,10 @@ export default function ProductDetail() {
             />
           ) : (
             <Button
-              label={soldOut ? 'Sold out' : 'Add to cart'}
+              label={isOwnProduct ? 'This is your listing' : soldOut ? 'Sold out' : 'Add to cart'}
               block
               size="lg"
-              disabled={soldOut}
+              disabled={soldOut || isOwnProduct}
               onPress={add}
             />
           )}

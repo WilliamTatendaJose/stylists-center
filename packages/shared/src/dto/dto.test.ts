@@ -153,6 +153,7 @@ describe('auth schemas', () => {
         selectedAccountType: null,
         onboardingComplete: false,
         hasProviderProfile: false,
+        providerProfileId: null,
         verificationStatus: 'unverified',
         profileComplete: true,
         bookingRemindersEnabled: true,

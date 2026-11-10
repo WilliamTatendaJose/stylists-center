@@ -65,6 +65,11 @@ export class BookingsService {
     if (service?.providerId !== input.providerId) {
       throw new NotFoundException('Service not found for this provider');
     }
+    // A stylist booking themselves would pay into their own escrow and
+    // collect it back as earnings — a way to fake completed jobs and ratings.
+    if (service.provider.userId === clientId) {
+      throw new BadRequestException("You can't book your own services");
+    }
     // Discovery (search, "Available now", smart-match fan-out) already
     // excludes a provider whose subscription has lapsed — this closes the
     // remaining gap where a client still has their profile/service open
