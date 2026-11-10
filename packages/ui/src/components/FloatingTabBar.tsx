@@ -41,6 +41,8 @@ export interface FloatingTabDescriptor {
     // contravariant, so `unknown` here would have been too narrow, not too wide.
     tabBarLabel?: string | ((props: never) => ReactNode);
     tabBarIcon?: (props: { focused: boolean; color: string; size: number }) => ReactNode;
+    /** React Navigation's own option name: a count (or short text) shown on the icon. */
+    tabBarBadge?: number | string;
   };
 }
 export interface FloatingTabNavigationEvent {
@@ -85,6 +87,20 @@ const styles = StyleSheet.create({
     gap: space.xs,
   },
   label: { overflow: 'hidden' },
+  iconWrap: { position: 'relative' },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -10,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { fontSize: 10, lineHeight: 12, fontWeight: '700' },
 });
 
 /**
@@ -141,6 +157,7 @@ export function FloatingTabBar({ state, descriptors, navigation }: FloatingTabBa
             key={route.key}
             focused={focused}
             label={label}
+            {...(options.tabBarBadge !== undefined ? { badge: options.tabBarBadge } : {})}
             onPress={onPress}
             renderIcon={(iconColor) =>
               options.tabBarIcon?.({ focused, color: iconColor, size: 19 })
@@ -155,11 +172,12 @@ export function FloatingTabBar({ state, descriptors, navigation }: FloatingTabBa
 interface FloatingTabProps {
   focused: boolean;
   label: string;
+  badge?: number | string;
   onPress: () => void;
   renderIcon: (color: string) => ReactNode;
 }
 
-function FloatingTab({ focused, label, onPress, renderIcon }: FloatingTabProps) {
+function FloatingTab({ focused, label, badge, onPress, renderIcon }: FloatingTabProps) {
   const { colors, isDark } = useTheme();
   // 0 = inactive (black fill, white icon/label), 1 = active (white fill,
   // accent icon/label, flexGrow 1.9). Driven off `focused` rather than a
@@ -200,13 +218,37 @@ function FloatingTab({ focused, label, onPress, renderIcon }: FloatingTabProps) 
     <Animated.View style={[styles.tab, containerStyle]}>
       <Pressable
         accessibilityRole="tab"
-        accessibilityLabel={label}
+        accessibilityLabel={badge !== undefined ? `${label}, ${String(badge)} unread` : label}
         accessibilityState={{ selected: focused }}
         onPress={onPress}
         onDark
         style={styles.tabInner}
       >
-        {renderIcon(tint)}
+        <View style={styles.iconWrap}>
+          {renderIcon(tint)}
+          {badge !== undefined ? (
+            <View
+              style={[
+                styles.badge,
+                {
+                  backgroundColor: colors.accent,
+                  // A ring in the tab's own fill separates the badge from the icon.
+                  borderColor: focused
+                    ? isDark
+                      ? colors.neutral200
+                      : colors.bg
+                    : isDark
+                      ? colors.surface
+                      : colors.neutral900,
+                },
+              ]}
+            >
+              <Text variant="tabLabel" color={color.onAccent.text} style={styles.badgeText}>
+                {String(badge)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Animated.View style={labelStyle}>
           <Text variant="tabLabel" color={tint} numberOfLines={1} style={styles.label}>
             {label}

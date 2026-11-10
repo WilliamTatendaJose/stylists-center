@@ -1,0 +1,55 @@
+# Publishes an over-the-air (JavaScript-only) update with `eas update`.
+#
+# Manual on purpose: an update reaches every installed app on the channel
+# whose runtime matches (runtimeVersion follows the app version in
+# app.config.ts), so shipping one is a decision, not a side effect of a
+# merge. Anything that adds or changes native code needs a new build
+# (mobile-build.yml) and a version bump instead; an update cannot add it.
+name: OTA update
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: 'EAS update channel (matches the build profile installs came from)'
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+      message:
+        description: 'What this update contains'
+        required: true
+        type: string
+
+concurrency:
+  group: ota-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @sc/shared run build
+      - run: pnpm --filter @sc/mobile run typecheck
+      - run: pnpm --filter @sc/mobile run lint
+      - run: npm install -g eas-cli
+      # --environment loads the same EXPO_PUBLIC_* values (API URL, Firebase,
+      # MapTiler) the matching build profile used, from EAS.
+      - name: Publish update
+        working-directory: apps/mobile
+        run: >-
+          eas update --channel "$CHANNEL" --environment "$CHANNEL" --platform android
+          --message "$MESSAGE" --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          CHANNEL: ${{ inputs.channel }}
+          MESSAGE: ${{ inputs.message }}

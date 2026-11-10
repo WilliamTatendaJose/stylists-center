@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { ClipboardList, MessageCircle, Store, Wallet, User, Banknote } from 'lucide-react-native';
 import { FloatingTabBar, type FloatingTabBarProps } from '@sc/ui';
+import { useUnreadMessagesBadge } from '../../src/api/hooks/useChat.js';
 
 /**
  * Stylist tab bar: Jobs · Shop · Messages · Earnings · My page.
@@ -11,6 +12,8 @@ import { FloatingTabBar, type FloatingTabBarProps } from '@sc/ui';
  * can never drift. My page is the same account screen /profile is.
  */
 export default function ProviderTabsLayout() {
+  const unreadBadge = useUnreadMessagesBadge();
+
   return (
     <Tabs
       // Same assertion, and the same reason, as the client layout: @sc/ui's
@@ -41,6 +44,7 @@ export default function ProviderTabsLayout() {
         name="messages"
         options={{
           title: 'Messages',
+          ...(unreadBadge !== undefined ? { tabBarBadge: unreadBadge } : {}),
           tabBarIcon: ({ color: iconColor, size }) => (
             <MessageCircle color={iconColor} size={size} strokeWidth={1.8} />
           ),

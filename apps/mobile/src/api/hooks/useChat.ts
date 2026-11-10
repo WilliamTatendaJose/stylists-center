@@ -26,6 +26,39 @@ export function useConversations() {
   });
 }
 
+/**
+ * Unread messages across every conversation, for the Messages tab badge, in
+ * the form React Navigation's `tabBarBadge` takes: undefined when there are
+ * none (so no badge renders), capped at "99+".
+ *
+ * Kept live without polling: the server emits `message.created` to the
+ * recipient's own `user:{id}` room for every new message and
+ * `conversation.read` when a thread is read elsewhere, and either one
+ * refetches the inbox, whose rows carry their own `unreadCount`.
+ */
+export function useUnreadMessagesBadge(): number | string | undefined {
+  const queryClient = useQueryClient();
+  const { data } = useConversations();
+
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) return undefined;
+    const refresh = () => {
+      void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY, exact: true });
+    };
+    socket.on('message.created', refresh);
+    socket.on('conversation.read', refresh);
+    return () => {
+      socket.off('message.created', refresh);
+      socket.off('conversation.read', refresh);
+    };
+  }, [queryClient]);
+
+  const unread = (data ?? []).reduce((sum, conversation) => sum + conversation.unreadCount, 0);
+  if (unread <= 0) return undefined;
+  return unread > 99 ? '99+' : unread;
+}
+
 /** `POST /v1/conversations` — finds-or-creates the 1:1 thread with a provider, for "Message" buttons that only know a providerId. */
 export function useStartConversation() {
   return useMutation({

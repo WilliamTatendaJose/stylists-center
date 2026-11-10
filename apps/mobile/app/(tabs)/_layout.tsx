@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Search, Store, CalendarCheck, MessageCircle, Wallet } from 'lucide-react-native';
 import { FloatingTabBar, type FloatingTabBarProps } from '@sc/ui';
+import { useUnreadMessagesBadge } from '../../src/api/hooks/useChat.js';
 
 /**
  * Client tab bar (handoff: Find · Market · Bookings · Messages · Wallet).
@@ -12,6 +13,8 @@ import { FloatingTabBar, type FloatingTabBarProps } from '@sc/ui';
  * contract FloatingTabBar was built against.
  */
 export default function TabsLayout() {
+  const unreadBadge = useUnreadMessagesBadge();
+
   return (
     <Tabs
       tabBar={(props) => (
@@ -62,6 +65,7 @@ export default function TabsLayout() {
         name="messages"
         options={{
           title: 'Messages',
+          ...(unreadBadge !== undefined ? { tabBarBadge: unreadBadge } : {}),
           tabBarIcon: ({ color: iconColor, size }) => (
             <MessageCircle color={iconColor} size={size} strokeWidth={1.8} />
           ),
