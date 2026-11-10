@@ -64,8 +64,21 @@ over a `geography` column). Deploy it from a Dockerfile instead:
 - **New service → Empty Service → Deploy from Dockerfile**
 - Root Directory: `infra/docker/postgres`
 - Dockerfile Path: `Dockerfile`
-- Variables: `POSTGRES_USER=sc`, `POSTGRES_PASSWORD=<generate>`, `POSTGRES_DB=sc_prod`
+- Variables: `POSTGRES_USER=sc`, `POSTGRES_PASSWORD=<generate>`, `POSTGRES_DB=sc_prod`,
+  `PGDATA=/var/lib/postgresql/data/pgdata`
 - **Attach a Volume** at `/var/lib/postgresql/data` (data is lost on redeploy without one)
+
+**`PGDATA` must be exactly `/var/lib/postgresql/data/pgdata`, inside the
+volume.** It has to be a subdirectory because the volume's root contains
+`lost+found`, and `initdb` refuses a non-empty directory. **Don't set it
+from Git Bash on Windows:** Git Bash rewrites any argument starting with `/`
+into a Windows path, so `railway variables --set PGDATA=/var/...` stores
+`C:/Users/<you>/AppData/Local/Programs/Git/var/...`. Postgres then writes
+its data outside the volume, and **every restart of `db` silently wipes the
+database** (this happened in November 2026). Set it in the dashboard, from
+PowerShell, or prefix the command with `MSYS_NO_PATHCONV=1`. To check, the
+`db` deploy log must not show `initdb` running on a normal restart.
+
 - Internal port: `5432` (default, no need to expose publicly)
 
 ## 2. `redis`
@@ -264,22 +277,48 @@ does nothing.
 ## First deploy order
 
 1. `db`, then `redis` — wait for both to come up healthy.
-2. `api` — first boot runs migrations against the empty `db` and seeds
-   nothing automatically. Create the bootstrap admin account once with
-   `railway run --service api pnpm --filter @sc/api seed:admin` — **not**
-   `pnpm seed`, which also inserts `prisma/seed.ts`'s demo categories,
-   providers, and bookings (fixture data meant for a dev database, tied to
-   ids the mobile app's local fixtures reference). Set
-   `ADMIN_BOOTSTRAP_EMAIL`/`ADMIN_BOOTSTRAP_PASSWORD` as `api` service
-   variables first if you don't want the default
-   `admin@stylistscenter.local` / `ChangeMe123!` (change the password
-   immediately after first login either way).
+2. `api`: first boot runs migrations against the empty `db`. Set
+   `ADMIN_BOOTSTRAP_EMAIL`/`ADMIN_BOOTSTRAP_PASSWORD` first, so the first
+   admin account is created on boot (see "Admin access and password resets"
+   below). Then load the city and categories once:
+   `railway ssh --service api -- pnpm seed:reference`. **Never** run
+   `pnpm seed` against production: it inserts demo users, providers and
+   bookings, plus an admin with a published password.
 3. `admin` — needs `api`'s public domain for `VITE_API_URL` at build time,
    so it has to build after `api` has one.
 4. Go back to `api` and set `ADMIN_WEB_ORIGIN` to `admin`'s public domain
    once that exists (there's a one-time chicken-and-egg here: both domains
    need to exist before both env vars are correct — redeploy `api` after
    `admin`'s domain is known).
+
+## Admin access and password resets
+
+There are three cases, from most to least common:
+
+| Situation                                       | What to do                                                                                                                 |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| A staff member forgot their password            | Another admin opens **Staff → Reset password** in the console. The new password signs out that person's existing sessions. |
+| A mobile user (client or stylist) forgot theirs | They tap **Forgot password** on the sign-in screen. Firebase emails them a reset link. Nothing to do on the server.        |
+| No admin can sign in at all                     | Break-glass, below.                                                                                                        |
+
+**Fresh or locked-out database, no shell needed.** On the `api` service set
+`ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` (12+ characters) and
+redeploy. On boot, if there is no enabled admin (the database is empty, or
+every admin is disabled or deleted), that account is created or restored. If
+any enabled admin exists, the variables do nothing, so leaving them set can't
+undo a password changed later. Delete them once you've signed in and changed
+the password anyway, so a stale credential isn't sitting in the dashboard.
+
+**Locked out of a specific account, with a shell:**
+
+```bash
+railway ssh --service api
+pnpm admin:reset-password owner@example.com            # prompts, input hidden
+pnpm admin:reset-password new@example.com --create     # creates it if missing
+```
+
+This needs 12+ characters, re-enables the account, and signs out every
+session it had.
 
 ## Verify
 
