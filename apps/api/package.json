@@ -15,7 +15,9 @@
     "db:reset": "prisma migrate reset --force",
     "seed": "tsx prisma/seed.ts",
     "seed:admin": "tsx prisma/seed-admin.ts",
-    "storage:migrate": "tsx scripts/migrate-uploads-to-s3.ts"
+    "storage:migrate": "tsx scripts/migrate-uploads-to-s3.ts",
+    "seed:reference": "tsx prisma/seed-reference.ts",
+    "admin:reset-password": "tsx prisma/admin-reset-password.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1164.0",

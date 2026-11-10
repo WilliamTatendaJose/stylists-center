@@ -44,6 +44,11 @@ export const envSchema = z
     // than the mobile app's app.enableCors() default, since only a browser
     // client needs the admin refresh cookie at all.
     ADMIN_WEB_ORIGIN: z.url().default('http://localhost:5173'),
+    // First admin account, created on boot only while no enabled admin exists
+    // (an empty or fully locked-out database). Ignored otherwise, so it never
+    // overwrites a password changed later. See RAILWAY.md → "Admin access".
+    ADMIN_BOOTSTRAP_EMAIL: z.email().optional(),
+    ADMIN_BOOTSTRAP_PASSWORD: z.string().min(12).optional(),
 
     FIREBASE_PROJECT_ID: z.string().min(2).optional(),
     FIREBASE_CLIENT_EMAIL: z.email().optional(),
@@ -171,6 +176,13 @@ export const envSchema = z
           });
         }
       }
+    }
+    if (Boolean(env.ADMIN_BOOTSTRAP_EMAIL) !== Boolean(env.ADMIN_BOOTSTRAP_PASSWORD)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [env.ADMIN_BOOTSTRAP_EMAIL ? 'ADMIN_BOOTSTRAP_PASSWORD' : 'ADMIN_BOOTSTRAP_EMAIL'],
+        message: 'ADMIN_BOOTSTRAP_EMAIL and ADMIN_BOOTSTRAP_PASSWORD must be set together.',
+      });
     }
     if (Boolean(env.FIREBASE_CLIENT_EMAIL) !== Boolean(env.FIREBASE_PRIVATE_KEY)) {
       ctx.addIssue({
