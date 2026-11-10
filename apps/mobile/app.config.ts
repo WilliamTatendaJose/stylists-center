@@ -101,7 +101,7 @@ const config: ExpoConfig = {
   // build therefore means setting it in eas.json's `env`, not just the shell.
   owner: process.env.EAS_PROJECT_OWNER ?? 'liam_jose',
   scheme: 'stylistscenter',
-  version: '0.2.0',
+  version: '0.1.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
   // Keep native surfaces (dialogs, inputs and the status/navigation bars) in
@@ -131,7 +131,7 @@ const config: ExpoConfig = {
     // is not supported when using app.config.js" before the build started.
     // Switching `appVersionSource` to "remote" would let EAS own the number
     // instead, which is the alternative if bumping this by hand ever gets missed.
-    versionCode: 2,
+    versionCode: 1,
     adaptiveIcon: {
       backgroundColor: '#000000',
       foregroundImage: './assets/android-icon-foreground.png',

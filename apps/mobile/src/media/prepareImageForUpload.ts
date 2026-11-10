@@ -1,6 +1,4 @@
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
-
 /** Long-edge cap for ordinary photos (portfolio, profile, product shots). */
 export const DEFAULT_UPLOAD_MAX_EDGE = 1600;
 /**
@@ -28,31 +26,14 @@ export interface PrepareImageOptions {
  * is returned unchanged: a large upload is better than a blocked one, and the
  * API still enforces its own size limit.
  */
-export async function prepareImageForUpload(
+export function prepareImageForUpload(
   asset: ImagePickerAsset,
-  { maxEdge = DEFAULT_UPLOAD_MAX_EDGE }: PrepareImageOptions = {},
+  // Kept so callers stay identical to main; unused in this build.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _options: PrepareImageOptions = {},
 ): Promise<ImagePickerAsset> {
-  try {
-    const context = ImageManipulator.manipulate(asset.uri);
-    const longEdge = Math.max(asset.width, asset.height);
-    if (longEdge > maxEdge) {
-      // Constrain only the long side; the native module keeps the aspect ratio.
-      context.resize(asset.width >= asset.height ? { width: maxEdge } : { height: maxEdge });
-    }
-    const rendered = await context.renderAsync();
-    const saved = await rendered.saveAsync({
-      format: SaveFormat.JPEG,
-      compress: UPLOAD_JPEG_QUALITY,
-    });
-    return {
-      uri: saved.uri,
-      width: saved.width,
-      height: saved.height,
-      type: 'image',
-      mimeType: 'image/jpeg',
-      fileName: `${(asset.fileName ?? 'photo').replace(/\.[^./\\]+$/, '')}.jpg`,
-    };
-  } catch {
-    return asset;
-  }
+  // 0.1.0 over-the-air update: the installed 0.1.0 binary has no
+  // expo-image-manipulator, so uploads go out unresized. The 0.2.0 build
+  // (main) resizes on the phone.
+  return Promise.resolve(asset);
 }

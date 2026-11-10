@@ -1,5 +1,4 @@
-import { Image } from 'expo-image';
-import { Modal, StatusBar, StyleSheet, View } from 'react-native';
+import { Image, Modal, StatusBar, StyleSheet, View } from 'react-native';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { radius, space } from '@sc/tokens';
 import { Pressable, Text, useTheme } from '@sc/ui';
@@ -89,9 +88,7 @@ export function FullScreenImageViewer({
             <Image
               source={{ uri: selectedUrl }}
               accessibilityLabel={`Work photo ${String((initialIndex ?? 0) + 1)}`}
-              contentFit="contain"
-              cachePolicy="memory-disk"
-              transition={150}
+              resizeMode="contain"
               style={styles.image}
             />
           ) : null}

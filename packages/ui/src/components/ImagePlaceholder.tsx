@@ -1,5 +1,4 @@
-import { Image } from 'expo-image';
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { Image, StyleSheet, View, type ViewStyle } from 'react-native';
 import { Image as ImageIcon } from 'lucide-react-native';
 import { type RadiusToken, radius } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
@@ -58,9 +57,6 @@ export function ImagePlaceholder({
         <Image
           source={{ uri: thumbnail ? thumbnailUrl(uri) : uri }}
           style={styles.fill}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-          transition={150}
           accessibilityIgnoresInvertColors
         />
       </View>
