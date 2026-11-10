@@ -434,7 +434,11 @@ export class AuthService {
       throw new UnauthorizedException('Session no longer valid');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    // Runs on every authenticated request, so fetch only the columns checked.
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, tokenVersion: true, deletedAt: true, disabledAt: true },
+    });
     if (user?.tokenVersion !== payload.ver || user.deletedAt !== null || user.disabledAt !== null) {
       throw new UnauthorizedException('Session no longer valid');
     }

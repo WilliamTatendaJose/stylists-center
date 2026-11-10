@@ -33,7 +33,8 @@ interface ProviderIdentity {
 }
 
 export function toConversationDto(
-  conversation: Conversation,
+  // Only these two columns are read, so the inbox query can select just them.
+  conversation: Pick<Conversation, 'id' | 'lastMessageAt'>,
   counterparty: ProviderIdentity,
   lastMessagePreview: string,
   unreadCount: number,

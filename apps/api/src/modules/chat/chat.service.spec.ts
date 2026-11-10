@@ -35,6 +35,7 @@ const BASE_ENV: Env = {
 };
 
 describe('ChatService', () => {
+  let socketEmitter: SocketEmitterService;
   let prisma: PrismaService;
   let chat: ChatService;
   let cityId: string;
@@ -123,7 +124,7 @@ describe('ChatService', () => {
   });
 
   beforeEach(() => {
-    const socketEmitter = new SocketEmitterService();
+    socketEmitter = new SocketEmitterService();
     const attachmentStorage = {
       saveMany: vi.fn((files: { originalname: string; mimetype: string; size: number }[]) =>
         Promise.resolve(
@@ -216,6 +217,70 @@ describe('ChatService', () => {
     await chat.getMessages(conversation.id, clientId);
     const after = await chat.list(clientId);
     expect(after.find((c) => c.id === conversation.id)?.unreadCount).toBe(0);
+  });
+
+  it('pages the thread: latest page ascending by default, older pages via the before cursor', async () => {
+    const conversation = await chat.getOrCreateByProvider(otherClientId, providerId);
+    const base = Date.now() - 60_000;
+    for (let i = 0; i < 5; i += 1) {
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          authorId: i % 2 === 0 ? otherClientId : providerUserId,
+          text: `m${String(i)}`,
+          createdAt: new Date(base + i * 1000),
+        },
+      });
+    }
+
+    const latest = await chat.getMessages(conversation.id, otherClientId, { limit: 2 });
+    expect(latest.map((m) => m.text)).toEqual(['m3', 'm4']);
+
+    const older = await chat.getMessages(conversation.id, otherClientId, {
+      limit: 2,
+      before: latest[0]?.id,
+    });
+    expect(older.map((m) => m.text)).toEqual(['m1', 'm2']);
+
+    const oldest = await chat.getMessages(conversation.id, otherClientId, {
+      limit: 2,
+      before: older[0]?.id,
+    });
+    expect(oldest.map((m) => m.text)).toEqual(['m0']);
+
+    // No query at all (older app builds) returns the whole short thread.
+    expect(await chat.getMessages(conversation.id, otherClientId)).toHaveLength(5);
+  });
+
+  it("still reports unread messages when the latest page holds only the viewer's own messages", async () => {
+    const conversation = await chat.getOrCreateByProvider(otherClientId, providerId);
+    const base = Date.now() + 1000;
+    await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        authorId: providerUserId,
+        text: 'unread reply',
+        createdAt: new Date(base),
+      },
+    });
+    for (let i = 1; i <= 3; i += 1) {
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          authorId: otherClientId,
+          text: `mine ${String(i)}`,
+          createdAt: new Date(base + i * 1000),
+        },
+      });
+    }
+    const emitSpy = vi.spyOn(socketEmitter, 'emitToUser');
+
+    const page = await chat.getMessages(conversation.id, otherClientId, { limit: 2 });
+    expect(page.every((m) => m.mine)).toBe(true);
+    expect(emitSpy).toHaveBeenCalledWith(providerUserId, 'conversation.read', {
+      conversationId: conversation.id,
+      readByUserId: otherClientId,
+    });
   });
 
   it('lets the provider list, read, and reply in the same conversation', async () => {

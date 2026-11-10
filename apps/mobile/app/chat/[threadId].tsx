@@ -199,6 +199,9 @@ export default function Chat() {
     isError: messagesError,
     error: messageLoadError,
     refetch: refetchMessages,
+    hasNextPage: hasOlderMessages,
+    isFetchingNextPage: isFetchingOlderMessages,
+    fetchNextPage: fetchOlderMessages,
   } = useConversationMessages(conversationId);
   useChatRealtime(conversationId);
   const sendMessage = useSendMessage(conversationId);
@@ -599,6 +602,11 @@ export default function Chat() {
           keyExtractor={(item) => item.message.id}
           renderItem={renderMessage}
           inverted
+          // Inverted list: the "end" is the visual top, i.e. the oldest loaded message.
+          onEndReached={() => {
+            if (hasOlderMessages && !isFetchingOlderMessages) void fetchOlderMessages();
+          }}
+          onEndReachedThreshold={0.5}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -618,7 +626,9 @@ export default function Chat() {
             )
           }
           ListFooterComponent={
-            visibleMessages.length > 0 ? (
+            isFetchingOlderMessages ? (
+              <ActivityIndicator color={colors.accent} style={styles.centreNote} />
+            ) : visibleMessages.length > 0 && !hasOlderMessages ? (
               <Text variant="metaSmall" color="neutral600" style={styles.centreNote}>
                 Keep order details and collection updates here so both sides have the same record.
               </Text>

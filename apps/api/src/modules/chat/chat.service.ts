@@ -5,12 +5,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  CHAT_MESSAGES_DEFAULT_LIMIT,
   deriveInitials,
   deriveTint,
   type ConversationDto,
   type MessageDto,
+  type MessagesQuery,
   type SendMessageInput,
 } from '@sc/shared';
+import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
@@ -19,6 +22,8 @@ import {
   AttachmentStorageService,
   type UploadedAttachmentFile,
 } from './attachment-storage.service';
+
+const INBOX_LIMIT = 100;
 
 function messagePreview(
   message: { text: string; attachments: { name: string }[] } | null | undefined,
@@ -42,42 +47,91 @@ export class ChatService {
   async list(viewerId: string): Promise<ConversationDto[]> {
     const conversations = await this.prisma.conversation.findMany({
       where: { OR: [{ clientId: viewerId }, { providerUserId: viewerId }] },
-      include: {
-        client: true,
-        providerUser: { include: { providerProfile: true } },
-        messages: { orderBy: { createdAt: 'desc' }, take: 1, include: { attachments: true } },
+      // Only what toConversationDto / the counterparty mapping reads.
+      select: {
+        id: true,
+        clientId: true,
+        lastMessageAt: true,
+        client: { select: { displayName: true, avatarImageUrl: true } },
+        providerUser: {
+          select: {
+            providerProfile: {
+              select: {
+                id: true,
+                displayName: true,
+                tint: true,
+                initials: true,
+                profileImageUrl: true,
+              },
+            },
+          },
+        },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { authorId: true, text: true, attachments: { select: { name: true }, take: 1 } },
+        },
       },
       orderBy: { lastMessageAt: 'desc' },
+      // An inbox never needs every thread ever opened; the 100 most recently active is plenty.
+      take: INBOX_LIMIT,
     });
 
-    return Promise.all(
-      conversations.map(async (c) => {
-        const viewingAsClient = c.clientId === viewerId;
-        const profile = c.providerUser.providerProfile;
-        const counterparty = viewingAsClient
-          ? profile
-          : {
-              displayName: c.client.displayName,
-              tint: deriveTint(c.client.displayName),
-              initials: deriveInitials(c.client.displayName),
-              avatarImageUrl: c.client.avatarImageUrl,
-            };
-        if (!counterparty) throw new Error(`Conversation ${c.id} has no provider profile`);
-        const lastReadAt = viewingAsClient ? c.clientLastReadAt : c.providerLastReadAt;
-        const unreadCount = await this.prisma.message.count({
-          where: {
-            conversationId: c.id,
-            authorId: { not: viewerId },
-            createdAt: { gt: lastReadAt },
-          },
-        });
-        return toConversationDto(c, counterparty, messagePreview(c.messages[0]), unreadCount, {
+    const unreadByConversation = await this.unreadCounts(
+      viewerId,
+      conversations.map((c) => c.id),
+    );
+
+    return conversations.map((c) => {
+      const viewingAsClient = c.clientId === viewerId;
+      const profile = c.providerUser.providerProfile;
+      const counterparty = viewingAsClient
+        ? profile
+        : {
+            displayName: c.client.displayName,
+            tint: deriveTint(c.client.displayName),
+            initials: deriveInitials(c.client.displayName),
+            avatarImageUrl: c.client.avatarImageUrl,
+          };
+      if (!counterparty) throw new Error(`Conversation ${c.id} has no provider profile`);
+      return toConversationDto(
+        c,
+        counterparty,
+        messagePreview(c.messages[0]),
+        unreadByConversation.get(c.id) ?? 0,
+        {
           viewerId,
           lastMessageAuthorId: c.messages[0]?.authorId,
           counterpartyProviderId: viewingAsClient ? profile?.id : undefined,
-        });
-      }),
-    );
+        },
+      );
+    });
+  }
+
+  /**
+   * Unread counts for many conversations in one round trip: messages by the
+   * other participant newer than the viewer's own last-read timestamp. Which
+   * timestamp that is depends on the viewer's side of each conversation, so it
+   * is chosen per row (client side wins a self-conversation, as before).
+   * Conversations with nothing unread are simply absent from the result.
+   */
+  private async unreadCounts(viewerId: string, conversationIds: string[]) {
+    const counts = new Map<string, number>();
+    if (conversationIds.length === 0) return counts;
+    const rows = await this.prisma.$queryRaw<{ conversationId: string; unread: number }[]>`
+      SELECT m."conversationId" AS "conversationId", COUNT(*)::int AS "unread"
+      FROM "Message" m
+      JOIN "Conversation" c ON c."id" = m."conversationId"
+      WHERE m."conversationId" IN (${Prisma.join(conversationIds)})
+        AND m."authorId" <> ${viewerId}
+        AND m."createdAt" > CASE
+          WHEN c."clientId" = ${viewerId} THEN c."clientLastReadAt"
+          ELSE c."providerLastReadAt"
+        END
+      GROUP BY m."conversationId"
+    `;
+    for (const row of rows) counts.set(row.conversationId, row.unread);
+    return counts;
   }
 
   /** Finds-or-creates the 1:1 thread with a provider — the only entry point a client needs, since it never has to track conversation ids itself. */
@@ -167,35 +221,68 @@ export class ChatService {
     });
   }
 
-  /** Viewing the thread is what marks it read — plan §9's endpoint list has no separate "mark read" call. */
-  async getMessages(conversationId: string, viewerId: string): Promise<MessageDto[]> {
+  /**
+   * Viewing the thread is what marks it read — plan §9's endpoint list has no
+   * separate "mark read" call. Returns one page, ascending: the latest `limit`
+   * messages, or the `limit` messages immediately older than the `before` one.
+   */
+  async getMessages(
+    conversationId: string,
+    viewerId: string,
+    query: Pick<MessagesQuery, 'limit'> & { before?: string | undefined } = {
+      limit: CHAT_MESSAGES_DEFAULT_LIMIT,
+    },
+  ): Promise<MessageDto[]> {
     const conversation = await this.prisma.conversation.findUnique({
       where: { id: conversationId },
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
     this.assertParticipant(conversation, viewerId);
 
-    const messages = await this.prisma.message.findMany({
-      where: { conversationId },
-      orderBy: { createdAt: 'asc' },
-      include: { attachments: true },
-    });
-
+    const { limit, before } = query;
     const viewerLastReadAt =
       conversation.clientId === viewerId
         ? conversation.clientLastReadAt
         : conversation.providerLastReadAt;
-    const readNewMessages = messages.some(
-      (message) => message.authorId !== viewerId && message.createdAt > viewerLastReadAt,
-    );
 
-    await this.prisma.conversation.update({
-      where: { id: conversationId },
-      data:
-        conversation.clientId === viewerId
-          ? { clientLastReadAt: new Date() }
-          : { providerLastReadAt: new Date() },
-    });
+    const [newestFirst, unreadMessage] = await Promise.all([
+      this.prisma.message.findMany({
+        where: { conversationId },
+        // `id` breaks createdAt ties so the keyset cursor below is stable.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limit,
+        // `skip: 1` steps over the cursor row itself. `where` still scopes the
+        // result to this thread, so a foreign cursor id leaks nothing.
+        ...(before ? { cursor: { id: before }, skip: 1 } : {}),
+        include: { attachments: true },
+      }),
+      // Asked of the database rather than inferred from the page: the page
+      // may be all the viewer's own messages while an older unread one exists.
+      before
+        ? null
+        : this.prisma.message.findFirst({
+            where: {
+              conversationId,
+              authorId: { not: viewerId },
+              createdAt: { gt: viewerLastReadAt },
+            },
+            select: { id: true },
+          }),
+    ]);
+    const messages = newestFirst.reverse();
+    // Paging back into history is not "opening the thread": only the initial
+    // (latest) page marks it read and notifies the counterparty.
+    const readNewMessages = unreadMessage !== null;
+
+    if (!before) {
+      await this.prisma.conversation.update({
+        where: { id: conversationId },
+        data:
+          conversation.clientId === viewerId
+            ? { clientLastReadAt: new Date() }
+            : { providerLastReadAt: new Date() },
+      });
+    }
 
     const counterpartyId =
       conversation.clientId === viewerId ? conversation.providerUserId : conversation.clientId;

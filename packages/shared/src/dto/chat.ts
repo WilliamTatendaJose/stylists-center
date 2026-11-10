@@ -41,6 +41,27 @@ export const messageSchema = z.object({
 });
 export type MessageDto = z.infer<typeof messageSchema>;
 
+/** Page size the app asks for; the API default when `limit` is omitted. */
+export const CHAT_MESSAGES_DEFAULT_LIMIT = 50;
+export const CHAT_MESSAGES_MAX_LIMIT = 100;
+
+/**
+ * `GET /conversations/:id/messages` query. The response stays a plain
+ * `MessageDto[]` in ascending order: with no `before` it is the latest page,
+ * with `before` it is the page of messages strictly older than that message.
+ */
+export const messagesQuerySchema = z.object({
+  limit: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .max(CHAT_MESSAGES_MAX_LIMIT)
+    .default(CHAT_MESSAGES_DEFAULT_LIMIT),
+  /** Id of the oldest message the caller already has (cursor). */
+  before: z.uuid().optional(),
+});
+export type MessagesQuery = z.infer<typeof messagesQuerySchema>;
+
 export const sendMessageSchema = z.object({
   // Attachment-only messages arrive as multipart requests with no text field.
   // ChatService enforces that at least text or one attachment is present.

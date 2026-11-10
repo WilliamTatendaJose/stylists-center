@@ -604,6 +604,8 @@ model Conversation {
 
   @@unique([clientId, providerUserId])
   @@index([lastMessageAt])
+  // The unique above only serves clientId-led lookups; the provider's inbox filters on providerUserId.
+  @@index([providerUserId])
 }
 
 model Message {
@@ -617,7 +619,8 @@ model Message {
 
   attachments MessageAttachment[]
 
-  @@index([conversationId])
+  // Serves both the latest-page/cursor reads and the unread-count aggregation.
+  @@index([conversationId, createdAt])
 }
 
 model MessageAttachment {
