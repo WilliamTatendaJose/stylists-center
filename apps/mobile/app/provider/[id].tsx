@@ -36,6 +36,8 @@ const styles = StyleSheet.create({
   sectionLabel: { marginBottom: space.m },
   section: { marginBottom: space.xxl },
   photoRow: { flexDirection: 'row', gap: 8 },
+  photoSingle: { height: 248 },
+  photoPair: { flex: 1, height: 200 },
   photoLeft: { flex: 1, height: 248 },
   photoRight: { flex: 1, gap: 8 },
   photoRightTop: { height: 150 },
@@ -168,18 +170,13 @@ export default function ProviderProfile() {
   const workImageUrls = provider.portfolioImageUrls
     .map((url) => apiAssetUrl(url))
     .filter((url): url is string => Boolean(url));
-  const renderWorkPhoto = (
-    url: string | undefined,
-    index: number,
-    style: ViewStyle,
-    label?: string,
-  ) => {
-    const uri = apiAssetUrl(url);
-    if (!uri) {
-      return <ImagePlaceholder uri={undefined} radius={18} style={style} label={label} />;
-    }
+  // Indexes into `workImageUrls`, the same list the full-screen viewer pages
+  // through. Only real photos are ever rendered: empty grey tiles made a
+  // stylist with one photo look like their page was broken.
+  const renderWorkPhoto = (uri: string, index: number, style: ViewStyle) => {
     return (
       <Pressable
+        key={uri}
         accessibilityRole="button"
         accessibilityLabel={`View work photo ${String(index + 1)} full screen`}
         onPress={() => setSelectedWorkIndex(index)}
@@ -268,30 +265,43 @@ export default function ProviderProfile() {
           <StatTile value={String(provider.yearsExperience)} caption="Years" />
         </View>
 
-        <View style={styles.section}>
-          <Text variant="sectionLabel" style={styles.sectionLabel}>
-            Work
-          </Text>
-          <View style={styles.photoRow}>
-            {renderWorkPhoto(
-              provider.portfolioImageUrls[0],
-              0,
-              styles.photoLeft,
-              provider.portfolioImageUrls.length ? undefined : 'No work photos yet',
-            )}
-            <View style={styles.photoRight}>
-              {renderWorkPhoto(provider.portfolioImageUrls[1], 1, styles.photoRightTop)}
-              {renderWorkPhoto(provider.portfolioImageUrls[2], 2, styles.photoRightBottom)}
-            </View>
+        {workImageUrls.length > 0 ? (
+          <View style={styles.section}>
+            <Text variant="sectionLabel" style={styles.sectionLabel}>
+              Work
+            </Text>
+            {/* The layout follows how many photos there are: one fills the row,
+              two sit side by side, three use the large-left/two-right mosaic,
+              and any beyond that go in a row underneath. */}
+            {workImageUrls.length === 1 && workImageUrls[0] ? (
+              renderWorkPhoto(workImageUrls[0], 0, styles.photoSingle)
+            ) : workImageUrls.length === 2 ? (
+              <View style={styles.photoRow}>
+                {workImageUrls.map((uri, index) => renderWorkPhoto(uri, index, styles.photoPair))}
+              </View>
+            ) : workImageUrls.length >= 3 &&
+              workImageUrls[0] &&
+              workImageUrls[1] &&
+              workImageUrls[2] ? (
+              <>
+                <View style={styles.photoRow}>
+                  {renderWorkPhoto(workImageUrls[0], 0, styles.photoLeft)}
+                  <View style={styles.photoRight}>
+                    {renderWorkPhoto(workImageUrls[1], 1, styles.photoRightTop)}
+                    {renderWorkPhoto(workImageUrls[2], 2, styles.photoRightBottom)}
+                  </View>
+                </View>
+                {workImageUrls.length > 3 ? (
+                  <View style={styles.photoExtras}>
+                    {workImageUrls
+                      .slice(3)
+                      .map((uri, index) => renderWorkPhoto(uri, index + 3, styles.photoExtra))}
+                  </View>
+                ) : null}
+              </>
+            ) : null}
           </View>
-          {provider.portfolioImageUrls.length > 3 ? (
-            <View style={styles.photoExtras}>
-              {provider.portfolioImageUrls
-                .slice(3)
-                .map((url, index) => renderWorkPhoto(url, index + 3, styles.photoExtra))}
-            </View>
-          ) : null}
-        </View>
+        ) : null}
 
         <View style={styles.section}>
           <Text variant="sectionLabel" style={styles.sectionLabel}>

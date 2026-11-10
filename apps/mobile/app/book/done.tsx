@@ -47,7 +47,29 @@ export default function Booked() {
   };
 
   return (
-    <Screen theme="accent">
+    <Screen
+      theme="accent"
+      footer={
+        // Fixed at the bottom like every other screen's actions; inline they
+        // sat flush against the summary's last rule, mid-screen.
+        <View style={styles.footerRow}>
+          <Button
+            label="Message"
+            variant="outlineOnAccent"
+            size="lg"
+            onPress={goMessage}
+            style={styles.footerButton}
+          />
+          <Button
+            label="My bookings"
+            variant="whiteOnAccent"
+            size="lg"
+            onPress={goBookings}
+            style={styles.footerButton}
+          />
+        </View>
+      }
+    >
       <View style={styles.circle}>
         <Check size={32} strokeWidth={2} color={color.onAccent.text} />
       </View>
@@ -55,8 +77,8 @@ export default function Booked() {
         Booked.
       </Text>
       <Text variant="body" color={color.onAccent.labelDim} style={styles.body}>
-        {providerName ?? 'She'} has your request for {whenLabel ?? 'your slot'}. She confirms within
-        the hour.
+        {providerName ?? 'Your stylist'} has your request for {whenLabel ?? 'your slot'} and
+        confirms within the hour.
       </Text>
 
       <RuleList
@@ -68,23 +90,6 @@ export default function Booked() {
           { label: 'Where', value: areaName ?? '—' },
         ]}
       />
-
-      <View style={styles.footerRow}>
-        <Button
-          label="Message"
-          variant="outlineOnAccent"
-          size="lg"
-          onPress={goMessage}
-          style={styles.footerButton}
-        />
-        <Button
-          label="My bookings"
-          variant="whiteOnAccent"
-          size="lg"
-          onPress={goBookings}
-          style={styles.footerButton}
-        />
-      </View>
     </Screen>
   );
 }
