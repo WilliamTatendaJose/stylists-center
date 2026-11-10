@@ -3,6 +3,7 @@ import { Flag, ShieldBan, UserCheck, Users } from 'lucide-react';
 import { formatUsd } from '@sc/shared';
 import { useOverview, useOverviewTrends } from '../api/overview';
 import { useAuditLog } from '../api/audit';
+import { useAuthStore } from '../state/authStore';
 import { StatTile } from '../components/ui/StatTile';
 import { Card } from '../components/ui/Card';
 import { TrendChart } from '../components/ui/TrendChart';
@@ -10,7 +11,8 @@ import { TrendChart } from '../components/ui/TrendChart';
 export function OverviewPage() {
   const { data: overview, isLoading } = useOverview();
   const { data: trends } = useOverviewTrends();
-  const { data: recent } = useAuditLog(8);
+  const isOwner = useAuthStore((s) => s.admin?.role === 'owner');
+  const { data: recent } = useAuditLog(8, isOwner);
 
   return (
     <div>
@@ -87,33 +89,37 @@ export function OverviewPage() {
         </div>
       ) : null}
 
-      <Card padded={false}>
-        <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4 dark:border-dark-border">
-          <h2 className="font-semibold text-neutral-900 dark:text-dark-text">Recent activity</h2>
-          <Link
-            to="/audit-log"
-            className="text-sm font-medium text-accent-700 hover:underline dark:text-dark-accent"
-          >
-            View all
-          </Link>
-        </div>
-        <div className="divide-y divide-neutral-200 dark:divide-dark-border">
-          {recent?.map((entry) => (
-            <div key={entry.id} className="flex items-center justify-between px-6 py-3 text-sm">
-              <span className="text-neutral-900 dark:text-dark-text">
-                {entry.actorName ?? (entry.actorType === 'admin' ? 'An admin' : 'System')} ·{' '}
-                <span className="text-neutral-600 dark:text-dark-muted">{entry.action}</span>
-              </span>
-              <span className="shrink-0 text-neutral-500 dark:text-dark-muted">
-                {new Date(entry.at).toLocaleString()}
-              </span>
-            </div>
-          ))}
-          {recent?.length === 0 ? (
-            <p className="px-6 py-4 text-sm text-neutral-600 dark:text-dark-muted">Nothing yet.</p>
-          ) : null}
-        </div>
-      </Card>
+      {isOwner ? (
+        <Card padded={false}>
+          <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4 dark:border-dark-border">
+            <h2 className="font-semibold text-neutral-900 dark:text-dark-text">Recent activity</h2>
+            <Link
+              to="/audit-log"
+              className="text-sm font-medium text-accent-700 hover:underline dark:text-dark-accent"
+            >
+              View all
+            </Link>
+          </div>
+          <div className="divide-y divide-neutral-200 dark:divide-dark-border">
+            {recent?.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between px-6 py-3 text-sm">
+                <span className="text-neutral-900 dark:text-dark-text">
+                  {entry.actorName ?? (entry.actorType === 'admin' ? 'An admin' : 'System')} ·{' '}
+                  <span className="text-neutral-600 dark:text-dark-muted">{entry.action}</span>
+                </span>
+                <span className="shrink-0 text-neutral-500 dark:text-dark-muted">
+                  {new Date(entry.at).toLocaleString()}
+                </span>
+              </div>
+            ))}
+            {recent?.length === 0 ? (
+              <p className="px-6 py-4 text-sm text-neutral-600 dark:text-dark-muted">
+                Nothing yet.
+              </p>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
     </div>
   );
 }

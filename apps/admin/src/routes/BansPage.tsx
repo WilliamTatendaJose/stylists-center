@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { APPEAL_STATUS_LABELS, type AdminBanRowDto, type AppealStatus } from '@sc/shared';
 import { useBans, useResolveAppeal } from '../api/trust';
 import { ApiError } from '../api/client';
+import { Pager } from '../components/Pager';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
 import { TextAreaField } from '../components/ui/Field';
@@ -123,8 +124,10 @@ function BanRow({ ban }: { ban: AdminBanRowDto }) {
 }
 
 export function BansPage() {
+  const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<AppealStatus | undefined>(undefined);
-  const { data: bans, isLoading, isError } = useBans(filter);
+  const { data, isLoading, isError } = useBans({ appealStatus: filter, offset });
+  const bans = data?.items;
 
   return (
     <div>
@@ -137,6 +140,7 @@ export function BansPage() {
               type="button"
               onClick={() => {
                 setFilter(f.value);
+                setOffset(0);
               }}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 filter === f.value
@@ -163,6 +167,9 @@ export function BansPage() {
           <BanRow key={ban.id} ban={ban} />
         ))}
       </div>
+      {data ? (
+        <Pager offset={offset} shown={data.items.length} total={data.total} onChange={setOffset} />
+      ) : null}
     </div>
   );
 }

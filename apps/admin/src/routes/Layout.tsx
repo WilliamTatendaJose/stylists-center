@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
+  CircleUserRound,
   CreditCard,
   Flag,
   HandCoins,
@@ -20,6 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuthStore } from '../state/authStore';
+import { canOpen, ROLE_LABELS } from '../roles';
 import { useLogout } from '../api/auth';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { BrandLogo } from '../components/BrandLogo';
@@ -100,38 +102,59 @@ export function Layout() {
         </div>
 
         <nav className="flex-1 space-y-1 px-3">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-accent-100 text-accent-700 dark:bg-accent/15 dark:text-dark-accent'
-                    : 'text-neutral-700 hover:bg-neutral-100 dark:text-dark-muted dark:hover:bg-white/5'
-                }`
-              }
-              onClick={() => {
-                setMobileNavOpen(false);
-              }}
-            >
-              <Icon size={18} strokeWidth={2} />
-              {label}
-            </NavLink>
-          ))}
+          {NAV_ITEMS.filter(({ to }) => (admin ? canOpen(admin.role, to) : false)).map(
+            ({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-accent-100 text-accent-700 dark:bg-accent/15 dark:text-dark-accent'
+                      : 'text-neutral-700 hover:bg-neutral-100 dark:text-dark-muted dark:hover:bg-white/5'
+                  }`
+                }
+                onClick={() => {
+                  setMobileNavOpen(false);
+                }}
+              >
+                <Icon size={18} strokeWidth={2} />
+                {label}
+              </NavLink>
+            ),
+          )}
         </nav>
 
         <div className="border-t border-neutral-200 p-3 dark:border-dark-border">
-          <div className="flex items-center justify-between rounded-lg px-3 py-2">
+          <NavLink
+            to="/account"
+            onClick={() => {
+              setMobileNavOpen(false);
+            }}
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-lg px-3 py-2 ${
+                isActive
+                  ? 'bg-accent-100 dark:bg-accent/15'
+                  : 'hover:bg-neutral-100 dark:hover:bg-white/5'
+              }`
+            }
+          >
+            <CircleUserRound
+              size={18}
+              strokeWidth={2}
+              className="shrink-0 text-neutral-600 dark:text-dark-muted"
+            />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-neutral-900 dark:text-dark-text">
                 {admin?.displayName}
               </p>
               <p className="truncate text-xs text-neutral-500 dark:text-dark-muted">
-                {admin?.email}
+                {admin?.mfaEnabled
+                  ? `${ROLE_LABELS[admin.role]} · ${admin.email}`
+                  : 'Two-factor sign-in is off'}
               </p>
             </div>
-          </div>
+          </NavLink>
           <button
             type="button"
             onClick={() => {

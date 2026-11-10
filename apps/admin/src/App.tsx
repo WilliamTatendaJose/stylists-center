@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuthStore } from './state/authStore';
 import { Layout } from './routes/Layout';
 import { LoginPage } from './routes/LoginPage';
@@ -19,10 +19,13 @@ import { CatalogPage } from './routes/CatalogPage';
 import { StaffPage } from './routes/StaffPage';
 import { VerificationsPage } from './routes/VerificationsPage';
 import { UsersPage } from './routes/UsersPage';
+import { AccountPage } from './routes/AccountPage';
+import { canOpen } from './roles';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const admin = useAuthStore((s) => s.admin);
   const isBootstrapping = useAuthStore((s) => s.isBootstrapping);
+  const location = useLocation();
 
   if (isBootstrapping) {
     return (
@@ -33,6 +36,16 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   }
   if (!admin) {
     return <Navigate to="/login" replace />;
+  }
+  // ADMIN_MFA_REQUIRED and not enrolled: the API refuses everything else, so
+  // keep the user on the page where they can fix that.
+  if (admin.mfaSetupRequired && location.pathname !== '/account') {
+    return <Navigate to="/account" replace />;
+  }
+  // Hidden pages are also refused by the API; this just avoids a page full
+  // of 403s when someone follows an old link.
+  if (!canOpen(admin.role, location.pathname)) {
+    return <Navigate to="/overview" replace />;
   }
   return <>{children}</>;
 }
@@ -66,6 +79,7 @@ export function App() {
         <Route path="reviews" element={<ReviewsPage />} />
         <Route path="catalog" element={<CatalogPage />} />
         <Route path="staff" element={<StaffPage />} />
+        <Route path="account" element={<AccountPage />} />
         <Route path="audit-log" element={<AuditLogPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

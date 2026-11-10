@@ -28,6 +28,7 @@ async function main() {
       email: ADMIN_EMAIL,
       passwordHash: await hashPassword(ADMIN_PASSWORD),
       displayName: 'Admin',
+      role: 'owner',
     },
   });
 

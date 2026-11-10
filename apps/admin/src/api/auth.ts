@@ -1,16 +1,93 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { AdminIdentity, AdminLoginInput, AdminSession } from '@sc/shared';
+import type {
+  AdminChangePasswordInput,
+  AdminIdentity,
+  AdminLoginInput,
+  AdminLoginResult,
+  AdminMfaDisableInput,
+  AdminMfaLoginInput,
+  AdminMfaSetup,
+  AdminRecoveryCodes,
+  AdminSession,
+} from '@sc/shared';
 import { apiFetch } from './client';
 import { useAuthStore } from '../state/authStore';
 
+/** Password step. Resolves to a session, or to a 2FA challenge the caller completes with useMfaLogin. */
 export function useLogin() {
   const setSession = useAuthStore((s) => s.setSession);
 
   return useMutation({
     mutationFn: (input: AdminLoginInput) =>
-      apiFetch<AdminSession>('/v1/admin/auth/login', { method: 'POST', body: input, auth: false }),
+      apiFetch<AdminLoginResult>('/v1/admin/auth/login', {
+        method: 'POST',
+        body: input,
+        auth: false,
+      }),
+    onSuccess: (result) => {
+      if ('accessToken' in result) setSession(result.accessToken, result.admin);
+    },
+  });
+}
+
+export function useMfaLogin() {
+  const setSession = useAuthStore((s) => s.setSession);
+
+  return useMutation({
+    mutationFn: (input: AdminMfaLoginInput) =>
+      apiFetch<AdminSession>('/v1/admin/auth/login/mfa', {
+        method: 'POST',
+        body: input,
+        auth: false,
+      }),
     onSuccess: (session) => {
       setSession(session.accessToken, session.admin);
+    },
+  });
+}
+
+export function useMfaSetup() {
+  return useMutation({
+    mutationFn: () => apiFetch<AdminMfaSetup>('/v1/admin/auth/mfa/setup', { method: 'POST' }),
+  });
+}
+
+/**
+ * Doesn't update the signed-in admin itself: the caller must first store the
+ * recovery codes, then mark 2FA on. Flipping mfaEnabled here (hook-level
+ * onSuccess runs before the caller's) unmounted the setup form before its
+ * own onSuccess could run, and the one-time codes were never shown.
+ */
+export function useMfaEnable() {
+  return useMutation({
+    mutationFn: (code: string) =>
+      apiFetch<AdminRecoveryCodes>('/v1/admin/auth/mfa/enable', {
+        method: 'POST',
+        body: { code },
+      }),
+  });
+}
+
+export function useRegenerateRecoveryCodes() {
+  return useMutation({
+    mutationFn: (code: string) =>
+      apiFetch<AdminRecoveryCodes>('/v1/admin/auth/mfa/recovery-codes', {
+        method: 'POST',
+        body: { code },
+      }),
+  });
+}
+
+export function useMfaDisable() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AdminMfaDisableInput) =>
+      apiFetch<{ ok: boolean }>('/v1/admin/auth/mfa/disable', { method: 'POST', body: input }),
+    onSuccess: async () => {
+      // /me knows whether ADMIN_MFA_REQUIRED now applies to this account.
+      const admin = await apiFetch<AdminIdentity>('/v1/admin/auth/me');
+      useAuthStore.getState().updateAdmin(admin);
+      await queryClient.invalidateQueries();
     },
   });
 }
@@ -56,4 +133,19 @@ export async function bootstrapSession(): Promise<void> {
   } finally {
     finishBootstrapping();
   }
+}
+
+/**
+ * Changes your own password. Every other session for the account is signed
+ * out; this tab gets the fresh session the API returns, so it stays signed in.
+ */
+export function useChangePassword() {
+  const setSession = useAuthStore((s) => s.setSession);
+  return useMutation({
+    mutationFn: (input: AdminChangePasswordInput) =>
+      apiFetch<AdminSession>('/v1/admin/auth/password', { method: 'POST', body: input }),
+    onSuccess: (session) => {
+      setSession(session.accessToken, session.admin);
+    },
+  });
 }

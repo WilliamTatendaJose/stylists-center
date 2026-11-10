@@ -1,16 +1,33 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AdminProviderRowDto, UpdateProviderAdminInput } from '@sc/shared';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type {
+  AdminProviderRowDto,
+  AdminSubscriptionSummaryDto,
+  Paged,
+  UpdateProviderAdminInput,
+} from '@sc/shared';
 import { apiFetch } from './client';
+import { listQuery, type ListParams } from './paging';
 
 const PROVIDERS_KEY = ['admin', 'providers'] as const;
 
-export function useProviders(verified?: boolean) {
+export function useProviders(
+  params: ListParams & {
+    verified?: boolean | undefined;
+    subscription?: 'active' | 'lapsed' | undefined;
+  } = {},
+) {
   return useQuery({
-    queryKey: [...PROVIDERS_KEY, verified ?? 'all'],
+    queryKey: [...PROVIDERS_KEY, params],
+    queryFn: () => apiFetch<Paged<AdminProviderRowDto>>(`/v1/admin/providers${listQuery(params)}`),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useSubscriptionSummary() {
+  return useQuery({
+    queryKey: [...PROVIDERS_KEY, 'subscription-summary'],
     queryFn: () =>
-      apiFetch<AdminProviderRowDto[]>(
-        `/v1/admin/providers${verified !== undefined ? `?verified=${String(verified)}` : ''}`,
-      ),
+      apiFetch<AdminSubscriptionSummaryDto>('/v1/admin/providers/subscription-summary'),
   });
 }
 

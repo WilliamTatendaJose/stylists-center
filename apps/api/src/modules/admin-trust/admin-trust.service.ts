@@ -3,6 +3,8 @@ import type { AdminBanRowDto, AdminReportRowDto, AppealStatus, ReportStatus } fr
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { TrustService } from '../trust/trust.service';
+import type { Paged } from '@sc/shared';
+import { toPage, type PageRequest } from '../../common/paging';
 
 const REPORT_INCLUDE = {
   reporter: { select: { id: true, displayName: true, phone: true } },
@@ -31,13 +33,26 @@ export class AdminTrustService {
     private readonly trust: TrustService,
   ) {}
 
-  async listReports(status?: ReportStatus): Promise<AdminReportRowDto[]> {
-    const reports = await this.prisma.report.findMany({
-      ...(status ? { where: { status } } : {}),
-      include: REPORT_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-    });
-    return Promise.all(reports.map((report) => this.toReportRow(report)));
+  async listReports(
+    status: ReportStatus | undefined,
+    page: PageRequest,
+  ): Promise<Paged<AdminReportRowDto>> {
+    const where = status ? { status } : {};
+    const [reports, total] = await this.prisma.$transaction([
+      this.prisma.report.findMany({
+        where,
+        include: REPORT_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: page.limit,
+        skip: page.offset,
+      }),
+      this.prisma.report.count({ where }),
+    ]);
+    return toPage(
+      await Promise.all(reports.map((report) => this.toReportRow(report))),
+      total,
+      page,
+    );
   }
 
   async getReport(id: string): Promise<AdminReportRowDto> {
@@ -62,13 +77,26 @@ export class AdminTrustService {
     return this.toReportRow(updated);
   }
 
-  async listBans(appealStatus?: AppealStatus): Promise<AdminBanRowDto[]> {
-    const bans = await this.prisma.ban.findMany({
-      ...(appealStatus ? { where: { appealStatus } } : {}),
-      include: BAN_INCLUDE,
-      orderBy: { createdAt: 'desc' },
-    });
-    return bans.map((ban) => this.toBanRow(ban));
+  async listBans(
+    appealStatus: AppealStatus | undefined,
+    page: PageRequest,
+  ): Promise<Paged<AdminBanRowDto>> {
+    const where = appealStatus ? { appealStatus } : {};
+    const [bans, total] = await this.prisma.$transaction([
+      this.prisma.ban.findMany({
+        where,
+        include: BAN_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: page.limit,
+        skip: page.offset,
+      }),
+      this.prisma.ban.count({ where }),
+    ]);
+    return toPage(
+      bans.map((ban) => this.toBanRow(ban)),
+      total,
+      page,
+    );
   }
 
   async getBan(id: string): Promise<AdminBanRowDto> {

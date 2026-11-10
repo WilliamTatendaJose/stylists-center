@@ -13,6 +13,7 @@ import { resetAdminPassword } from '../src/modules/admin-auth/admin-accounts.js'
  *   railway ssh --service api
  *   pnpm admin:reset-password owner@example.com            # prompts, hidden
  *   pnpm admin:reset-password owner@example.com --create   # make it if missing
+ *   pnpm admin:reset-password owner@example.com --clear-mfa  # also turn off 2FA (lost phone)
  *
  * ADMIN_NEW_PASSWORD is read instead of prompting, for non-interactive use.
  * Re-enables the account and signs out all of its sessions.
@@ -39,7 +40,9 @@ async function promptHidden(question: string): Promise<string> {
 async function main() {
   const args = process.argv.slice(2);
   const email = args.find((arg) => !arg.startsWith('--'));
-  if (!email) throw new Error('Usage: pnpm admin:reset-password <email> [--create]');
+  if (!email) {
+    throw new Error('Usage: pnpm admin:reset-password <email> [--create] [--clear-mfa]');
+  }
 
   let password = process.env.ADMIN_NEW_PASSWORD;
   if (!password) {
@@ -53,12 +56,13 @@ async function main() {
   try {
     const outcome = await resetAdminPassword(prisma, email, password, {
       create: args.includes('--create'),
+      clearMfa: args.includes('--clear-mfa'),
     });
     // eslint-disable-next-line no-console
     console.log(
       outcome === 'created'
         ? `Created admin ${email}.`
-        : `Password reset for ${email}; all its sessions signed out.`,
+        : `Password reset for ${email}${args.includes('--clear-mfa') ? ', two-factor sign-in turned off' : ''}; all its sessions signed out.`,
     );
   } finally {
     await prisma.$disconnect();

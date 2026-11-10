@@ -12,6 +12,14 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get(ConfigService<Env, true>);
 
+  // Railway (like most hosts) terminates TLS at an edge proxy and forwards
+  // the request, so without this every request's req.ip is the proxy's
+  // address: ThrottlerGuard then counts all users as one client, and the
+  // global 120/min limit becomes a limit for the whole app. Trusting exactly
+  // the configured number of hops takes the client IP from X-Forwarded-For
+  // without letting a client spoof it by adding entries of its own.
+  app.set('trust proxy', config.get('TRUST_PROXY_HOPS', { infer: true }));
+
   // Health checks stay unprefixed — infra probes (load balancer, container
   // orchestrator) expect a fixed /healthz path, not one that moves with the
   // API version. The two .well-known files are unprefixed because the

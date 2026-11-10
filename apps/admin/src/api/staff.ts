@@ -43,3 +43,14 @@ export function useDeleteStaff(id: string) {
     },
   });
 }
+
+export function useResetStaffMfa(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<AdminStaffRowDto>(`/v1/admin/staff/${id}/reset-mfa`, { method: 'POST' }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: STAFF_KEY });
+    },
+  });
+}

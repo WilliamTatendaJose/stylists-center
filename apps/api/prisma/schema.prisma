@@ -122,41 +122,41 @@ model City {
 /// is bumped on a ban so every live session's JWT is invalidated instantly
 /// without needing a revocation list lookup per request.
 model User {
-  id                 String             @id @default(uuid())
-  firebaseUid        String?            @unique
-  email              String?            @unique
-  phone              String?            @unique
-  displayName        String
+  id                         String             @id @default(uuid())
+  firebaseUid                String?            @unique
+  email                      String?            @unique
+  phone                      String?            @unique
+  displayName                String
   /// Client-controlled photo used for their identity in stylist jobs and messages.
-  avatarImageUrl     String?
-  activeRole         ActiveRole         @default(client)
+  avatarImageUrl             String?
+  activeRole                 ActiveRole         @default(client)
   /// Chosen after Firebase authentication. Null means this account has not yet
   /// selected which onboarding path to enter; activeRole is not consulted yet.
-  selectedAccountType ActiveRole?
+  selectedAccountType        ActiveRole?
   /// Set only after client details or stylist setup is finished.
-  onboardingCompletedAt DateTime?
-  verificationStatus VerificationStatus @default(unverified)
-  verificationIdDocumentUrl String?
+  onboardingCompletedAt      DateTime?
+  verificationStatus         VerificationStatus @default(unverified)
+  verificationIdDocumentUrl  String?
   verificationSelfieImageUrl String?
-  verificationNote String?
-  verificationSubmittedAt DateTime?
-  tokenVersion       Int                @default(0)
-  bookingRemindersEnabled Boolean        @default(true)
-  pickupRemindersEnabled  Boolean        @default(true)
+  verificationNote           String?
+  verificationSubmittedAt    DateTime?
+  tokenVersion               Int                @default(0)
+  bookingRemindersEnabled    Boolean            @default(true)
+  pickupRemindersEnabled     Boolean            @default(true)
   /// Set by the admin console when access is suspended. Firebase is disabled
   /// at the same time, while this database flag invalidates app JWTs immediately.
-  disabledAt         DateTime?
+  disabledAt                 DateTime?
   /// Tombstone rather than a hard delete: financial, booking and audit foreign
   /// keys remain valid, while credentials and personal fields are removed.
-  deletedAt          DateTime?
-  cityId             String
-  city               City               @relation(fields: [cityId], references: [id])
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  deletedAt                  DateTime?
+  cityId                     String
+  city                       City               @relation(fields: [cityId], references: [id])
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
 
   providerProfile ProviderProfile?
   agent           Agent?
-  referralRecord  Referral?           @relation("ReferralReferredUser")
+  referralRecord  Referral?        @relation("ReferralReferredUser")
 
   matchRequests       MatchRequest[]
   bookingsAsClient    Booking[]           @relation("BookingClient")
@@ -189,43 +189,45 @@ model User {
 /// added by a hand-written migration (plan §6) precisely so the app can never
 /// write a `location` that disagrees with these two decimals.
 model ProviderProfile {
-  id                 String       @id @default(uuid())
-  userId             String       @unique
-  user               User         @relation(fields: [userId], references: [id])
-  displayName        String
-  tint               String
-  initials           String
-  categoryId         String
-  category           Category     @relation(fields: [categoryId], references: [id])
-  areaName           String
-  latitude           Float
-  longitude          Float
-  cityId             String
-  city               City         @relation(fields: [cityId], references: [id])
-  yearsExperience    Int          @default(0)
-  profileImageUrl    String?
-  portfolioImageUrls String[]     @default([])
-  priceDisplay       PriceDisplay @default(list)
-  fromPriceUsdCents  Int?
-  workingHoursLabel  String
+  id                        String       @id @default(uuid())
+  userId                    String       @unique
+  user                      User         @relation(fields: [userId], references: [id])
+  displayName               String
+  tint                      String
+  initials                  String
+  categoryId                String
+  category                  Category     @relation(fields: [categoryId], references: [id])
+  areaName                  String
+  latitude                  Float
+  longitude                 Float
+  cityId                    String
+  city                      City         @relation(fields: [cityId], references: [id])
+  yearsExperience           Int          @default(0)
+  profileImageUrl           String?
+  portfolioImageUrls        String[]     @default([])
+  priceDisplay              PriceDisplay @default(list)
+  fromPriceUsdCents         Int?
+  workingHoursLabel         String
   /// Null preserves legacy profiles until the stylist configures a weekly calendar.
-  weeklyHours        Json?
-  /** Provider-controlled "I'm taking work right now". The only thing that makes Home's "Available now" list actually mean anything. */
-  acceptingBookings  Boolean      @default(true)
-  verified           Boolean      @default(false)
-  ratingAvg          Float        @default(0)
-  completedCount     Int          @default(0)
-  salonCreatedAt     DateTime?
+  weeklyHours               Json?
+  /**
+   * Provider-controlled "I'm taking work right now". The only thing that makes Home's "Available now" list actually mean anything.
+   */
+  acceptingBookings         Boolean      @default(true)
+  verified                  Boolean      @default(false)
+  ratingAvg                 Float        @default(0)
+  completedCount            Int          @default(0)
+  salonCreatedAt            DateTime?
   /// Per-provider so a future admin webapp can change one provider's price
   /// without a deploy — see DEFAULT_SUBSCRIPTION_PRICE_USD_CENTS in @sc/shared.
-  subscriptionPriceUsdCents Int      @default(500)
+  subscriptionPriceUsdCents Int          @default(500)
   /// Null for a provider who has never paid — never active, not an error.
   /// Whether that reads as "active" is computed from this at request time
   /// (isSubscriptionActive in @sc/shared), never stored as a separate flag,
   /// so it can never drift out of sync with the date it's derived from.
-  subscriptionPaidUntil    DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  subscriptionPaidUntil     DateTime?
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
 
   services             Service[]
   offers               MatchOffer[]
@@ -234,13 +236,13 @@ model ProviderProfile {
   trips                Trip[]
   products             Product[]
   orders               Order[]
-  subscriptionPayments Payment[]    @relation("SubscriptionPayments")
+  subscriptionPayments Payment[]         @relation("SubscriptionPayments")
   payouts              Payout[]
+  // The trigram (GIN) and partial availability indexes are declared in the
+  // hand-written migration — Prisma's schema language cannot express either.
 
   @@index([categoryId])
   @@index([cityId])
-  // The trigram (GIN) and partial availability indexes are declared in the
-  // hand-written migration — Prisma's schema language cannot express either.
 }
 
 model ProviderTimeOff {
@@ -377,22 +379,22 @@ model Booking {
 /// refund or release is a NEW row referencing the same booking, not an
 /// update, so the ledger stays a true audit trail.
 model Payment {
-  id String @id @default(uuid())
+  id                     String           @id @default(uuid())
   /// Exactly one of bookingId/orderId/subscriptionProviderId is set — the ledger covers all three money flows so it reconciles in one place. `feeUsdCents` is always 0 for a subscription row (there is no counterparty to take a cut from); it stays on the row rather than a separate model because the ledger's shape — provider/status/amount/externalRef/createdAt — is otherwise identical.
-  bookingId             String?
+  bookingId              String?
   booking                Booking?         @relation(fields: [bookingId], references: [id])
   orderId                String?
   order                  Order?           @relation(fields: [orderId], references: [id])
   subscriptionProviderId String?
   subscriptionProvider   ProviderProfile? @relation("SubscriptionPayments", fields: [subscriptionProviderId], references: [id])
-  provider       String // 'fake-ecocash' | 'paynow' | 'pesepay' — a string, not an enum, so a further gateway is a new value, not a migration
-  status         String // held | released | refunded | failed
-  amountUsdCents Int
-  feeUsdCents    Int      @default(0)
-  externalRef    String?
+  provider               String // 'fake-ecocash' | 'paynow' | 'pesepay' — a string, not an enum, so a further gateway is a new value, not a migration
+  status                 String // held | released | refunded | failed
+  amountUsdCents         Int
+  feeUsdCents            Int              @default(0)
+  externalRef            String?
   /// The gateway reference this payment was initiated under. Bookings and orders carry their own `reference` column, but a subscription has no such row — without this, a Paynow callback for a subscription had nothing to match against and was rejected as unknown. Nullable because rows written before this column existed cannot be backfilled.
-  reference      String?
-  createdAt      DateTime @default(now())
+  reference              String?
+  createdAt              DateTime         @default(now())
 
   @@index([bookingId])
   @@index([orderId])
@@ -422,9 +424,9 @@ model Payout {
 /// Mirrors @sc/shared's OrderStatus exactly.
 enum OrderStatus {
   /// Paid or pledged, stock held for the buyer, waiting to be collected.
-    reserved
-    /// Seller says the goods are packed; buyer may now confirm collection.
-    ready_for_collection
+  reserved
+  /// Seller says the goods are packed; buyer may now confirm collection.
+  ready_for_collection
   /// Buyer confirmed they have it; escrow released.
   collected
   cancelled
@@ -448,7 +450,7 @@ model Product {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
 
-  orderItems OrderItem[]
+  orderItems     OrderItem[]
   productReviews ProductReview[]
 
   @@index([providerId])
@@ -457,35 +459,35 @@ model Product {
 
 /// One order is always with ONE stylist — the buyer collects from a single place.
 model Order {
-  id                String        @id @default(uuid())
-  reference         String        @unique
-  buyerId           String
-  buyer             User          @relation("OrderBuyer", fields: [buyerId], references: [id])
-  providerId        String
-  provider          ProviderProfile @relation(fields: [providerId], references: [id])
-  status            OrderStatus   @default(reserved)
-  paymentMethod     PaymentMethod
+  id                   String          @id @default(uuid())
+  reference            String          @unique
+  buyerId              String
+  buyer                User            @relation("OrderBuyer", fields: [buyerId], references: [id])
+  providerId           String
+  provider             ProviderProfile @relation(fields: [providerId], references: [id])
+  status               OrderStatus     @default(reserved)
+  paymentMethod        PaymentMethod
   /// Buyer-scoped request key: retrying a timed-out checkout returns the same order.
-  checkoutKey       String?
-  checkoutFingerprint String?
-  checkoutUrl       String?
+  checkoutKey          String?
+  checkoutFingerprint  String?
+  checkoutUrl          String?
   checkoutInstructions String?
-  pickupAddress     String?
-  pickupHours       String?
-  pickupLat         Float?
-  pickupLng         Float?
-  pickupNote        String?
+  pickupAddress        String?
+  pickupHours          String?
+  pickupLat            Float?
+  pickupLng            Float?
+  pickupNote           String?
   /// Sum of the item snapshots, stored so a later price change cannot rewrite history.
-  totalUsdCents     Int
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
+  totalUsdCents        Int
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
-  items    OrderItem[]
-  payments Payment[]
+  items          OrderItem[]
+  payments       Payment[]
   productReviews ProductReview[]
 
-  @@index([buyerId])
   @@unique([buyerId, checkoutKey])
+  @@index([buyerId])
   @@index([providerId])
 }
 
@@ -537,18 +539,18 @@ model Review {
 }
 
 model Report {
-  id         String       @id @default(uuid())
-  reporterId String
-  reporter   User         @relation("ReportReporter", fields: [reporterId], references: [id])
-  reportedId String
-  reported   User         @relation("ReportReported", fields: [reportedId], references: [id])
-  bookingId  String?
-  booking    Booking?     @relation(fields: [bookingId], references: [id])
-  reason     ReportReason
-  status     ReportStatus @default(open)
+  id             String       @id @default(uuid())
+  reporterId     String
+  reporter       User         @relation("ReportReporter", fields: [reporterId], references: [id])
+  reportedId     String
+  reported       User         @relation("ReportReported", fields: [reportedId], references: [id])
+  bookingId      String?
+  booking        Booking?     @relation(fields: [bookingId], references: [id])
+  reason         ReportReason
+  status         ReportStatus @default(open)
   /// Set by the admin console when a report moves to `resolved` — the record of why.
   resolutionNote String?
-  createdAt  DateTime     @default(now())
+  createdAt      DateTime     @default(now())
 
   @@index([reportedId])
 }
@@ -560,7 +562,9 @@ model NoShowRecord {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   bookingId String
-  /** 'no_show' | 'late_cancellation' — both count toward account standing, but an appeal needs to know which happened. */
+  /**
+   * 'no_show' | 'late_cancellation' — both count toward account standing, but an appeal needs to know which happened.
+   */
   reason    String   @default("no_show")
   createdAt DateTime @default(now())
 
@@ -586,19 +590,19 @@ model Ban {
 /// One conversation per client/provider pair — the handoff's chat model is
 /// strictly 1:1, not a group thread.
 model Conversation {
-  id             String   @id @default(uuid())
-  clientId       String
-  client         User     @relation("ConversationClient", fields: [clientId], references: [id])
-  providerUserId String
-  providerUser   User     @relation("ConversationProvider", fields: [providerUserId], references: [id])
-  lastMessageAt  DateTime @default(now())
+  id                 String   @id @default(uuid())
+  clientId           String
+  client             User     @relation("ConversationClient", fields: [clientId], references: [id])
+  providerUserId     String
+  providerUser       User     @relation("ConversationProvider", fields: [providerUserId], references: [id])
+  lastMessageAt      DateTime @default(now())
   /// Only the client role exists in M1 (Provider screens are a later
   /// milestone), so this is the one read-receipt column needed: unreadCount
   /// on the client's own inbox is just "messages from the provider after
   /// this timestamp", bumped whenever the client fetches the thread.
-  clientLastReadAt DateTime @default(now())
+  clientLastReadAt   DateTime @default(now())
   providerLastReadAt DateTime @default(now())
-  createdAt      DateTime @default(now())
+  createdAt          DateTime @default(now())
 
   messages Message[]
 
@@ -649,15 +653,15 @@ model Agent {
 }
 
 model Referral {
-  id           String         @id @default(uuid())
-  agentId      String
-  agent        Agent          @relation(fields: [agentId], references: [id])
-  referredName String
-  referredUserId String? @unique
-  referredUser User? @relation("ReferralReferredUser", fields: [referredUserId], references: [id])
-  coinsAwarded Int
-  status       ReferralStatus @default(pending)
-  createdAt    DateTime       @default(now())
+  id             String         @id @default(uuid())
+  agentId        String
+  agent          Agent          @relation(fields: [agentId], references: [id])
+  referredName   String
+  referredUserId String?        @unique
+  referredUser   User?          @relation("ReferralReferredUser", fields: [referredUserId], references: [id])
+  coinsAwarded   Int
+  status         ReferralStatus @default(pending)
+  createdAt      DateTime       @default(now())
 
   @@index([agentId])
 }
@@ -771,21 +775,39 @@ model AuditLog {
 /// (email + password, not phone + OTP): staff aren't clients or providers,
 /// and the two login flows should never be able to authenticate as each
 /// other by construction, not just by convention.
+/// What an admin may do in the console. Owners can do everything; see
+/// admin-auth/admin-roles.ts for which areas finance and support can reach.
+enum AdminRole {
+  owner
+  finance
+  support
+}
+
 model AdminUser {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  displayName  String
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  passwordHash       String
+  displayName        String
+  role               AdminRole @default(support)
   /// Same lever as User.tokenVersion: bump to invalidate every live admin session instantly (disabling a staff account).
-  tokenVersion Int      @default(0)
+  tokenVersion       Int       @default(0)
   /// A revoked staff account — kept rather than deleted so AuditLog.adminActor
   /// stays resolvable for their past actions. Checked at login and on every
   /// access-token verification, so revocation takes effect immediately.
-  disabled     Boolean  @default(false)
+  disabled           Boolean   @default(false)
   /// Deleted accounts stay in the database so historical audit actors remain resolvable.
-  deletedAt    DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  deletedAt          DateTime?
+  /// Encrypted TOTP secret (admin-auth/secret-box.ts); set once 2FA is confirmed.
+  totpSecret         String?
+  /// Encrypted secret awaiting its first valid code during enrolment.
+  totpPendingSecret  String?
+  totpEnabledAt      DateTime?
+  /// Last TOTP time-step accepted, so a code can't be replayed inside its window.
+  totpLastUsedStep   Int?
+  /// SHA-256 hashes of unused one-time recovery codes.
+  recoveryCodeHashes String[]  @default([])
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   refreshTokens   AdminRefreshToken[]
   auditLogEntries AuditLog[]

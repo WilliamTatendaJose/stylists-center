@@ -9,6 +9,8 @@ import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
 import { StatTile } from '../components/ui/StatTile';
 import { TextField } from '../components/ui/Field';
+import { Pager, SearchBox } from '../components/Pager';
+import { CsvExport } from '../components/CsvExport';
 
 function RecordPayoutForm({
   provider,
@@ -123,7 +125,10 @@ function ProviderPayoutRow({ provider }: { provider: AdminProviderPayoutRowDto }
 
 export function PaymentsPage() {
   const { data: overview, isLoading: overviewLoading } = usePaymentsOverview();
-  const { data: providers, isLoading: providersLoading, isError } = useProviderPayouts();
+  const [offset, setOffset] = useState(0);
+  const [q, setQ] = useState('');
+  const { data, isLoading: providersLoading, isError } = useProviderPayouts({ q, offset });
+  const providers = data?.items;
 
   return (
     <div>
@@ -177,6 +182,16 @@ export function PaymentsPage() {
 
       <h2 className="mb-3 font-semibold text-neutral-900 dark:text-dark-text">Provider balances</h2>
 
+      <CsvExport kinds={['payments', 'payouts']} />
+      <div className="mb-4">
+        <SearchBox
+          placeholder="Search provider or phone"
+          onSearch={(value) => {
+            setQ(value);
+            setOffset(0);
+          }}
+        />
+      </div>
       {providersLoading ? (
         <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p>
       ) : null}
@@ -196,6 +211,9 @@ export function PaymentsPage() {
           <ProviderPayoutRow key={provider.providerId} provider={provider} />
         ))}
       </div>
+      {data ? (
+        <Pager offset={offset} shown={data.items.length} total={data.total} onChange={setOffset} />
+      ) : null}
     </div>
   );
 }

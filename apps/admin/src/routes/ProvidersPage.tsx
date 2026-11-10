@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { AdminProviderRowDto } from '@sc/shared';
 import { useProviders, useUpdateProvider } from '../api/providers';
 import { ApiError } from '../api/client';
+import { Pager, SearchBox } from '../components/Pager';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
 import { adminAssetUrl } from '../api/media';
@@ -129,8 +130,11 @@ function ProviderRow({ provider }: { provider: AdminProviderRowDto }) {
 }
 
 export function ProvidersPage() {
+  const [offset, setOffset] = useState(0);
+  const [q, setQ] = useState('');
   const [filter, setFilter] = useState<boolean | undefined>(undefined);
-  const { data: providers, isLoading, isError } = useProviders(filter);
+  const { data, isLoading, isError } = useProviders({ verified: filter, q, offset });
+  const providers = data?.items;
 
   return (
     <div>
@@ -143,6 +147,7 @@ export function ProvidersPage() {
               type="button"
               onClick={() => {
                 setFilter(f.value);
+                setOffset(0);
               }}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 filter === f.value
@@ -156,6 +161,15 @@ export function ProvidersPage() {
         </div>
       </div>
 
+      <div className="mb-4">
+        <SearchBox
+          placeholder="Search name, phone or email"
+          onSearch={(value) => {
+            setQ(value);
+            setOffset(0);
+          }}
+        />
+      </div>
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
       {isError ? (
         <p className="text-sm text-accent-700 dark:text-dark-accent">
@@ -171,6 +185,9 @@ export function ProvidersPage() {
           <ProviderRow key={provider.id} provider={provider} />
         ))}
       </div>
+      {data ? (
+        <Pager offset={offset} shown={data.items.length} total={data.total} onChange={setOffset} />
+      ) : null}
     </div>
   );
 }

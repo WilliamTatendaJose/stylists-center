@@ -1,10 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AdminPaymentsOverviewDto,
   AdminProviderPayoutRowDto,
+  Paged,
   RecordPayoutInput,
 } from '@sc/shared';
 import { apiFetch } from './client';
+import { listQuery, type ListParams } from './paging';
 
 const OVERVIEW_KEY = ['admin', 'payments', 'overview'] as const;
 const PROVIDERS_KEY = ['admin', 'payments', 'providers'] as const;
@@ -16,10 +18,14 @@ export function usePaymentsOverview() {
   });
 }
 
-export function useProviderPayouts() {
+export function useProviderPayouts(params: ListParams = {}) {
   return useQuery({
-    queryKey: PROVIDERS_KEY,
-    queryFn: () => apiFetch<AdminProviderPayoutRowDto[]>('/v1/admin/payments/providers'),
+    queryKey: [...PROVIDERS_KEY, params],
+    queryFn: () =>
+      apiFetch<Paged<AdminProviderPayoutRowDto>>(
+        `/v1/admin/payments/providers${listQuery({ ...params })}`,
+      ),
+    placeholderData: keepPreviousData,
   });
 }
 

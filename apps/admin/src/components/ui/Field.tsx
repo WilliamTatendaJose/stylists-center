@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from 'react';
 
 const fieldChrome =
   'w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 focus:border-accent focus:outline-none dark:border-dark-border dark:bg-white/5 dark:text-dark-text dark:placeholder:text-neutral-600 dark:focus:border-accent';
@@ -27,6 +27,22 @@ export function TextAreaField({
     <label className="mb-4 block">
       <span className={labelChrome}>{label}</span>
       <textarea className={`${fieldChrome} ${className}`} {...props} />
+    </label>
+  );
+}
+
+export function SelectField({
+  label,
+  className = '',
+  children,
+  ...props
+}: { label: string } & SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <label className="mb-4 block">
+      <span className={labelChrome}>{label}</span>
+      <select className={`${fieldChrome} ${className}`} {...props}>
+        {children}
+      </select>
     </label>
   );
 }

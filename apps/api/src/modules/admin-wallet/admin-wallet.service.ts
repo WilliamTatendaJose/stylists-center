@@ -1,6 +1,9 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { AdminCashOutRowDto, RecordCashOutSettlementInput } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import type { Paged } from '@sc/shared';
+import type { Prisma } from '../../generated/prisma';
+import { toPage, type PageRequest } from '../../common/paging';
 
 /**
  * `WalletTransaction.type = 'cash_out'` already debited the coin ledger the
@@ -14,16 +17,37 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AdminWalletService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listCashOuts(): Promise<AdminCashOutRowDto[]> {
-    const transactions = await this.prisma.walletTransaction.findMany({
-      where: { type: 'cash_out' },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: { select: { displayName: true, phone: true } },
-        cashOutSettlement: true,
-      },
-    });
-    return transactions.map(toCashOutRow);
+  async listCashOuts(input: {
+    q?: string | undefined;
+    page: PageRequest;
+  }): Promise<Paged<AdminCashOutRowDto>> {
+    const where: Prisma.WalletTransactionWhereInput = {
+      type: 'cash_out',
+      ...(input.q
+        ? {
+            user: {
+              OR: [
+                { displayName: { contains: input.q, mode: 'insensitive' } },
+                { phone: { contains: input.q } },
+              ],
+            },
+          }
+        : {}),
+    };
+    const [transactions, total] = await this.prisma.$transaction([
+      this.prisma.walletTransaction.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: {
+          user: { select: { displayName: true, phone: true } },
+          cashOutSettlement: true,
+        },
+        take: input.page.limit,
+        skip: input.page.offset,
+      }),
+      this.prisma.walletTransaction.count({ where }),
+    ]);
+    return toPage(transactions.map(toCashOutRow), total, input.page);
   }
 
   async settleCashOut(

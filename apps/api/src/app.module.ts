@@ -36,6 +36,7 @@ import { AdminLookupModule } from './modules/admin-lookup/admin-lookup.module';
 import { AdminReviewsModule } from './modules/admin-reviews/admin-reviews.module';
 import { AdminVerificationsModule } from './modules/admin-verifications/admin-verifications.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
+import { AdminExportsModule } from './modules/admin-exports/admin-exports.module';
 
 @Module({
   imports: [
@@ -83,6 +84,7 @@ import { AdminUsersModule } from './modules/admin-users/admin-users.module';
     AdminReviewsModule,
     AdminVerificationsModule,
     AdminUsersModule,
+    AdminExportsModule,
   ],
   providers: [
     /**

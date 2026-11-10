@@ -11,6 +11,8 @@ const TEST_DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://sc:sc@localh
 const BASE_ENV: Env = {
   NODE_ENV: 'test',
   PORT: 4000,
+  TRUST_PROXY_HOPS: 1,
+  ADMIN_MFA_REQUIRED: false,
   DATABASE_URL: TEST_DATABASE_URL,
   REDIS_URL: 'redis://localhost:6380',
   STORAGE_DRIVER: 'local',
@@ -124,7 +126,7 @@ describe('AdminWalletService', () => {
   // indexing into the list or counting it — otherwise they would depend on
   // what other specs happen to have left in the ledger.
   it('lists a pending cash-out with the requested amount as a positive number', async () => {
-    const rows = await adminWallet.listCashOuts();
+    const { items: rows } = await adminWallet.listCashOuts({ page: { limit: 200, offset: 0 } });
     const row = rows.find((r) => r.transactionId === cashOutTxnId);
 
     expect(row).toBeDefined();
@@ -139,7 +141,7 @@ describe('AdminWalletService', () => {
   });
 
   it('never returns the referral credit — only cash_out rows belong in the queue', async () => {
-    const rows = await adminWallet.listCashOuts();
+    const { items: rows } = await adminWallet.listCashOuts({ page: { limit: 200, offset: 0 } });
     expect(rows.some((r) => r.transactionId === creditTxnId)).toBe(false);
   });
 
@@ -151,7 +153,7 @@ describe('AdminWalletService', () => {
     expect(settled.settledAt).not.toBeNull();
     expect(settled.amountUsdCents).toBe(600);
 
-    const rows = await adminWallet.listCashOuts();
+    const { items: rows } = await adminWallet.listCashOuts({ page: { limit: 200, offset: 0 } });
     expect(rows.find((r) => r.transactionId === cashOutTxnId)?.settled).toBe(true);
   });
 

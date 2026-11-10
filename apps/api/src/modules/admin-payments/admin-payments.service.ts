@@ -7,6 +7,8 @@ import type {
 } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import type { Paged } from '@sc/shared';
+import { pageArray, type PageRequest } from '../../common/paging';
 
 const ESCROW_PAYMENT_SELECT = {
   bookingId: true,
@@ -77,7 +79,23 @@ export class AdminPaymentsService {
     };
   }
 
-  async providerPayouts(): Promise<AdminProviderPayoutRowDto[]> {
+  /**
+   * Balances need every released payment, so they're computed in memory and
+   * then paged. That keeps the response small, but the server still reads
+   * all payments; a SQL aggregate is the fix if this becomes slow.
+   */
+  async providerPayouts(input: {
+    q?: string | undefined;
+    page: PageRequest;
+  }): Promise<Paged<AdminProviderPayoutRowDto>> {
+    const q = input.q?.toLowerCase();
+    const rows = (await this.allProviderPayouts()).filter(
+      (row) => !q || row.displayName.toLowerCase().includes(q) || (row.phone ?? '').includes(q),
+    );
+    return pageArray(rows, input.page);
+  }
+
+  private async allProviderPayouts(): Promise<AdminProviderPayoutRowDto[]> {
     const [current, providers, payouts] = await Promise.all([
       this.currentEscrowPayments(),
       this.prisma.providerProfile.findMany({
@@ -124,7 +142,7 @@ export class AdminPaymentsService {
         };
       })
       .filter((row) => row.releasedUsdCents > 0 || row.paidOutUsdCents > 0)
-      .sort((a, b) => b.owedUsdCents - a.owedUsdCents);
+      .sort((a, b) => b.owedUsdCents - a.owedUsdCents || a.providerId.localeCompare(b.providerId));
   }
 
   async recordPayout(providerId: string, input: RecordPayoutInput): Promise<AdminPayoutRowDto> {

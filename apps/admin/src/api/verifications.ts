@@ -1,20 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AdminVerificationRowDto,
+  Paged,
   ReviewVerificationInput,
   VerificationStatus,
 } from '@sc/shared';
 import { apiFetch } from './client';
+import { listQuery, type ListParams } from './paging';
 
 const VERIFICATIONS_KEY = ['admin', 'verifications'] as const;
 
-export function useVerifications(status?: VerificationStatus) {
+export function useVerifications(
+  params: ListParams & { status?: VerificationStatus | undefined } = {},
+) {
   return useQuery({
-    queryKey: [...VERIFICATIONS_KEY, status ?? 'all'],
+    queryKey: [...VERIFICATIONS_KEY, params],
     queryFn: () =>
-      apiFetch<AdminVerificationRowDto[]>(
-        `/v1/admin/verifications${status ? `?status=${status}` : ''}`,
-      ),
+      apiFetch<Paged<AdminVerificationRowDto>>(`/v1/admin/verifications${listQuery(params)}`),
+    placeholderData: keepPreviousData,
   });
 }
 
