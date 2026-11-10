@@ -8,6 +8,7 @@ import type { AdminStaffRowDto, CreateStaffInput, UpdateStaffInput } from '@sc/s
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { hashPassword } from '../admin-auth/password';
+import { AdminMfaService } from '../admin-auth/admin-mfa.service';
 
 /**
  * Every admin console feature shares one flat access level — there's no role
@@ -18,7 +19,25 @@ import { hashPassword } from '../admin-auth/password';
  */
 @Injectable()
 export class AdminStaffService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly mfa: AdminMfaService,
+  ) {}
+
+  /**
+   * Clears a colleague's 2FA after a lost or replaced phone, and signs them
+   * out everywhere. Not for your own account: turning off your own 2FA needs
+   * your password and a current code (POST /admin/auth/mfa/disable).
+   */
+  async resetMfa(id: string, actingAdminId: string): Promise<AdminStaffRowDto> {
+    if (id === actingAdminId) {
+      throw new ForbiddenException('Turn off your own two-factor sign-in from your account page');
+    }
+    const target = await this.prisma.adminUser.findUniqueOrThrow({ where: { id } });
+    if (target.deletedAt) throw new BadRequestException('Deleted staff accounts cannot be edited');
+    await this.mfa.resetFor(id);
+    return toRow(await this.prisma.adminUser.findUniqueOrThrow({ where: { id } }));
+  }
 
   async list(includeDeleted = false): Promise<AdminStaffRowDto[]> {
     const where = includeDeleted ? {} : { deletedAt: null };
@@ -121,6 +140,7 @@ function toRow(admin: {
   email: string;
   displayName: string;
   disabled: boolean;
+  totpEnabledAt: Date | null;
   deletedAt: Date | null;
   createdAt: Date;
 }): AdminStaffRowDto {
@@ -129,6 +149,7 @@ function toRow(admin: {
     email: admin.email,
     displayName: admin.displayName,
     disabled: admin.disabled,
+    mfaEnabled: admin.totpEnabledAt !== null,
     createdAt: admin.createdAt.toISOString(),
     deletedAt: admin.deletedAt?.toISOString() ?? null,
   };

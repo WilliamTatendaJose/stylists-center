@@ -1,9 +1,19 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
+import type { Env } from '../../config/env';
 import { AdminAuthService } from './admin-auth.service';
+import { ALLOW_WITHOUT_MFA } from './allow-without-mfa.decorator';
 
 export interface AdminAuthenticatedRequest extends Request {
-  admin?: { id: string };
+  admin?: { id: string; mfaEnabled: boolean };
 }
 
 /**
@@ -11,10 +21,17 @@ export interface AdminAuthenticatedRequest extends Request {
  * via AdminAuthService rather than AuthService, so an admin token can never
  * authenticate a `/v1/*` user route or vice versa. Attaches `req.admin`,
  * which AuditInterceptor also reads (see audit.interceptor.ts).
+ *
+ * With ADMIN_MFA_REQUIRED on, an account that hasn't enrolled in 2FA is
+ * refused everywhere except routes marked @AllowWithoutMfa().
  */
 @Injectable()
 export class AdminJwtAuthGuard implements CanActivate {
-  constructor(private readonly adminAuth: AdminAuthService) {}
+  constructor(
+    private readonly adminAuth: AdminAuthService,
+    private readonly config: ConfigService<Env, true>,
+    private readonly reflector: Reflector,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context.switchToHttp().getRequest<AdminAuthenticatedRequest>();
@@ -26,6 +43,21 @@ export class AdminJwtAuthGuard implements CanActivate {
 
     const token = header.slice('Bearer '.length);
     req.admin = await this.adminAuth.verifyAccessToken(token);
+
+    if (
+      this.config.get('ADMIN_MFA_REQUIRED', { infer: true }) &&
+      !req.admin.mfaEnabled &&
+      !this.reflector.getAllAndOverride<boolean>(ALLOW_WITHOUT_MFA, [
+        context.getHandler(),
+        context.getClass(),
+      ])
+    ) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'MFA_SETUP_REQUIRED',
+        message: 'Set up two-factor sign-in on your account page to continue.',
+      });
+    }
     return true;
   }
 }

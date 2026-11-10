@@ -9,6 +9,9 @@ interface AuthState {
   isBootstrapping: boolean;
   setSession: (accessToken: string, admin: AdminIdentity) => void;
   setAccessToken: (accessToken: string) => void;
+  /** Merges fields into the signed-in admin (e.g. after turning 2FA on or off). */
+  updateAdmin: (patch: Partial<AdminIdentity>) => void;
+  markMfaSetupRequired: () => void;
   finishBootstrapping: () => void;
   clear: () => void;
 }
@@ -22,6 +25,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   setAccessToken: (accessToken) => {
     set({ accessToken });
+  },
+  updateAdmin: (patch) => {
+    set((state) => (state.admin ? { admin: { ...state.admin, ...patch } } : {}));
+  },
+  markMfaSetupRequired: () => {
+    set((state) => (state.admin ? { admin: { ...state.admin, mfaSetupRequired: true } } : {}));
   },
   finishBootstrapping: () => {
     set({ isBootstrapping: false });

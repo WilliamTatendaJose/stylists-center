@@ -51,7 +51,7 @@ export async function resetAdminPassword(
   prisma: AdminClient,
   email: string,
   password: string,
-  options: { create?: boolean } = {},
+  options: { create?: boolean; clearMfa?: boolean } = {},
 ): Promise<ResetOutcome> {
   if (password.length < MIN_RECOVERY_PASSWORD_LENGTH) {
     throw new Error(
@@ -74,7 +74,23 @@ export async function resetAdminPassword(
     }),
     prisma.adminUser.update({
       where: { id: existing.id },
-      data: { passwordHash, disabled: false, deletedAt: null, tokenVersion: { increment: 1 } },
+      data: {
+        passwordHash,
+        disabled: false,
+        deletedAt: null,
+        tokenVersion: { increment: 1 },
+        // A lost phone on the only admin account: nobody is left to reset it
+        // from the Staff page, so the break-glass script can clear it too.
+        ...(options.clearMfa
+          ? {
+              totpSecret: null,
+              totpPendingSecret: null,
+              totpEnabledAt: null,
+              totpLastUsedStep: null,
+              recoveryCodeHashes: [],
+            }
+          : {}),
+      },
     }),
   ]);
   return 'reset';

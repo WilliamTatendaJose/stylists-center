@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import type { AdminStaffRowDto } from '@sc/shared';
 import { useAuthStore } from '../state/authStore';
-import { useCreateStaff, useDeleteStaff, useStaff, useUpdateStaff } from '../api/staff';
+import {
+  useCreateStaff,
+  useDeleteStaff,
+  useResetStaffMfa,
+  useStaff,
+  useUpdateStaff,
+} from '../api/staff';
 import { ApiError } from '../api/client';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
@@ -164,6 +170,7 @@ function StaffRow({ staff }: { staff: AdminStaffRowDto }) {
   const currentAdmin = useAuthStore((s) => s.admin);
   const updateStaff = useUpdateStaff(staff.id);
   const deleteStaff = useDeleteStaff(staff.id);
+  const resetMfa = useResetStaffMfa(staff.id);
   const [editing, setEditing] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,6 +187,22 @@ function StaffRow({ staff }: { staff: AdminStaffRowDto }) {
         },
       },
     );
+  };
+
+  const clearMfa = () => {
+    if (
+      !window.confirm(
+        `Turn off two-factor sign-in for ${staff.displayName}? Use this when they've lost their phone. They'll be signed out and can set it up again from their account page.`,
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    resetMfa.mutate(undefined, {
+      onError: (err) => {
+        setError(err instanceof ApiError ? err.message : 'Could not reset two-factor sign-in.');
+      },
+    });
   };
 
   const remove = () => {
@@ -223,6 +246,12 @@ function StaffRow({ staff }: { staff: AdminStaffRowDto }) {
             tone={isDeleted || staff.disabled ? 'accent' : 'neutral'}
           />
           {!isDeleted ? (
+            <Badge
+              label={staff.mfaEnabled ? '2FA on' : '2FA off'}
+              tone={staff.mfaEnabled ? 'dark' : 'accent'}
+            />
+          ) : null}
+          {!isDeleted ? (
             <>
               <Button
                 variant="secondary"
@@ -242,6 +271,11 @@ function StaffRow({ staff }: { staff: AdminStaffRowDto }) {
               >
                 {resetting ? 'Close' : 'Reset password'}
               </Button>
+              {staff.mfaEnabled && !isSelf ? (
+                <Button variant="secondary" onClick={clearMfa} disabled={resetMfa.isPending}>
+                  {resetMfa.isPending ? 'Resetting…' : 'Reset 2FA'}
+                </Button>
+              ) : null}
               <Button
                 variant={staff.disabled ? 'secondary' : 'danger'}
                 onClick={toggleDisabled}

@@ -53,6 +53,12 @@ export const envSchema = z
     // First admin account, created on boot only while no enabled admin exists
     // (an empty or fully locked-out database). Ignored otherwise, so it never
     // overwrites a password changed later. See RAILWAY.md → "Admin access".
+    /**
+     * When true, admins without authenticator-app 2FA can only reach their
+     * account page until they enrol. Off by default so turning it on is a
+     * deliberate step once every admin knows it's coming.
+     */
+    ADMIN_MFA_REQUIRED: z.stringbool().default(false),
     ADMIN_BOOTSTRAP_EMAIL: z.email().optional(),
     ADMIN_BOOTSTRAP_PASSWORD: z.string().min(12).optional(),
 

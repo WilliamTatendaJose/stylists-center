@@ -21,10 +21,25 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    /** Machine-readable reason, when the API sends one (e.g. MFA_SETUP_REQUIRED). */
+    public readonly code?: string,
   ) {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+function extractCode(text: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && 'code' in parsed) {
+      const { code } = parsed;
+      if (typeof code === 'string') return code;
+    }
+  } catch {
+    // Not JSON.
+  }
+  return undefined;
 }
 
 interface ApiFetchOptions {
@@ -114,7 +129,11 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 
   if (!res.ok) {
     const text = await res.text();
-    throw new ApiError(res.status, extractMessage(text, res.status, res.statusText));
+    const code = extractCode(text);
+    // ADMIN_MFA_REQUIRED is on and this account hasn't enrolled: flag it so
+    // the layout sends the user to their account page to set it up.
+    if (code === 'MFA_SETUP_REQUIRED') useAuthStore.getState().markMfaSetupRequired();
+    throw new ApiError(res.status, extractMessage(text, res.status, res.statusText), code);
   }
 
   // Nest's default status for a `void`-returning POST/PATCH/DELETE handler is

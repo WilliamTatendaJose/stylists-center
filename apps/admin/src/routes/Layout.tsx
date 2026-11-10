@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
+  CircleUserRound,
   CreditCard,
   Flag,
   HandCoins,
@@ -122,16 +123,33 @@ export function Layout() {
         </nav>
 
         <div className="border-t border-neutral-200 p-3 dark:border-dark-border">
-          <div className="flex items-center justify-between rounded-lg px-3 py-2">
+          <NavLink
+            to="/account"
+            onClick={() => {
+              setMobileNavOpen(false);
+            }}
+            className={({ isActive }) =>
+              `flex items-center gap-3 rounded-lg px-3 py-2 ${
+                isActive
+                  ? 'bg-accent-100 dark:bg-accent/15'
+                  : 'hover:bg-neutral-100 dark:hover:bg-white/5'
+              }`
+            }
+          >
+            <CircleUserRound
+              size={18}
+              strokeWidth={2}
+              className="shrink-0 text-neutral-600 dark:text-dark-muted"
+            />
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-neutral-900 dark:text-dark-text">
                 {admin?.displayName}
               </p>
               <p className="truncate text-xs text-neutral-500 dark:text-dark-muted">
-                {admin?.email}
+                {admin?.mfaEnabled ? admin.email : 'Two-factor sign-in is off'}
               </p>
             </div>
-          </div>
+          </NavLink>
           <button
             type="button"
             onClick={() => {

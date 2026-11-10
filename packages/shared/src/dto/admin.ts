@@ -20,6 +20,10 @@ export const adminIdentitySchema = z.object({
   id: z.uuid(),
   email: z.email(),
   displayName: z.string(),
+  /** Whether this account signs in with an authenticator-app code as well as its password. */
+  mfaEnabled: z.boolean(),
+  /** True when ADMIN_MFA_REQUIRED is on and this account hasn't enrolled yet: only account setup is allowed. */
+  mfaSetupRequired: z.boolean(),
 });
 export type AdminIdentity = z.infer<typeof adminIdentitySchema>;
 
@@ -29,6 +33,48 @@ export const adminSessionSchema = z.object({
   admin: adminIdentitySchema,
 });
 export type AdminSession = z.infer<typeof adminSessionSchema>;
+
+/** Password accepted, but the account has 2FA: finish with POST /admin/auth/login/mfa. */
+export const adminMfaChallengeSchema = z.object({
+  mfaRequired: z.literal(true),
+  mfaToken: z.string(),
+});
+export type AdminMfaChallenge = z.infer<typeof adminMfaChallengeSchema>;
+export type AdminLoginResult = AdminSession | AdminMfaChallenge;
+
+/** A 6-digit authenticator code, or one of the account's one-time recovery codes. */
+export const adminMfaCodeSchema = z.string().trim().min(6).max(20);
+
+export const adminMfaLoginSchema = z.object({
+  mfaToken: z.string().min(1),
+  code: adminMfaCodeSchema,
+});
+export type AdminMfaLoginInput = z.infer<typeof adminMfaLoginSchema>;
+
+export const adminMfaSetupSchema = z.object({
+  /** For manual entry in the authenticator app. */
+  secret: z.string(),
+  /** otpauth:// URL, rendered as a QR code by the console. */
+  otpauthUrl: z.string(),
+});
+export type AdminMfaSetup = z.infer<typeof adminMfaSetupSchema>;
+
+export const adminMfaEnableSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{6}$/),
+});
+export type AdminMfaEnableInput = z.infer<typeof adminMfaEnableSchema>;
+
+export const adminRecoveryCodesSchema = z.object({ recoveryCodes: z.array(z.string()) });
+export type AdminRecoveryCodes = z.infer<typeof adminRecoveryCodesSchema>;
+
+export const adminMfaDisableSchema = z.object({
+  password: z.string().min(1),
+  code: adminMfaCodeSchema,
+});
+export type AdminMfaDisableInput = z.infer<typeof adminMfaDisableSchema>;
 
 export const adminAccessTokenSchema = z.object({
   accessToken: z.string(),
@@ -350,6 +396,7 @@ export const adminStaffRowSchema = z.object({
   email: z.email(),
   displayName: z.string(),
   disabled: z.boolean(),
+  mfaEnabled: z.boolean(),
   createdAt: z.iso.datetime(),
   deletedAt: z.iso.datetime().nullable(),
 });

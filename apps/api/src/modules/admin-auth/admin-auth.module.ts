@@ -5,13 +5,20 @@ import { AdminAuthService } from './admin-auth.service';
 import { AdminJwtAuthGuard } from './admin-jwt-auth.guard';
 import { AdminBootstrapService } from './admin-bootstrap.service';
 import { LoginAttemptsService } from './login-attempts.service';
+import { AdminMfaService } from './admin-mfa.service';
 
 @Module({
   // Registered with no default secret/options, same reasoning as AuthModule:
   // every sign/verify call passes ADMIN_JWT_ACCESS_SECRET explicitly.
   imports: [JwtModule.register({})],
   controllers: [AdminAuthController],
-  providers: [AdminAuthService, AdminJwtAuthGuard, AdminBootstrapService, LoginAttemptsService],
-  exports: [AdminAuthService, AdminJwtAuthGuard],
+  providers: [
+    AdminAuthService,
+    AdminJwtAuthGuard,
+    AdminBootstrapService,
+    LoginAttemptsService,
+    AdminMfaService,
+  ],
+  exports: [AdminAuthService, AdminJwtAuthGuard, AdminMfaService],
 })
 export class AdminAuthModule {}

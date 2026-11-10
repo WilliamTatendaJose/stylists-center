@@ -128,6 +128,18 @@ describe('resetAdminPassword', () => {
     expect(tokens.map((t) => t.revoked)).toEqual([true, false]);
   });
 
+  it('clears 2FA only when asked', async () => {
+    const db = fakeDb([{ email: 'owner@example.com' }]);
+    const row = db.rows[0] as unknown as Record<string, unknown>;
+    row.totpEnabledAt = new Date();
+    row.totpSecret = 'sealed';
+    await resetAdminPassword(db, 'owner@example.com', STRONG);
+    expect(row.totpEnabledAt).toBeInstanceOf(Date);
+    await resetAdminPassword(db, 'owner@example.com', STRONG, { clearMfa: true });
+    expect(row.totpEnabledAt).toBeNull();
+    expect(row.totpSecret).toBeNull();
+  });
+
   it('refuses a short password and an unknown account unless asked to create it', async () => {
     const db = fakeDb();
     await expect(resetAdminPassword(db, 'x@example.com', 'short')).rejects.toThrow(/12/);

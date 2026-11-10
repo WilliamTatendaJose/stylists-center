@@ -38,6 +38,11 @@ export class AdminStaffController {
     return this.adminStaff.update(id, dto, admin.id);
   }
 
+  @Post(':id/reset-mfa')
+  resetMfa(@Param('id') id: string, @CurrentAdmin() admin: { id: string }) {
+    return this.adminStaff.resetMfa(id, admin.id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string, @CurrentAdmin() admin: { id: string }) {
     return this.adminStaff.remove(id, admin.id);

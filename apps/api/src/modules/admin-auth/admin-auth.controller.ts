@@ -16,7 +16,15 @@ import type { Env } from '../../config/env';
 import { AdminAuthService } from './admin-auth.service';
 import { AdminJwtAuthGuard } from './admin-jwt-auth.guard';
 import { CurrentAdmin } from './current-admin.decorator';
-import { AdminLoginDto } from './dto';
+import {
+  AdminLoginDto,
+  AdminMfaCodeDto,
+  AdminMfaDisableDto,
+  AdminMfaEnableDto,
+  AdminMfaLoginDto,
+} from './dto';
+import { AdminMfaService } from './admin-mfa.service';
+import { AllowWithoutMfa } from './allow-without-mfa.decorator';
 import { LoginAttemptsService } from './login-attempts.service';
 import { clearAdminRefreshCookie, readAdminRefreshCookie, setAdminRefreshCookie } from './cookies';
 
@@ -26,6 +34,7 @@ export class AdminAuthController {
     private readonly adminAuth: AdminAuthService,
     private readonly config: ConfigService<Env, true>,
     private readonly attempts: LoginAttemptsService,
+    private readonly mfa: AdminMfaService,
   ) {}
 
   // 10 tries a minute per client IP (the global floor is 120), on top of the
@@ -43,8 +52,69 @@ export class AdminAuthController {
       throw error;
     }
     await this.attempts.clear(dto.email);
+    if (result.kind === 'mfa') {
+      return { mfaRequired: true as const, mfaToken: result.mfaToken };
+    }
     setAdminRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt, this.isSecure());
     return { accessToken: result.accessToken, admin: result.admin };
+  }
+
+  /**
+   * Second sign-in step for accounts with 2FA. Same per-IP limit as login,
+   * and its own per-account lockout: a 6-digit code is guessable in ~10^6
+   * tries, so 5 wrong codes lock the account's code entry for 15 minutes.
+   */
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('login/mfa')
+  @HttpCode(200)
+  async loginMfa(@Body() dto: AdminMfaLoginDto, @Res({ passthrough: true }) res: Response) {
+    const { adminId } = await this.adminAuth.readMfaChallenge(dto.mfaToken);
+    const lockKey = `mfa:${adminId}`;
+    await this.attempts.assertNotLocked(lockKey);
+    let result: Awaited<ReturnType<AdminAuthService['completeMfaLogin']>>;
+    try {
+      result = await this.adminAuth.completeMfaLogin(dto.mfaToken, dto.code);
+    } catch (error) {
+      if (error instanceof UnauthorizedException) await this.attempts.recordFailure(lockKey);
+      throw error;
+    }
+    await this.attempts.clear(lockKey);
+    setAdminRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt, this.isSecure());
+    return { accessToken: result.accessToken, admin: result.admin };
+  }
+
+  @Post('mfa/setup')
+  @HttpCode(200)
+  @UseGuards(AdminJwtAuthGuard)
+  @AllowWithoutMfa()
+  setupMfa(@CurrentAdmin() admin: { id: string }) {
+    return this.mfa.startEnrollment(admin.id);
+  }
+
+  @Post('mfa/enable')
+  @HttpCode(200)
+  @UseGuards(AdminJwtAuthGuard)
+  @AllowWithoutMfa()
+  async enableMfa(@CurrentAdmin() admin: { id: string }, @Body() dto: AdminMfaEnableDto) {
+    return { recoveryCodes: await this.mfa.confirmEnrollment(admin.id, dto.code) };
+  }
+
+  @Post('mfa/recovery-codes')
+  @HttpCode(200)
+  @UseGuards(AdminJwtAuthGuard)
+  async regenerateRecoveryCodes(
+    @CurrentAdmin() admin: { id: string },
+    @Body() dto: AdminMfaCodeDto,
+  ) {
+    return { recoveryCodes: await this.mfa.regenerateRecoveryCodes(admin.id, dto.code) };
+  }
+
+  @Post('mfa/disable')
+  @HttpCode(200)
+  @UseGuards(AdminJwtAuthGuard)
+  async disableMfa(@CurrentAdmin() admin: { id: string }, @Body() dto: AdminMfaDisableDto) {
+    await this.mfa.disable(admin.id, dto.password, dto.code);
+    return { ok: true };
   }
 
   @Post('refresh')
@@ -73,6 +143,7 @@ export class AdminAuthController {
 
   @Get('me')
   @UseGuards(AdminJwtAuthGuard)
+  @AllowWithoutMfa()
   me(@CurrentAdmin() admin: { id: string }) {
     return this.adminAuth.me(admin.id);
   }
