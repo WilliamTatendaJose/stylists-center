@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etaMinutes, KOMBI_FARE_USD_CENTS } from './eta.js';
+import { etaMinutes } from './eta.js';
 
 describe('ETA lookup table', () => {
   it('matches every value from the handoff exactly', () => {
@@ -23,9 +23,5 @@ describe('ETA lookup table', () => {
 
   it('handles the shortest seeded distance sensibly', () => {
     expect(etaMinutes(0)).toBe(6);
-  });
-
-  it('has the flat kombi fare from the handoff', () => {
-    expect(KOMBI_FARE_USD_CENTS).toBe(200);
   });
 });

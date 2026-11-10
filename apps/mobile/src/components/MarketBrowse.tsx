@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
+import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { formatUsd, type ProductCategory, type ProductRowDto, type ProductSort } from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
+  type ScreenListProps,
   Text,
   Pressable,
   SearchField,
@@ -49,13 +50,53 @@ const sorts: { value: ProductSort; label: string }[] = [
   { value: 'newest', label: 'Newest' },
 ];
 
+const keyExtractor = (product: ProductRowDto) => product.id;
+
+const openProduct = (product: ProductRowDto) => {
+  router.push({ pathname: '/market/[id]', params: { id: product.id } });
+};
+
+const ProductRow = memo(function ProductRow({ product }: { product: ProductRowDto }) {
+  return (
+    <ListRow
+      avatar={{
+        initials: product.initials,
+        tint: product.tint,
+        uri: apiAssetUrl(product.imageUrls[0]),
+        size: 54,
+      }}
+      title={product.name}
+      meta={`${product.providerName} · ${product.areaName}`}
+      // Stock is called out only when it is low enough to matter:
+      // "12 available" is noise, "Only 2 left" is a reason to decide.
+      subMeta={
+        product.stockQty <= 3
+          ? `Only ${String(product.stockQty)} left`
+          : `${String(product.stockQty)} available`
+      }
+      rightPrimary={formatUsd(product.priceUsdCents)}
+      rightCaption={`${product.distanceKm.toFixed(1)} km`}
+      onPress={() => {
+        openProduct(product);
+      }}
+    />
+  );
+});
+
+export interface MarketBrowseProps {
+  /** From `<Screen renderList>` — spread onto the list so padding/refresh match the other screens. */
+  listProps: ScreenListProps;
+  /** Rendered at the very top of the list, above the search field (e.g. Shop's Sell/Buy toggle). */
+  leading?: ReactNode;
+}
+
 /**
  * The marketplace catalogue — search, distance filter, "orders to collect"
  * shortcut, and the results list. Extracted from the client Market tab so
  * the provider Shop screen's "Buy" view can render the exact same browsing
  * experience instead of a second, drifting copy of it.
  */
-export function MarketBrowse() {
+export function MarketBrowse({ listProps, leading }: MarketBrowseProps) {
   const { colors } = useTheme();
   const maxDistanceKm = useSessionStore((s) => s.maxDistanceKm);
 
@@ -79,12 +120,25 @@ export function MarketBrowse() {
   const isSearching = query.trim().length > 0;
   const tooShort = isSearching && debouncedQuery.trim().length < MIN_SEARCH_QUERY;
 
-  const openProduct = (product: ProductRowDto) => {
-    router.push({ pathname: '/market/[id]', params: { id: product.id } });
-  };
+  const listData = useMemo<ProductRowDto[]>(
+    () => (tooShort ? [] : (items ?? [])),
+    [tooShort, items],
+  );
 
-  return (
+  const renderItem = useCallback(
+    ({ item }: { item: ProductRowDto }) => <ProductRow product={item} />,
+    [],
+  );
+
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = products;
+  const loadMore = useCallback(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+    void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  const listHeader = (
     <>
+      {leading}
       <View style={styles.searchRow}>
         <SearchField placeholder="Hair, wigs, polish…" value={query} onChangeText={setQuery} />
       </View>
@@ -243,63 +297,47 @@ export function MarketBrowse() {
         label={isSearching ? `Results for “${query.trim()}”` : 'For sale near you'}
         count={items?.length}
       />
-
-      {tooShort ? (
-        <EmptyPanel body="Keep typing — two letters or more." />
-      ) : items?.length ? (
-        <>
-          {items.map((product) => (
-            <ListRow
-              key={product.id}
-              avatar={{
-                initials: product.initials,
-                tint: product.tint,
-                uri: apiAssetUrl(product.imageUrls[0]),
-                size: 54,
-              }}
-              title={product.name}
-              meta={`${product.providerName} · ${product.areaName}`}
-              // Stock is called out only when it is low enough to matter:
-              // "12 available" is noise, "Only 2 left" is a reason to decide.
-              subMeta={
-                product.stockQty <= 3
-                  ? `Only ${String(product.stockQty)} left`
-                  : `${String(product.stockQty)} available`
-              }
-              rightPrimary={formatUsd(product.priceUsdCents)}
-              rightCaption={`${product.distanceKm.toFixed(1)} km`}
-              onPress={() => {
-                openProduct(product);
-              }}
-            />
-          ))}
-          {products.hasNextPage ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Load more items"
-              disabled={products.isFetchingNextPage}
-              onPress={() => {
-                void products.fetchNextPage();
-              }}
-              style={styles.loadMore}
-            >
-              <Text variant="meta" color={colors.accent}>
-                {products.isFetchingNextPage ? 'Loading…' : 'Show more'}
-              </Text>
-            </Pressable>
-          ) : null}
-        </>
-      ) : (
-        <EmptyPanel
-          body={
-            products.isLoading
-              ? 'Loading the market…'
-              : isSearching
-                ? `Nothing matching “${debouncedQuery.trim()}” within ${String(maxDistanceKm)} km.`
-                : `Nothing for sale within ${String(maxDistanceKm)} km yet. Try a wider distance.`
-          }
-        />
-      )}
     </>
+  );
+
+  const listEmpty = tooShort ? (
+    <EmptyPanel body="Keep typing — two letters or more." />
+  ) : (
+    <EmptyPanel
+      body={
+        products.isLoading
+          ? 'Loading the market…'
+          : isSearching
+            ? `Nothing matching “${debouncedQuery.trim()}” within ${String(maxDistanceKm)} km.`
+            : `Nothing for sale within ${String(maxDistanceKm)} km yet. Try a wider distance.`
+      }
+    />
+  );
+
+  const listFooter =
+    listData.length > 0 && hasNextPage ? (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Load more items"
+        disabled={isFetchingNextPage}
+        onPress={loadMore}
+        style={styles.loadMore}
+      >
+        <Text variant="meta" color={colors.accent}>
+          {isFetchingNextPage ? 'Loading…' : 'Show more'}
+        </Text>
+      </Pressable>
+    ) : null;
+
+  return (
+    <FlatList
+      {...listProps}
+      data={listData}
+      keyExtractor={keyExtractor}
+      renderItem={renderItem}
+      ListHeaderComponent={listHeader}
+      ListEmptyComponent={listEmpty}
+      ListFooterComponent={listFooter}
+    />
   );
 }

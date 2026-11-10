@@ -79,8 +79,7 @@ export default function Market() {
           }
         />
       }
-    >
-      <MarketBrowse />
-    </Screen>
+      renderList={(listProps) => <MarketBrowse listProps={listProps} />}
+    />
   );
 }

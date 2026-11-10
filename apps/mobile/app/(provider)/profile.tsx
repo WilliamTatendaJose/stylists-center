@@ -61,6 +61,7 @@ const styles = StyleSheet.create({
   detailsCard: { paddingHorizontal: space.l },
   cardAction: { marginTop: space.l },
   accountGap: { marginTop: space.s },
+  linkStack: { gap: space.xs },
   subscriptionTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -433,11 +434,13 @@ export default function ProviderProfile() {
               }}
             />
             {data ? (
-              <View style={[styles.row, styles.accountGap]}>
-                <View style={styles.grow}>
+              // Stacked, not side by side: at this label size "View as a client"
+              // wrapped onto two lines in half the card's width.
+              <View style={[styles.linkStack, styles.accountGap]}>
+                <View>
                   <Button label="Share my page" variant="ghost" block onPress={shareProfile} />
                 </View>
-                <View style={styles.grow}>
+                <View>
                   <Button
                     label="View as a client"
                     variant="ghost"

@@ -148,11 +148,11 @@ export function useCreateProviderProfile() {
   return useMutation({
     mutationFn: async (input: CreateProviderProfileInput) => {
       try {
-        await apiFetch<CreateProviderProfileResponse>('/v1/providers', {
+        const created = await apiFetch<CreateProviderProfileResponse>('/v1/providers', {
           method: 'POST',
           body: input,
         });
-        return { kind: 'created' as const, displayName: input.displayName };
+        return { kind: 'created' as const, displayName: input.displayName, id: created.id };
       } catch (error) {
         const me = await confirmAfterTimeout(
           error,
@@ -178,6 +178,7 @@ export function useCreateProviderProfile() {
                 selectedAccountType: 'provider',
                 onboardingComplete: true,
                 hasProviderProfile: true,
+                providerProfileId: outcome.id,
                 profileComplete: true,
               }
             : current,

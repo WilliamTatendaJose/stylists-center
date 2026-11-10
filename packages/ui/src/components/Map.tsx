@@ -45,7 +45,9 @@ export interface ScMapProps {
  * Kept as one named constant so that swap is a one-line change.
  */
 const OSM_TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY;
+// Asserted because expo-image's types (via expo-modules-core) widen
+// `process.env` lookups to `any` across this package.
+const MAPTILER_KEY = process.env.EXPO_PUBLIC_MAPTILER_KEY as string | undefined;
 const MAPTILER_STYLE_URL = MAPTILER_KEY
   ? `https://api.maptiler.com/maps/streets-v2/style.json?key=${MAPTILER_KEY}`
   : null;

@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -12,7 +13,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ChatService } from './chat.service';
-import { SendMessageDto, StartConversationDto } from './dto';
+import { MessagesQueryDto, SendMessageDto, StartConversationDto } from './dto';
 import {
   MAX_CHAT_ATTACHMENTS,
   MAX_CHAT_ATTACHMENT_BYTES,
@@ -40,8 +41,12 @@ export class ChatController {
   }
 
   @Get(':id/messages')
-  getMessages(@Param('id') id: string, @CurrentUser() user: { id: string }) {
-    return this.chat.getMessages(id, user.id);
+  getMessages(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Query() query: MessagesQueryDto,
+  ) {
+    return this.chat.getMessages(id, user.id, query);
   }
 
   @Post(':id/messages')

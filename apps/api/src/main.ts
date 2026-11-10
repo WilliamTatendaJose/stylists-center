@@ -4,6 +4,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { RequestMethod } from '@nestjs/common';
 import helmet from 'helmet';
+import compression from 'compression';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module';
 import type { Env } from './config/env';
@@ -43,6 +44,10 @@ async function bootstrap() {
   });
 
   app.use(helmet());
+  // JSON responses are gzip-compressed, which matters for clients on metered
+  // connections. The middleware's default filter already skips types that
+  // don't benefit (e.g. images), so no custom filter is needed here.
+  app.use(compression());
   // Only the admin console is a browser client — the mobile app's requests
   // aren't subject to CORS at all. `credentials: true` is what lets the
   // browser attach the admin refresh cookie, which is why the origin can't

@@ -95,6 +95,7 @@ export class PaymentStatusService {
         feeUsdCents: polled === 'refunded' ? 0 : payment.feeUsdCents,
         externalRef: payment.externalRef,
         reference: payment.reference,
+        channel: payment.channel,
       },
     });
 

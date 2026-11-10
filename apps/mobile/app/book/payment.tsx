@@ -2,20 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { space } from '@sc/tokens';
-import { formatUsd, isValidMobileMoneyPhone } from '@sc/shared';
-import {
-  Screen,
-  ScreenHeader,
-  Text,
-  RadioCard,
-  RuleList,
-  Button,
-  TextField,
-  useTheme,
-} from '@sc/ui';
+import { formatUsd, PAY_CHANNEL_LABELS, PHONE_PAY_CHANNELS, type PayChannel } from '@sc/shared';
+import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button, useTheme } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateBooking } from '../../src/api/hooks/useBookings.js';
 import { useMe } from '../../src/api/hooks/useMe.js';
+import { usePayChannels } from '../../src/api/hooks/usePayments.js';
+import { OnlinePaymentFields, payerPhoneError } from '../../src/components/OnlinePaymentFields.js';
 import { useBookingDraftStore, usePendingPaymentStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { formatSlotLabel, isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
@@ -27,8 +20,6 @@ const styles = StyleSheet.create({
   section: { marginBottom: space.xxl },
   sectionLabel: { marginBottom: space.m },
   radioGap: { marginBottom: space.s },
-  phoneField: { marginTop: space.l },
-  phoneHelp: { marginTop: space.s },
 });
 
 /** Payment (handoff screen 7, Step 2/2). */
@@ -51,6 +42,11 @@ export default function Payment() {
   const { data: me } = useMe();
   const [payerPhone, setPayerPhone] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const { channels } = usePayChannels();
+  const [chosenChannel, setChosenChannel] = useState<PayChannel>('ecocash');
+  // A channel the server stopped offering (or one an older server never did)
+  // falls back to the first it does offer rather than being sent and refused.
+  const payChannel = channels.includes(chosenChannel) ? chosenChannel : (channels[0] ?? 'ecocash');
   const [doneParams, setDoneParams] = useState<Record<string, string> | null>(null);
   /**
    * Only ever set by a checkout started on this visit.
@@ -125,8 +121,10 @@ export default function Payment() {
     setBookingError(null);
     // Catch a bad number here rather than letting the server reject the whole
     // booking for it — the slot and service are fine, only this field isn't.
-    if (paymentMethod === 'ecocash' && !isValidMobileMoneyPhone(payerPhone.trim())) {
-      setPhoneError('Enter a valid mobile number, for example 077 000 0000.');
+    const numberError =
+      paymentMethod === 'ecocash' ? payerPhoneError(payChannel, payerPhone) : null;
+    if (numberError) {
+      setPhoneError(numberError);
       return;
     }
     setPhoneError(null);
@@ -140,7 +138,10 @@ export default function Payment() {
         startsAt: isoFromHarareSlot(date, time),
         paymentMethod,
         ...(matchId ? { matchId } : {}),
-        ...(paymentMethod === 'ecocash' ? { payerPhone: payerPhone.trim() } : {}),
+        ...(paymentMethod === 'ecocash' ? { payChannel } : {}),
+        ...(paymentMethod === 'ecocash' && PHONE_PAY_CHANNELS.has(payChannel)
+          ? { payerPhone: payerPhone.trim() }
+          : {}),
       },
       {
         onSuccess: (created) => {
@@ -162,7 +163,7 @@ export default function Payment() {
           // params it was arriving empty, and the waiting screen's guard then
           // sent the user to the home tab with the booking unpaid and nothing
           // polling it.
-          if (created.instructions || created.checkoutUrl) {
+          if (created.instructions || created.checkoutUrl || created.action) {
             setPendingPayment({
               bookingId: created.id,
               reference: created.reference,
@@ -173,6 +174,8 @@ export default function Payment() {
               areaName: provider.areaName,
               ...(created.instructions ? { instructions: created.instructions } : {}),
               ...(created.checkoutUrl ? { checkoutUrl: created.checkoutUrl } : {}),
+              ...(created.action ? { action: created.action } : {}),
+              payChannel,
             });
             setHandingOff(true);
             return;
@@ -276,7 +279,7 @@ export default function Payment() {
         <View style={styles.radioGap}>
           <RadioCard
             title="Paynow — pay securely"
-            description="Choose EcoCash, card, or another supported Paynow method. We record payment only after Paynow verifies it."
+            description={`Pay with ${channels.map((c) => PAY_CHANNEL_LABELS[c]).join(', ')}. We record payment only after Paynow verifies it.`}
             dot
             selected={paymentMethod === 'ecocash'}
             onPress={() => {
@@ -295,27 +298,20 @@ export default function Payment() {
         />
 
         {paymentMethod === 'ecocash' ? (
-          <View style={styles.phoneField}>
-            <TextField
-              label="EcoCash number"
-              value={payerPhone}
-              onChangeText={(value) => {
-                setPayerPhone(value);
-                setPhoneError(null);
-              }}
-              placeholder="077 000 0000"
-              keyboardType="phone-pad"
-            />
-            <Text
-              variant="metaSmall"
-              color={phoneError ? colors.accent700 : 'neutral600'}
-              style={styles.phoneHelp}
-              {...(phoneError ? { accessibilityLiveRegion: 'polite' as const } : {})}
-            >
-              {phoneError ??
-                "We'll send the payment prompt here. It doesn't have to be your login number."}
-            </Text>
-          </View>
+          <OnlinePaymentFields
+            channels={channels}
+            channel={payChannel}
+            onChannelChange={(next) => {
+              setChosenChannel(next);
+              setPhoneError(null);
+            }}
+            phone={payerPhone}
+            onPhoneChange={(value) => {
+              setPayerPhone(value);
+              setPhoneError(null);
+            }}
+            phoneError={phoneError}
+          />
         ) : null}
       </View>
     </Screen>

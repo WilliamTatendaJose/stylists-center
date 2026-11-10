@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
-import { RefreshControl, StyleSheet, View } from 'react-native';
+import { memo, useMemo, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { formatBookingWhen } from '@sc/shared';
+import { formatBookingWhen, type ConversationDto } from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
   Screen,
@@ -31,6 +31,73 @@ const styles = StyleSheet.create({
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.s },
 });
 
+const openProvider = (providerId: string | undefined) => {
+  if (!providerId) return;
+  router.push({ pathname: '/provider/[id]', params: { id: providerId } });
+};
+
+const keyExtractor = (conversation: ConversationDto) => conversation.id;
+
+const ConversationRow = memo(function ConversationRow({
+  conversation,
+}: {
+  conversation: ConversationDto;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View
+      key={conversation.id}
+      style={
+        conversation.unreadCount > 0
+          ? [styles.unreadRow, { backgroundColor: colors.accent100 }]
+          : undefined
+      }
+    >
+      <ListRow
+        avatar={{
+          initials: conversation.initials,
+          tint: conversation.tint,
+          uri: apiAssetUrl(conversation.imageUrl),
+          size: 48,
+        }}
+        title={conversation.counterpartyName}
+        meta={
+          conversation.lastMessagePreview
+            ? `${conversation.lastMessageMine ? 'You: ' : ''}${conversation.lastMessagePreview}`
+            : 'Start the conversation…'
+        }
+        subMeta={conversation.unreadCount > 0 ? 'New message' : undefined}
+        rightCaption={formatBookingWhen(conversation.lastMessageAt)}
+        right={
+          conversation.unreadCount > 0 ? (
+            <Badge label={String(conversation.unreadCount)} tone="accent" />
+          ) : null
+        }
+        onPress={() => {
+          router.push({
+            pathname: '/chat/[threadId]',
+            params: { threadId: conversation.id },
+          });
+        }}
+        onAvatarPress={
+          conversation.counterpartyProviderId
+            ? () => openProvider(conversation.counterpartyProviderId)
+            : undefined
+        }
+        avatarAccessibilityLabel={
+          conversation.counterpartyProviderId
+            ? `View ${conversation.counterpartyName}'s stylist profile`
+            : undefined
+        }
+      />
+    </View>
+  );
+});
+
+const renderConversation = ({ item }: { item: ConversationDto }) => (
+  <ConversationRow conversation={item} />
+);
+
 /** Searchable Messages inbox with an explicit unread queue. */
 export default function Messages() {
   const { colors } = useTheme();
@@ -51,13 +118,17 @@ export default function Messages() {
   );
   const unreadTotal = conversations.reduce((total, row) => total + row.unreadCount, 0);
   const normalizedQuery = query.trim().toLocaleLowerCase();
-  const visible = sorted.filter((conversation) => {
-    if (filter === 'unread' && conversation.unreadCount === 0) return false;
-    if (!normalizedQuery) return true;
-    return `${conversation.counterpartyName} ${conversation.lastMessagePreview}`
-      .toLocaleLowerCase()
-      .includes(normalizedQuery);
-  });
+  const visible = useMemo(
+    () =>
+      sorted.filter((conversation) => {
+        if (filter === 'unread' && conversation.unreadCount === 0) return false;
+        if (!normalizedQuery) return true;
+        return `${conversation.counterpartyName} ${conversation.lastMessagePreview}`
+          .toLocaleLowerCase()
+          .includes(normalizedQuery);
+      }),
+    [sorted, filter, normalizedQuery],
+  );
 
   const emptyBody = normalizedQuery
     ? `No conversations match “${query.trim()}”.`
@@ -67,10 +138,29 @@ export default function Messages() {
         ? 'Loading your conversations…'
         : 'No conversations yet — message a stylist or buyer to start one.';
 
-  const openProvider = (providerId: string | undefined) => {
-    if (!providerId) return;
-    router.push({ pathname: '/provider/[id]', params: { id: providerId } });
-  };
+  const listHeader = (
+    <>
+      <View style={styles.controls}>
+        <View style={styles.searchRow}>
+          <SearchField
+            placeholder="Search people or messages"
+            value={query}
+            onChangeText={setQuery}
+          />
+        </View>
+        <SegmentedPills
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all', label: `All (${String(conversations.length)})` },
+            { value: 'unread', label: `Unread (${String(unreadTotal)})` },
+          ]}
+        />
+      </View>
+
+      {isError ? <ServerConnectionPanel error={error} onRetry={() => void refetch()} /> : null}
+    </>
+  );
 
   return (
     <Screen
@@ -97,79 +187,16 @@ export default function Messages() {
           onRefresh={() => void refetch()}
         />
       }
-    >
-      <View style={styles.controls}>
-        <View style={styles.searchRow}>
-          <SearchField
-            placeholder="Search people or messages"
-            value={query}
-            onChangeText={setQuery}
-          />
-        </View>
-        <SegmentedPills
-          value={filter}
-          onChange={setFilter}
-          options={[
-            { value: 'all', label: `All (${String(conversations.length)})` },
-            { value: 'unread', label: `Unread (${String(unreadTotal)})` },
-          ]}
+      renderList={(listProps) => (
+        <FlatList
+          {...listProps}
+          data={visible}
+          keyExtractor={keyExtractor}
+          renderItem={renderConversation}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={isError ? null : <EmptyPanel body={emptyBody} />}
         />
-      </View>
-
-      {isError ? <ServerConnectionPanel error={error} onRetry={() => void refetch()} /> : null}
-
-      {!isError && visible.length === 0 ? (
-        <EmptyPanel body={emptyBody} />
-      ) : (
-        visible.map((conversation) => (
-          <View
-            key={conversation.id}
-            style={
-              conversation.unreadCount > 0
-                ? [styles.unreadRow, { backgroundColor: colors.accent100 }]
-                : undefined
-            }
-          >
-            <ListRow
-              avatar={{
-                initials: conversation.initials,
-                tint: conversation.tint,
-                uri: apiAssetUrl(conversation.imageUrl),
-                size: 48,
-              }}
-              title={conversation.counterpartyName}
-              meta={
-                conversation.lastMessagePreview
-                  ? `${conversation.lastMessageMine ? 'You: ' : ''}${conversation.lastMessagePreview}`
-                  : 'Start the conversation…'
-              }
-              subMeta={conversation.unreadCount > 0 ? 'New message' : undefined}
-              rightCaption={formatBookingWhen(conversation.lastMessageAt)}
-              right={
-                conversation.unreadCount > 0 ? (
-                  <Badge label={String(conversation.unreadCount)} tone="accent" />
-                ) : null
-              }
-              onPress={() => {
-                router.push({
-                  pathname: '/chat/[threadId]',
-                  params: { threadId: conversation.id },
-                });
-              }}
-              onAvatarPress={
-                conversation.counterpartyProviderId
-                  ? () => openProvider(conversation.counterpartyProviderId)
-                  : undefined
-              }
-              avatarAccessibilityLabel={
-                conversation.counterpartyProviderId
-                  ? `View ${conversation.counterpartyName}'s stylist profile`
-                  : undefined
-              }
-            />
-          </View>
-        ))
       )}
-    </Screen>
+    />
   );
 }

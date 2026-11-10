@@ -3,13 +3,16 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { Check } from 'lucide-react-native';
-import { formatUsd } from '@sc/shared';
+import { formatUsd, PAY_CHANNEL_LABELS } from '@sc/shared';
 import { Screen, Text, Button, useTheme } from '@sc/ui';
 import { space } from '@sc/tokens';
 import { useSubscriptionPaymentStatus } from '../../src/api/hooks/useProviders.js';
 import { usePendingSubscriptionStore } from '../../src/state/index.js';
+import { PaymentActionPanel } from '../../src/components/PaymentActionPanel.js';
 
 const POLL_TIMEOUT_MS = 90_000;
+/** InnBucks and O'mari need the stylist to switch apps or read an SMS, which takes longer than a prompt. */
+const ACTION_POLL_TIMEOUT_MS = 5 * 60_000;
 const SUCCESS_STATUSES = new Set(['held', 'paid', 'released']);
 const FAILURE_STATUSES = new Set(['failed', 'refunded', 'disputed']);
 
@@ -52,15 +55,20 @@ export default function SubscriptionPaying() {
 
   useEffect(() => {
     if (!status || SUCCESS_STATUSES.has(status)) return;
-    const timer = setTimeout(() => setTimedOut(true), POLL_TIMEOUT_MS);
+    const timer = setTimeout(
+      () => setTimedOut(true),
+      pending?.action ? ACTION_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
+    );
     return () => clearTimeout(timer);
-  }, [status]);
+  }, [status, pending?.action]);
 
   if (!pending) return null;
 
   const paid = status ? SUCCESS_STATUSES.has(status) : false;
   const failed = status ? FAILURE_STATUSES.has(status) : false;
   const viaBrowser = Boolean(pending.checkoutUrl);
+  const channelLabel = PAY_CHANNEL_LABELS[pending.payChannel ?? 'ecocash'];
+  const action = pending.action;
   const showExit = failed || timedOut;
   const leave = () => {
     clearPending();
@@ -95,7 +103,11 @@ export default function SubscriptionPaying() {
                 ? 'Still waiting on Paynow'
                 : viaBrowser
                   ? 'Finish paying in Paynow'
-                  : 'Check your phone'}
+                  : action?.kind === 'innbucks'
+                    ? 'Approve in InnBucks'
+                    : action?.kind === 'otp'
+                      ? "Enter your O'mari code"
+                      : 'Check your phone'}
         </Text>
         <Text variant="body" color="neutral700" style={styles.instructions}>
           {paid
@@ -107,8 +119,11 @@ export default function SubscriptionPaying() {
                 : (pending.instructions ??
                   (viaBrowser
                     ? 'Complete the payment in the Paynow window. This screen updates on its own once it clears.'
-                    : `Approve the EcoCash prompt on your phone to confirm this ${formatUsd(pending.priceUsdCents)} subscription payment.`))}
+                    : `Approve the ${channelLabel} prompt on your phone to confirm this ${formatUsd(pending.priceUsdCents)} subscription payment.`))}
         </Text>
+        {action && pending.reference && !paid && !showExit ? (
+          <PaymentActionPanel action={action} reference={pending.reference} />
+        ) : null}
       </View>
     </Screen>
   );

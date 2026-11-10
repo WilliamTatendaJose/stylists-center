@@ -27,6 +27,3 @@ export function etaMinutes(distanceKm: number): number {
   }
   return ETA_FALLBACK_MINUTES;
 }
-
-/** Flat kombi (shared taxi) fare shown alongside distance/driving on the Directions screen. */
-export const KOMBI_FARE_USD_CENTS = 200;

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { PayChannel, PaymentAction } from '@sc/shared';
 
 /**
  * The booking whose Paynow payment is currently being waited on.
@@ -26,6 +27,10 @@ export interface PendingPayment {
   instructions?: string;
   /** Set instead when Paynow fell back to its hosted checkout page. */
   checkoutUrl?: string;
+  /** An InnBucks code to show, or an O'mari OTP to collect, before the payment can settle. */
+  action?: PaymentAction;
+  /** Which wallet or card is paying — for the wording on the waiting and done screens. */
+  payChannel?: PayChannel;
 }
 
 interface PendingPaymentState {

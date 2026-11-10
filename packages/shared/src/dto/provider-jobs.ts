@@ -69,6 +69,8 @@ export const providerEarningsEntrySchema = z.object({
   feeUsdCents: z.number().int(),
   status: z.enum(['pending', 'paid', 'held', 'released', 'refunded', 'failed', 'disputed']),
   createdAt: z.iso.datetime(),
+  /** True once admin-recorded payouts cover this released entry (oldest released entries are covered first). */
+  paidOut: z.boolean(),
 });
 export type ProviderEarningsEntryDto = z.infer<typeof providerEarningsEntrySchema>;
 
@@ -79,8 +81,13 @@ export type ProviderEarningsEntryDto = z.infer<typeof providerEarningsEntrySchem
  * Neither total counts a refunded or failed entry.
  */
 export const providerEarningsSchema = z.object({
+  /** Released from escrow into the provider's balance — earned, but not necessarily paid out yet. */
   releasedUsdCents: z.number().int(),
   pendingUsdCents: z.number().int(),
+  /** What an admin has recorded as actually transferred to the provider (Payout rows). */
+  paidOutUsdCents: z.number().int(),
+  /** Released but not yet covered by a recorded payout. */
+  awaitingPayoutUsdCents: z.number().int(),
   entries: z.array(providerEarningsEntrySchema),
 });
 export type ProviderEarningsDto = z.infer<typeof providerEarningsSchema>;

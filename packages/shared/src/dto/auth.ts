@@ -48,6 +48,8 @@ export const meSchema = z.object({
   selectedAccountType: activeRoleSchema.nullable(),
   onboardingComplete: z.boolean(),
   hasProviderProfile: z.boolean(),
+  /** The user's own stylist page, so the app can hide Book / Add to cart on their own listings. */
+  providerProfileId: z.uuid().nullable(),
   verificationStatus: z.enum(['unverified', 'pending', 'verified']),
   /** False until `displayName` has been changed away from its sign-up placeholder (the phone number itself). */
   profileComplete: z.boolean(),

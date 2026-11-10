@@ -343,6 +343,17 @@ describe('BookingsService', () => {
     ).rejects.toThrow('no longer available');
   });
 
+  it('refuses a stylist booking their own service', async () => {
+    await expect(
+      bookings.create(providerAUserId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt: futureSlot(5),
+        paymentMethod: 'cash',
+      }),
+    ).rejects.toThrow("You can't book your own services");
+  });
+
   it('rejects a direct booking against a provider whose subscription has lapsed', async () => {
     await expect(
       bookings.create(clientId, {

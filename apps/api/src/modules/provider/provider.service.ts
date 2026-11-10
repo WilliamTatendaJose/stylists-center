@@ -13,7 +13,6 @@ import {
   formatBookingWhen,
   isSubscriptionActive,
   needsCashReconciliation,
-  normalizePhone,
   type BookingStatus,
   type CreateProviderProductInput,
   type UpdateProviderProductInput,
@@ -44,11 +43,13 @@ import { ConfigService } from '@nestjs/config';
 import { Optional } from '@nestjs/common';
 import type { Env } from '../../config/env';
 import { walletRates } from '../../config/wallet-rates';
+import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { payerPhoneFor } from '../payments/pay-channels';
 import { PaymentStatusService } from '../payments/payment-status.service';
 import { applySubscriptionPayment } from '../payments/payments.service';
 import { toBookingRowDto } from '../bookings/mappers';
@@ -389,8 +390,24 @@ export class ProviderService {
   async getOrders(providerProfileId: string): Promise<ProviderOrderDto[]> {
     const orders = await this.prisma.order.findMany({
       where: { providerId: providerProfileId },
-      include: { buyer: true, items: true, payments: true },
+      // Only what the mapping below reads, and only the newest 100 — the
+      // seller screen never needs a shop's full order history.
+      select: {
+        id: true,
+        reference: true,
+        status: true,
+        paymentMethod: true,
+        totalUsdCents: true,
+        createdAt: true,
+        pickupNote: true,
+        buyer: { select: { displayName: true } },
+        items: {
+          select: { productId: true, nameSnapshot: true, priceUsdCents: true, quantity: true },
+        },
+        payments: { select: { status: true } },
+      },
       orderBy: { createdAt: 'desc' },
+      take: 100,
     });
     return orders.map((order) => ({
       id: order.id,
@@ -684,18 +701,15 @@ export class ProviderService {
       where: { providerProfile: { id: providerProfileId } },
       select: { phone: true },
     });
-    // The number the stylist typed, which need not be their login line.
-    const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
-    const paymentPhone = payerPhone ?? user.phone;
-    if (!paymentPhone) {
-      throw new BadRequestException('Enter the EcoCash phone number for this payment');
-    }
+    const payChannel = input.payChannel ?? 'ecocash';
+    const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, user.phone);
     const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
     const intent = await this.paymentGateway.createCheckout({
       reference,
       amountUsdCents,
       description: 'Style Center monthly subscription',
-      phone: paymentPhone,
+      channel: payChannel,
+      ...(paymentPhone ? { phone: paymentPhone } : {}),
     });
     await this.prisma.payment.create({
       data: {
@@ -705,6 +719,8 @@ export class ProviderService {
         amountUsdCents,
         externalRef: intent.externalRef,
         reference,
+        channel: payChannel,
+        otpUrl: intent.otpUrl ?? null,
       },
     });
     // The fake dev adapter settles instantly ('held'); Paynow returns
@@ -717,6 +733,8 @@ export class ProviderService {
       pending: !paidNow,
       ...(intent.checkoutUrl ? { checkoutUrl: intent.checkoutUrl } : {}),
       ...(intent.instructions ? { instructions: intent.instructions } : {}),
+      ...(intent.action ? { action: intent.action } : {}),
+      reference,
     };
   }
 
@@ -819,68 +837,117 @@ export class ProviderService {
 
   /**
    * The provider side of the same Payment ledger every escrow movement in
-   * this codebase writes to. `releasedUsdCents` is what has actually
-   * settled (net of the platform fee); `pendingUsdCents` is still held —
-   * work in progress, not a payout yet. Refunded/failed entries count
+   * this codebase writes to. `releasedUsdCents` is what escrow has let go
+   * of into the provider's balance (net of the platform fee) — earned, not
+   * necessarily paid: `paidOutUsdCents` is what an admin has recorded as
+   * actually transferred. `pendingUsdCents` is still held — work in progress. Refunded/failed entries count
    * toward neither total but still appear in the list, since a stylist
    * needs to see a refund happened, not just that it isn't money for them.
    */
   async getEarnings(providerProfileId: string): Promise<ProviderEarningsDto> {
-    const payments = await this.prisma.payment.findMany({
-      where: {
-        OR: [
-          { booking: { providerId: providerProfileId } },
-          { order: { providerId: providerProfileId } },
-        ],
-      },
-      include: {
-        booking: { include: { client: true } },
-        order: { include: { buyer: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    let releasedUsdCents = 0;
-    let pendingUsdCents = 0;
-
     // The ledger is append-only, so a completed Paynow job has both a held
     // row and a newer released row. Totals describe the current state of
-    // each booking/order, not the sum of every historical movement.
-    const countedSubjects = new Set<string>();
-    const currentPayments: typeof payments = [];
-    for (const payment of payments) {
-      const subject = payment.bookingId
-        ? `booking:${payment.bookingId}`
-        : `order:${String(payment.orderId)}`;
-      if (countedSubjects.has(subject)) continue;
-      countedSubjects.add(subject);
-      currentPayments.push(payment);
-      if (payment.status === 'released') {
-        releasedUsdCents += payment.amountUsdCents - payment.feeUsdCents;
-      } else if (['pending', 'paid', 'held', 'disputed'].includes(payment.status)) {
-        pendingUsdCents += payment.amountUsdCents;
-      }
-    }
+    // each booking/order, not the sum of every historical movement: only the
+    // newest row per subject (booking, else order) counts. DISTINCT ON picks
+    // that row in the database so neither totals nor the list need every
+    // payment the provider ever had loaded into memory. `id DESC` is only a
+    // deterministic tiebreak for rows sharing a createdAt.
+    const subjectKey = Prisma.sql`(CASE WHEN p."bookingId" IS NOT NULL THEN 'booking:' || p."bookingId" ELSE 'order:' || p."orderId" END)`;
+    const latestPayments = Prisma.sql`
+      WITH latest AS (
+        SELECT DISTINCT ON (${subjectKey}) p.*
+        FROM "Payment" p
+        WHERE EXISTS (
+                SELECT 1 FROM "Booking" b
+                WHERE b.id = p."bookingId" AND b."providerId" = ${providerProfileId}
+              )
+           OR EXISTS (
+                SELECT 1 FROM "Order" o
+                WHERE o.id = p."orderId" AND o."providerId" = ${providerProfileId}
+              )
+        ORDER BY ${subjectKey}, p."createdAt" DESC, p.id DESC
+      )`;
+
+    const [[totals], rows, payouts] = await Promise.all([
+      // Totals cover every subject, not just the 100 listed below.
+      this.prisma.$queryRaw<{ released: bigint; pending: bigint }[]>`
+        ${latestPayments}
+        SELECT
+          coalesce(sum("amountUsdCents" - "feeUsdCents") FILTER (WHERE status = 'released'), 0)::bigint AS released,
+          coalesce(sum("amountUsdCents") FILTER (WHERE status IN ('pending', 'paid', 'held', 'disputed')), 0)::bigint AS pending
+        FROM latest
+      `,
+      this.prisma.$queryRaw<
+        {
+          id: string;
+          bookingId: string | null;
+          reference: string | null;
+          counterpartyName: string | null;
+          amountUsdCents: number;
+          feeUsdCents: number;
+          status: string;
+          createdAt: Date;
+          releasedRunning: bigint;
+        }[]
+      >`
+        ${latestPayments}
+        SELECT l.id,
+               l."bookingId",
+               coalesce(b.reference, o.reference) AS reference,
+               coalesce(bc."displayName", ob."displayName") AS "counterpartyName",
+               l."amountUsdCents",
+               l."feeUsdCents",
+               l.status,
+               l."createdAt",
+               -- Released earnings up to and including this row, oldest
+               -- first, over ALL of the provider's subjects (the window runs
+               -- before the LIMIT). Payouts are recorded as lump sums, so
+               -- they are attributed to the oldest released jobs first.
+               coalesce(sum(l."amountUsdCents" - l."feeUsdCents")
+                 FILTER (WHERE l.status = 'released')
+                 OVER (ORDER BY l."createdAt", l.id), 0)::bigint AS "releasedRunning"
+        FROM latest l
+        LEFT JOIN "Booking" b ON b.id = l."bookingId"
+        LEFT JOIN "User" bc ON bc.id = b."clientId"
+        LEFT JOIN "Order" o ON o.id = l."orderId"
+        LEFT JOIN "User" ob ON ob.id = o."buyerId"
+        ORDER BY l."createdAt" DESC, l.id DESC
+        LIMIT 100
+      `,
+      // What an admin has actually recorded as paid to this provider.
+      this.prisma.payout.aggregate({
+        where: { providerId: providerProfileId },
+        _sum: { amountUsdCents: true },
+      }),
+    ]);
+    const paidOutUsdCents = payouts._sum.amountUsdCents ?? 0;
+    const releasedUsdCents = Number(totals?.released ?? 0);
 
     // History is a provider-facing statement of where each job/order stands
     // now, not the internal escrow audit trail. Rendering every ledger row
     // made one completed job appear twice as both "In progress" and "Paid
     // out", even though the totals above already treated it as one payout.
-    const entries: ProviderEarningsEntryDto[] = currentPayments.map((payment) => {
-      return {
-        id: payment.id,
-        reference: payment.booking?.reference ?? payment.order?.reference ?? '',
-        kind: payment.bookingId ? 'booking' : 'order',
-        counterpartyName:
-          payment.booking?.client.displayName ?? payment.order?.buyer.displayName ?? '',
-        amountUsdCents: payment.amountUsdCents,
-        feeUsdCents: payment.feeUsdCents,
-        status: payment.status as ProviderEarningsEntryDto['status'],
-        createdAt: payment.createdAt.toISOString(),
-      };
-    });
+    const entries: ProviderEarningsEntryDto[] = rows.map((payment) => ({
+      id: payment.id,
+      reference: payment.reference ?? '',
+      kind: payment.bookingId ? 'booking' : 'order',
+      counterpartyName: payment.counterpartyName ?? '',
+      amountUsdCents: payment.amountUsdCents,
+      feeUsdCents: payment.feeUsdCents,
+      status: payment.status as ProviderEarningsEntryDto['status'],
+      createdAt: payment.createdAt.toISOString(),
+      // "Released" only means escrow let go of it into the provider's balance;
+      // it is paid out once recorded payouts cover it.
+      paidOut: payment.status === 'released' && Number(payment.releasedRunning) <= paidOutUsdCents,
+    }));
 
-    return { releasedUsdCents, pendingUsdCents, entries };
+    return {
+      releasedUsdCents,
+      pendingUsdCents: Number(totals?.pending ?? 0),
+      paidOutUsdCents,
+      awaitingPayoutUsdCents: Math.max(0, releasedUsdCents - paidOutUsdCents),
+      entries,
+    };
   }
 
   /** Append-only, same as every other escrow movement in this codebase. */

@@ -21,7 +21,6 @@ import {
   isSubscriptionActive,
   FREE_CANCELLATION_WINDOW_HOURS,
   needsCashReconciliation,
-  normalizePhone,
 } from '@sc/shared';
 import { ConfigService } from '@nestjs/config';
 import { Optional } from '@nestjs/common';
@@ -37,6 +36,7 @@ import {
   type PaymentIntentResult,
 } from '../payments/payment-gateway.port';
 import { PaymentStatusService } from '../payments/payment-status.service';
+import { payerPhoneFor } from '../payments/pay-channels';
 import { TrustService } from '../trust/trust.service';
 import { toBookingRowDto } from './mappers';
 import { expireStaleBookingRequests } from './booking-expiry';
@@ -64,6 +64,11 @@ export class BookingsService {
     });
     if (service?.providerId !== input.providerId) {
       throw new NotFoundException('Service not found for this provider');
+    }
+    // A stylist booking themselves would pay into their own escrow and
+    // collect it back as earnings — a way to fake completed jobs and ratings.
+    if (service.provider.userId === clientId) {
+      throw new BadRequestException("You can't book your own services");
     }
     // Discovery (search, "Available now", smart-match fan-out) already
     // excludes a provider whose subscription has lapsed — this closes the
@@ -103,23 +108,19 @@ export class BookingsService {
     // Paynow payment intent with no booking, which is recoverable; a wedged
     // MatchRequest was not.
     let checkoutIntent: PaymentIntentResult | undefined;
+    const payChannel = input.payChannel ?? 'ecocash';
     if (input.paymentMethod === 'ecocash') {
       const client = await this.prisma.user.findUniqueOrThrow({
         where: { id: clientId },
         select: { phone: true },
       });
-      // The number the client typed at checkout, which need not be the line
-      // they log in with. Normalised here so the adapter always receives E.164.
-      const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
-      const paymentPhone = payerPhone ?? client.phone;
-      if (!paymentPhone) {
-        throw new BadRequestException('Enter the EcoCash phone number for this payment');
-      }
+      const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, client.phone);
       checkoutIntent = await this.paymentGateway.createCheckout({
         reference,
         amountUsdCents: service.priceUsdCents,
         description: `Booking ${reference}: ${service.name}`,
-        phone: paymentPhone,
+        channel: payChannel,
+        ...(paymentPhone ? { phone: paymentPhone } : {}),
       });
     }
 
@@ -183,6 +184,8 @@ export class BookingsService {
             amountUsdCents: service.priceUsdCents,
             externalRef: checkoutIntent.externalRef,
             reference,
+            channel: payChannel,
+            otpUrl: checkoutIntent.otpUrl ?? null,
           },
         });
       }
@@ -199,6 +202,7 @@ export class BookingsService {
       status: booking.status,
       ...(checkoutIntent?.checkoutUrl ? { checkoutUrl: checkoutIntent.checkoutUrl } : {}),
       ...(checkoutIntent?.instructions ? { instructions: checkoutIntent.instructions } : {}),
+      ...(checkoutIntent?.action ? { action: checkoutIntent.action } : {}),
     };
   }
 
@@ -309,8 +313,11 @@ export class BookingsService {
     await expireStaleBookingRequests(this.prisma, { clientId });
     const bookings = await this.prisma.booking.findMany({
       where: { clientId },
+      // toBookingRowDto is typed against the full provider/service rows, so
+      // the include stays; the cap is what bounds the payload.
       include: { provider: true, service: true },
       orderBy: { startsAt: 'desc' },
+      take: 100,
     });
 
     const reviewed = await this.prisma.review.findMany({

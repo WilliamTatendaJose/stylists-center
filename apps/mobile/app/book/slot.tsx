@@ -53,11 +53,11 @@ export default function ChooseSlot() {
   const dates = useMemo(buildDateStrip, []);
   const [date, setDate] = useState(dates[0]?.value ?? '');
   const [time, setTime] = useState<string | null>(null);
-  const { data: slotsResponse } = useProviderSlots(
-    providerId ?? undefined,
-    serviceId ?? undefined,
-    date,
-  );
+  const {
+    data: slotsResponse,
+    isLoading: slotsLoading,
+    isError: slotsError,
+  } = useProviderSlots(providerId ?? undefined, serviceId ?? undefined, date);
 
   // Cold-start / deep-link guard — this screen only makes sense once a
   // provider has been chosen (Provider profile's BOOK button).
@@ -67,10 +67,31 @@ export default function ChooseSlot() {
     }
   }, [providerId]);
 
+  // One service means there is nothing to choose: select it, so the times
+  // appear straight away instead of an empty Time section that silently
+  // waits for a tap on the only card.
+  // A service id left in the draft from another stylist counts as none.
+  const onlyServiceId = provider?.services.length === 1 ? provider.services[0]?.id : undefined;
+  const hasValidService = !!provider?.services.some((s) => s.id === serviceId);
+  useEffect(() => {
+    if (onlyServiceId && !hasValidService) setService(onlyServiceId);
+  }, [onlyServiceId, hasValidService, setService]);
+
   if (!providerId) return null;
 
+  const slots = slotsResponse?.slots ?? [];
+  const timeEmptyMessage = !hasValidService
+    ? 'Choose a service above to see open times.'
+    : slotsLoading
+      ? 'Loading times…'
+      : slotsError
+        ? "Couldn't load times. Check your connection and pick the date again."
+        : slots.length === 0 || slots.every((slot) => !slot.available)
+          ? 'No open times on this day. Try another date.'
+          : null;
+
   const selectedService = provider?.services.find((s) => s.id === serviceId) ?? null;
-  const canContinue = !!serviceId && !!time;
+  const canContinue = hasValidService && !!time;
 
   const chooseDate = (value: string) => {
     setDate(value);
@@ -176,7 +197,20 @@ export default function ChooseSlot() {
         <Text variant="sectionLabel" style={styles.sectionLabel}>
           Time
         </Text>
-        <TimeGrid slots={slotsResponse?.slots ?? []} value={time} onChange={chooseTime} />
+        {timeEmptyMessage && slots.length === 0 ? (
+          <Text variant="body" color="neutral700">
+            {timeEmptyMessage}
+          </Text>
+        ) : (
+          <>
+            <TimeGrid slots={slots} value={time} onChange={chooseTime} />
+            {timeEmptyMessage ? (
+              <Text variant="meta" color="neutral700" style={styles.note}>
+                {timeEmptyMessage}
+              </Text>
+            ) : null}
+          </>
+        )}
         {submitError ? (
           <Text variant="meta" color="accent700" accessibilityRole="alert" style={styles.note}>
             {submitError}

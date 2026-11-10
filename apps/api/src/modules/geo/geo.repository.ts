@@ -31,6 +31,8 @@ export interface FindProvidersOptions {
   searchTerm?: string | undefined;
   /** Restrict to providers currently taking work. Off by default so internal callers (match fan-out) opt in deliberately. */
   onlyAcceptingBookings?: boolean | undefined;
+  /** Leave out the provider page owned by this user — nobody books or is offered their own services. */
+  excludeUserId?: string | undefined;
   /**
    * 'distance' keeps the KNN index ordering. 'relevance' blends proximity,
    * rating and verification (and text-match strength when searching) — a
@@ -76,6 +78,7 @@ export class GeoRepository {
       categoryId,
       searchTerm,
       onlyAcceptingBookings = false,
+      excludeUserId,
       sort = 'distance',
       limit,
       offset = 0,
@@ -87,6 +90,9 @@ export class GeoRepository {
         : Prisma.sql`AND ST_DWithin(p.location, ${point}, ${radiusKm * 1000})`;
     const categoryFilter = categoryId
       ? Prisma.sql`AND p."categoryId" = ${categoryId}`
+      : Prisma.empty;
+    const selfFilter = excludeUserId
+      ? Prisma.sql`AND p."userId" <> ${excludeUserId}`
       : Prisma.empty;
 
     // A lapsed subscription is time-based, not a stored flag — computed here
@@ -111,7 +117,7 @@ export class GeoRepository {
      * against "Hair Braiding". Plain `similarity` compares whole strings and
      * would rate that pair near zero, which is exactly the miss this fixes.
      */
-    const textScore = hasTerm
+    const textScoreExpr = hasTerm
       ? Prisma.sql`GREATEST(
           word_similarity(${term}, p."displayName"),
           word_similarity(${term}, c.name),
@@ -122,6 +128,19 @@ export class GeoRepository {
           ), 0)
         )`
       : Prisma.sql`0`;
+
+    // The score feeds both the fuzzy-match filter and the relevance ordering.
+    // Inlining the expression in each place made Postgres evaluate the four
+    // word_similarity calls (and the Service subquery) more than once per
+    // row, so it is computed once in a LATERAL join and referenced as a
+    // column. `OFFSET 0` is deliberate: without it the planner pulls the
+    // trivial subquery up and substitutes the expression back into every
+    // reference, undoing the point of the join. With no search term there is
+    // no join and the (constant 0) score is used as before.
+    const textScoreJoin = hasTerm
+      ? Prisma.sql`CROSS JOIN LATERAL (SELECT ${textScoreExpr} AS "textScore" OFFSET 0) ts`
+      : Prisma.empty;
+    const textScore = hasTerm ? Prisma.sql`ts."textScore"` : textScoreExpr;
 
     /**
      * A row matches if it contains the term outright (ILIKE, now index-backed
@@ -185,8 +204,9 @@ export class GeoRepository {
       FROM "ProviderProfile" p
       JOIN "User" u ON u.id = p."userId"
       JOIN "Category" c ON c.id = p."categoryId"
+      ${textScoreJoin}
       WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL
-      ${radiusFilter} ${categoryFilter} ${availabilityFilter} ${searchFilter}
+      ${radiusFilter} ${categoryFilter} ${selfFilter} ${availabilityFilter} ${searchFilter}
       ${orderBy}
       ${pagination}
     `;

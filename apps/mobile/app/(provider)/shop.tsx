@@ -317,9 +317,30 @@ export default function ProviderShop() {
     );
   };
 
+  const toggle = (
+    <View style={styles.toggle}>
+      <SegmentedPills
+        options={[
+          { value: 'sell', label: 'Sell' },
+          { value: 'buy', label: 'Buy' },
+        ]}
+        value={mode}
+        onChange={setMode}
+      />
+    </View>
+  );
+
   return (
     <Screen
       hasTabBar
+      // Buy mode is the infinite catalogue, so it gets a virtualised list
+      // instead of Screen's ScrollView. Sell mode (inline editors, a form and
+      // two short order lists) stays a plain scrolling column.
+      renderList={
+        mode === 'buy'
+          ? (listProps) => <MarketBrowse listProps={listProps} leading={toggle} />
+          : undefined
+      }
       header={
         <ScreenHeader
           title="Shop"
@@ -366,20 +387,9 @@ export default function ProviderShop() {
         />
       }
     >
-      <View style={styles.toggle}>
-        <SegmentedPills
-          options={[
-            { value: 'sell', label: 'Sell' },
-            { value: 'buy', label: 'Buy' },
-          ]}
-          value={mode}
-          onChange={setMode}
-        />
-      </View>
+      {toggle}
 
-      {mode === 'buy' ? (
-        <MarketBrowse />
-      ) : (
+      {mode === 'sell' ? (
         <>
           {error ? (
             <Text variant="meta" color={colors.accent700} style={styles.error}>
@@ -710,7 +720,7 @@ export default function ProviderShop() {
             />
           </View>
         </>
-      )}
+      ) : null}
     </Screen>
   );
 }

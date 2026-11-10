@@ -1,6 +1,15 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { nextSubscriptionPaidUntil } from '@sc/shared';
+import {
+  nextSubscriptionPaidUntil,
+  type PayChannelsResponse,
+  type SubmitPaymentOtpInput,
+} from '@sc/shared';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
 import { ledgerStatus } from './ledger-status';
@@ -13,6 +22,7 @@ import {
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 import { Inject } from '@nestjs/common';
 import { recordSubscriptionPaymentStatus } from './subscription-payment';
+import { offeredChannels } from './pay-channels';
 
 @Injectable()
 export class PaymentsService {
@@ -21,6 +31,49 @@ export class PaymentsService {
     private readonly config: ConfigService<Env, true>,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGatewayPort,
   ) {}
+
+  /** What the payment screens should offer: the live gateway's channels, narrowed by PAYMENT_CHANNELS. */
+  channels(): PayChannelsResponse {
+    return {
+      channels: offeredChannels(this.gateway, this.config.get('PAYMENT_CHANNELS', { infer: true })),
+    };
+  }
+
+  /**
+   * Forwards an O'mari one-time code for a payment the caller is paying.
+   *
+   * The OTP URL is looked up server-side from the newest Payment row started
+   * under this reference, and the caller must be that payment's payer (the
+   * booking's client, the order's buyer, or the subscribing stylist). The
+   * client never sees or chooses the URL, so this cannot be pointed anywhere
+   * else. The outcome still arrives through the usual poll or callback.
+   */
+  async submitOtp(userId: string, input: SubmitPaymentOtpInput): Promise<void> {
+    if (!this.gateway.submitOtp) {
+      throw new BadRequestException('This payment does not take a code');
+    }
+    const payment = await this.prisma.payment.findFirst({
+      where: { reference: input.reference },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        status: true,
+        otpUrl: true,
+        booking: { select: { clientId: true } },
+        order: { select: { buyerId: true } },
+        subscriptionProvider: { select: { userId: true } },
+      },
+    });
+    const payerId =
+      payment?.booking?.clientId ??
+      payment?.order?.buyerId ??
+      payment?.subscriptionProvider?.userId;
+    // One answer for "no such payment" and "not yours", so a reference cannot be probed.
+    if (!payment || payerId !== userId) throw new NotFoundException('Payment not found');
+    if (!payment.otpUrl || payment.status !== 'pending') {
+      throw new BadRequestException('This payment is not waiting for a code');
+    }
+    await this.gateway.submitOtp(payment.otpUrl, input.otp);
+  }
 
   /**
    * Paynow posts this asynchronously. A valid signature and the exact
@@ -150,6 +203,7 @@ export class PaymentsService {
         feeUsdCents: status === 'refunded' ? 0 : prior.feeUsdCents,
         externalRef: confirmation.externalRef ?? prior.externalRef,
         reference,
+        channel: prior.channel,
       },
     });
 

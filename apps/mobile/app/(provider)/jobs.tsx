@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { RefreshControl, StyleSheet, View } from 'react-native';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import {
   BOOKING_STATUS_LABELS,
   formatUsd,
@@ -65,17 +65,21 @@ const styles = StyleSheet.create({
 const COMPLETED_HISTORY_PREVIEW_COUNT = 2;
 
 /** A live smart-match offer: accept it and it becomes a booking, or it expires. */
-function OfferCardRow({
+const OfferCardRow = memo(function OfferCardRow({
   offer,
   pending,
-  onAccept,
-  onDecline,
+  actions,
 }: {
   offer: ProviderOfferDto;
   pending: boolean;
-  onAccept: () => void;
-  onDecline: () => void;
+  actions: JobActions;
 }) {
+  const onAccept = () => {
+    actions.acceptOffer(offer.id);
+  };
+  const onDecline = () => {
+    actions.declineOffer(offer.id);
+  };
   return (
     <Card bordered style={styles.card}>
       <View style={styles.offerTop}>
@@ -105,22 +109,55 @@ function OfferCardRow({
       </View>
     </Card>
   );
+});
+
+/**
+ * Stable handlers keyed by id, shared by every row so `memo` holds. Created
+ * once per mutation-function identity in the screen.
+ */
+interface JobActions {
+  acceptOffer: (id: string) => void;
+  declineOffer: (id: string) => void;
+  confirmBooking: (id: string) => void;
+  declineBooking: (id: string) => void;
+  completeBooking: (id: string) => void;
 }
 
-function JobCard({
+type JobSection = 'offers' | 'requests' | 'upcoming' | 'completed';
+
+type JobItem =
+  | { key: string; kind: 'offer'; offer: ProviderOfferDto }
+  | {
+      key: string;
+      kind: 'booking';
+      section: Exclude<JobSection, 'offers'>;
+      booking: ProviderBookingRowDto;
+    };
+
+const JobCard = memo(function JobCard({
   booking,
+  section,
   pending,
-  onConfirm,
-  onDecline,
-  onComplete,
+  actions,
 }: {
   booking: ProviderBookingRowDto;
+  section: Exclude<JobSection, 'offers'>;
   pending: boolean;
-  onConfirm: () => void;
-  onDecline: () => void;
-  onComplete: () => void;
+  actions: JobActions;
 }) {
   const { colors } = useTheme();
+  // Accept / decline are only wired for rows in "Waiting on you", and
+  // "Mark as done" is inert in the read-only Completed history — the same
+  // per-section wiring the screen had before it was virtualised.
+  const onConfirm = () => {
+    if (section === 'requests') actions.confirmBooking(booking.id);
+  };
+  const onDecline = () => {
+    if (section === 'requests') actions.declineBooking(booking.id);
+  };
+  const onComplete = () => {
+    if (section !== 'completed') actions.completeBooking(booking.id);
+  };
   return (
     <Card bordered style={styles.card}>
       <View style={styles.headerRow}>
@@ -136,7 +173,7 @@ function JobCard({
             {booking.serviceName} · {booking.whenLabel}
           </Text>
           <Text variant="metaSmall" color="neutral600">
-            {booking.paymentMethod === 'ecocash' ? 'EcoCash' : 'Cash'} ·{' '}
+            {booking.paymentMethod === 'ecocash' ? 'Paynow' : 'Cash'} ·{' '}
             {formatUsd(booking.priceUsdCents)} · {booking.reference}
           </Text>
         </View>
@@ -199,7 +236,7 @@ function JobCard({
       ) : null}
     </Card>
   );
-}
+});
 
 /** Falls back to the first two characters when a client has no display name yet — a phone number, usually. */
 function initialsOf(name: string): string {
@@ -238,14 +275,53 @@ export default function Jobs() {
     acceptOffer.isPending ||
     declineOffer.isPending;
 
-  const run = (mutate: (id: string) => void, id: string) => {
-    setActionError(null);
-    mutate(id);
-  };
+  const onError = useCallback(
+    (fallback: string) => (error: unknown) => {
+      setActionError(describeError(error, fallback));
+    },
+    [],
+  );
 
-  const onError = (fallback: string) => (error: unknown) => {
-    setActionError(describeError(error, fallback));
-  };
+  const acceptOfferMutate = acceptOffer.mutate;
+  const declineOfferMutate = declineOffer.mutate;
+  const confirmBookingMutate = confirmBooking.mutate;
+  const declineBookingMutate = declineBooking.mutate;
+  const completeBookingMutate = completeBooking.mutate;
+
+  const actions = useMemo<JobActions>(
+    () => ({
+      acceptOffer: (id) => {
+        setActionError(null);
+        acceptOfferMutate(id, {
+          onError: onError("Couldn't accept that request — it may have gone."),
+        });
+      },
+      declineOffer: (id) => {
+        setActionError(null);
+        declineOfferMutate(id, { onError: onError("Couldn't pass on that request.") });
+      },
+      confirmBooking: (id) => {
+        setActionError(null);
+        confirmBookingMutate(id, { onError: onError("Couldn't accept that booking.") });
+      },
+      declineBooking: (id) => {
+        setActionError(null);
+        declineBookingMutate(id, { onError: onError("Couldn't decline that booking.") });
+      },
+      completeBooking: (id) => {
+        setActionError(null);
+        completeBookingMutate(id, { onError: onError("Couldn't mark that as done.") });
+      },
+    }),
+    [
+      acceptOfferMutate,
+      declineOfferMutate,
+      confirmBookingMutate,
+      declineBookingMutate,
+      completeBookingMutate,
+      onError,
+    ],
+  );
 
   const offers = data?.offers ?? [];
   const bookings = data?.bookings ?? [];
@@ -256,21 +332,67 @@ export default function Jobs() {
     ? completed
     : completed.slice(0, COMPLETED_HISTORY_PREVIEW_COUNT);
 
-  return (
-    <Screen
-      hasTabBar
-      header={<ScreenHeader title="Jobs" showBack={false} right={<RoleSwitcher />} />}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => {
-            void refetch();
-          }}
-          tintColor={colors.accent}
-          colors={[colors.accent]}
+  const sections = useMemo(() => {
+    const result: {
+      key: JobSection;
+      title: string;
+      count: number;
+      gap: boolean;
+      data: JobItem[];
+    }[] = [];
+    const add = (key: JobSection, title: string, count: number, data: JobItem[]) => {
+      if (count === 0) return;
+      // Same spacing the stacked layout had: a gap above every group except
+      // the first, and always above Completed.
+      result.push({ key, title, count, gap: key === 'completed' || result.length > 0, data });
+    };
+    add(
+      'offers',
+      'Requests near you',
+      offers.length,
+      offers.map((offer) => ({ key: `offer:${offer.id}`, kind: 'offer', offer })),
+    );
+    const bookingItems = (section: 'requests' | 'upcoming' | 'completed', rows: typeof bookings) =>
+      rows.map((booking): JobItem => ({
+        key: `${section}:${booking.id}`,
+        kind: 'booking',
+        section,
+        booking,
+      }));
+    add('requests', 'Waiting on you', requests.length, bookingItems('requests', requests));
+    add('upcoming', 'Booked in', upcoming.length, bookingItems('upcoming', upcoming));
+    add('completed', 'Completed', completed.length, bookingItems('completed', visibleCompleted));
+    return result;
+    // offers/bookings are derived from `data`; the history toggle changes visibleCompleted.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, showAllCompletedHistory]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: JobItem }) =>
+      item.kind === 'offer' ? (
+        <OfferCardRow offer={item.offer} pending={busy} actions={actions} />
+      ) : (
+        <JobCard
+          booking={item.booking}
+          section={item.section}
+          pending={item.section === 'completed' ? false : busy}
+          actions={actions}
         />
-      }
-    >
+      ),
+    [busy, actions],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: (typeof sections)[number] }) => (
+      <View style={section.gap ? styles.sectionGap : undefined}>
+        <SectionLabel label={section.title} count={section.count} />
+      </View>
+    ),
+    [],
+  );
+
+  const listHeader = (
+    <>
       {actionError ? (
         <Text
           variant="meta"
@@ -317,121 +439,11 @@ export default function Jobs() {
           />
         </Card>
       ) : null}
+    </>
+  );
 
-      {offers.length > 0 ? (
-        <>
-          <SectionLabel label="Requests near you" count={offers.length} />
-          {offers.map((offer) => (
-            <OfferCardRow
-              key={offer.id}
-              offer={offer}
-              pending={busy}
-              onAccept={() => {
-                setActionError(null);
-                acceptOffer.mutate(offer.id, {
-                  onError: onError("Couldn't accept that request — it may have gone."),
-                });
-              }}
-              onDecline={() => {
-                setActionError(null);
-                declineOffer.mutate(offer.id, {
-                  onError: onError("Couldn't pass on that request."),
-                });
-              }}
-            />
-          ))}
-        </>
-      ) : null}
-
-      {requests.length > 0 ? (
-        <View style={offers.length > 0 ? styles.sectionGap : undefined}>
-          <SectionLabel label="Waiting on you" count={requests.length} />
-        </View>
-      ) : null}
-      {requests.map((booking) => (
-        <JobCard
-          key={booking.id}
-          booking={booking}
-          pending={busy}
-          onConfirm={() => {
-            run(
-              (id) =>
-                confirmBooking.mutate(id, { onError: onError("Couldn't accept that booking.") }),
-              booking.id,
-            );
-          }}
-          onDecline={() => {
-            run(
-              (id) =>
-                declineBooking.mutate(id, { onError: onError("Couldn't decline that booking.") }),
-              booking.id,
-            );
-          }}
-          onComplete={() => {
-            run(
-              (id) =>
-                completeBooking.mutate(id, { onError: onError("Couldn't mark that as done.") }),
-              booking.id,
-            );
-          }}
-        />
-      ))}
-
-      {upcoming.length > 0 ? (
-        <View style={requests.length > 0 || offers.length > 0 ? styles.sectionGap : undefined}>
-          <SectionLabel label="Booked in" count={upcoming.length} />
-        </View>
-      ) : null}
-      {upcoming.map((booking) => (
-        <JobCard
-          key={booking.id}
-          booking={booking}
-          pending={busy}
-          onConfirm={() => {
-            /* not offered in this state */
-          }}
-          onDecline={() => {
-            /* not offered in this state */
-          }}
-          onComplete={() => {
-            run(
-              (id) =>
-                completeBooking.mutate(id, { onError: onError("Couldn't mark that as done.") }),
-              booking.id,
-            );
-          }}
-        />
-      ))}
-
-      {completed.length > 0 ? (
-        <View style={styles.sectionGap}>
-          <SectionLabel label="Completed" count={completed.length} />
-        </View>
-      ) : null}
-      {visibleCompleted.map((booking) => (
-        <JobCard
-          key={booking.id}
-          booking={booking}
-          pending={false}
-          onConfirm={() => {}}
-          onDecline={() => {}}
-          onComplete={() => {}}
-        />
-      ))}
-      {completed.length > COMPLETED_HISTORY_PREVIEW_COUNT ? (
-        <Button
-          label={
-            showAllCompletedHistory ? 'Show less' : `View all history (${String(completed.length)})`
-          }
-          variant="ghost"
-          block
-          style={styles.note}
-          onPress={() => {
-            setShowAllCompletedHistory((current) => !current);
-          }}
-        />
-      ) : null}
-
+  const listEmpty = (
+    <>
       {data && offers.length === 0 && bookings.length === 0 ? (
         <EmptyPanel
           body={
@@ -443,6 +455,51 @@ export default function Jobs() {
       ) : null}
 
       {isLoading && !data ? <EmptyPanel body="Loading your jobs…" /> : null}
-    </Screen>
+    </>
+  );
+
+  const listFooter =
+    completed.length > COMPLETED_HISTORY_PREVIEW_COUNT ? (
+      <Button
+        label={
+          showAllCompletedHistory ? 'Show less' : `View all history (${String(completed.length)})`
+        }
+        variant="ghost"
+        block
+        style={styles.note}
+        onPress={() => {
+          setShowAllCompletedHistory((current) => !current);
+        }}
+      />
+    ) : null;
+
+  return (
+    <Screen
+      hasTabBar
+      header={<ScreenHeader title="Jobs" showBack={false} right={<RoleSwitcher />} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={() => {
+            void refetch();
+          }}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
+        />
+      }
+      renderList={(listProps) => (
+        <SectionList
+          {...listProps}
+          sections={sections}
+          keyExtractor={(item) => item.key}
+          renderItem={renderItem}
+          renderSectionHeader={renderSectionHeader}
+          stickySectionHeadersEnabled={false}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          ListFooterComponent={listFooter}
+        />
+      )}
+    />
   );
 }

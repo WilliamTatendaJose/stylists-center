@@ -3,6 +3,7 @@ import type { ImagePickerAsset } from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import type { UploadedImageDto } from '@sc/shared';
 import { apiFetch } from '../client.js';
+import { prepareImageForUpload } from '../../media/prepareImageForUpload.js';
 
 function uploadPart(asset: ImagePickerAsset): FormData {
   const form = new FormData();
@@ -21,13 +22,28 @@ function uploadPart(asset: ImagePickerAsset): FormData {
   return form;
 }
 
-export function useUploadImage(endpoint = '/v1/provider/images') {
+export interface UploadImageOptions {
+  /** Long-edge cap in px applied before upload; defaults to 1600. */
+  maxLongEdge?: number;
+}
+
+/**
+ * Every picked photo is downscaled and re-encoded on device before upload
+ * (see prepareImageForUpload), so all call sites share the same behaviour.
+ */
+export function useUploadImage(endpoint = '/v1/provider/images', options: UploadImageOptions = {}) {
+  const { maxLongEdge } = options;
   return useMutation({
-    mutationFn: (asset: ImagePickerAsset) =>
-      apiFetch<UploadedImageDto>(endpoint, {
+    mutationFn: async (asset: ImagePickerAsset) => {
+      const prepared = await prepareImageForUpload(
+        asset,
+        maxLongEdge === undefined ? {} : { maxEdge: maxLongEdge },
+      );
+      return apiFetch<UploadedImageDto>(endpoint, {
         method: 'POST',
-        body: uploadPart(asset),
-      }),
+        body: uploadPart(prepared),
+      });
+    },
   });
 }
 

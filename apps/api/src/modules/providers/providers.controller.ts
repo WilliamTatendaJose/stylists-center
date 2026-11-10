@@ -28,8 +28,9 @@ export class ProvidersController {
   // order, so these must come first or ':id' would swallow "/available"
   // and "/search".
   @Get('available')
-  available(@Query() query: LatLngQueryDto) {
+  available(@CurrentUser() user: { id: string }, @Query() query: LatLngQueryDto) {
     return this.providers.listAvailable({
+      viewerId: user.id,
       lat: query.lat,
       lng: query.lng,
       radiusKm: query.radiusKm ?? null,
@@ -39,8 +40,9 @@ export class ProvidersController {
   }
 
   @Get('search')
-  search(@Query() query: ProviderSearchQueryDto) {
+  search(@CurrentUser() user: { id: string }, @Query() query: ProviderSearchQueryDto) {
     return this.providers.search({
+      viewerId: user.id,
       query: query.q,
       lat: query.lat,
       lng: query.lng,

@@ -24,6 +24,7 @@
     "@maplibre/maplibre-react-native": "*",
     "@react-native-community/slider": "*",
     "expo-font": "*",
+    "expo-image": "*",
     "expo-status-bar": "*",
     "lucide-react-native": "*",
     "react": "*",

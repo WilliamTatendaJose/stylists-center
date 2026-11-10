@@ -174,7 +174,12 @@ export type RouteStepDto = z.infer<typeof routeStepSchema>;
 export const routeResponseSchema = z.object({
   distanceKm: z.number(),
   etaMinutes: z.number().int(),
-  kombiFareUsdCents: z.number().int(),
+  /**
+   * Deprecated: a flat $2 that was never calculated from anything. Still
+   * sent so installed 0.1.0 apps, which render it, don't show "$NaN"; no
+   * current screen reads it. Drop once 0.1.0 is no longer in use.
+   */
+  kombiFareUsdCents: z.number().int().optional(),
   steps: z.array(routeStepSchema),
   /**
    * Where the route ends — the provider's coordinates. Carried on the route

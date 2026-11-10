@@ -18,6 +18,7 @@ import {
   useTheme,
 } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
+import { useMe } from '../../src/api/hooks/useMe.js';
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { apiAssetUrl } from '../../src/api/client.js';
@@ -82,6 +83,10 @@ export default function ProviderProfile() {
   const { id, matchId } = useLocalSearchParams<{ id: string; matchId?: string }>();
   const onBack = useBack('/(tabs)');
   const { data: provider, isError: providerError, refetch: refetchProvider } = useProvider(id);
+  const { data: me } = useMe();
+  // A stylist previewing their own page ("View as a client") sees it as
+  // clients do, minus the buttons: nobody books or messages themselves.
+  const isOwnPage = !!me?.providerProfileId && me.providerProfileId === id;
   const setProvider = useBookingDraftStore((s) => s.setProvider);
   const clearPendingPayment = usePendingPaymentStore((s) => s.clearPending);
 
@@ -217,10 +222,16 @@ export default function ProviderProfile() {
           />
         }
         footer={
-          <View style={styles.footerRow}>
-            <Button label="Message" variant="secondary" size="lg" onPress={goMessage} />
-            <Button label="Book" size="lg" onPress={goBook} style={styles.bookButton} />
-          </View>
+          isOwnPage ? (
+            <Text variant="meta" color="neutral700">
+              This is your page as clients see it. They book and message you from here.
+            </Text>
+          ) : (
+            <View style={styles.footerRow}>
+              <Button label="Message" variant="secondary" size="lg" onPress={goMessage} />
+              <Button label="Book" size="lg" onPress={goBook} style={styles.bookButton} />
+            </View>
+          )
         }
       >
         {reportOutcome ? (

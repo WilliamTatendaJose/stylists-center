@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { isValidMobileMoneyPhone } from '../domain/phone.js';
 import { imageUrlSchema } from './uploads.js';
+import { payChannelSchema, paymentActionSchema } from './payments.js';
 
 export const paymentMethodSchema = z.enum(['ecocash', 'cash']);
 
@@ -29,8 +30,10 @@ export const createBookingSchema = z.object({
   startsAt: z.iso.datetime(),
   paymentMethod: paymentMethodSchema,
   matchId: z.uuid().optional(),
-  /** Required in practice for EcoCash — the number the prompt is sent to. Falls back to the account phone when absent. */
+  /** Required in practice for a mobile-money channel — the number to bill. Falls back to the account phone when absent. */
   payerPhone: payerPhoneSchema.optional(),
+  /** Which wallet or card pays an online booking. Absent from older app builds, which only knew EcoCash. */
+  payChannel: payChannelSchema.optional(),
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
@@ -45,6 +48,8 @@ export const createBookingResponseSchema = z.object({
   checkoutUrl: z.url().optional(),
   /** Present when the gateway pushed an EcoCash prompt to the client's phone — show this text while polling payment-status. */
   instructions: z.string().optional(),
+  /** Present when the customer must enter an InnBucks code or an O'mari OTP before the payment can settle. */
+  action: paymentActionSchema.optional(),
 });
 export type CreateBookingResponse = z.infer<typeof createBookingResponseSchema>;
 

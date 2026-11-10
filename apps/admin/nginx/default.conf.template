@@ -9,6 +9,28 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # Compress text-based responses. text/html is compressed by default and
+    # is intentionally not listed in gzip_types.
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_vary on;
+    gzip_types text/css application/javascript application/json image/svg+xml text/plain;
+
+    # Vite emits content-hashed filenames under /assets/, so they can be
+    # cached forever. A changed file gets a new name, so stale copies can't
+    # be served.
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # index.html references the hashed assets and must always be revalidated
+    # so new deploys are picked up immediately.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
     # A client-side router (react-router) owns every non-asset path — any
     # unmatched request falls back to index.html rather than nginx's 404.
     location / {

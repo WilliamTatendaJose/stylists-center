@@ -36,3 +36,7 @@ uploads/
 
 # Prisma generated client
 apps/api/src/generated/
+
+# pnpm content-addressable store and device/dev-server logs — local artifacts
+.pnpm-store/
+*.log

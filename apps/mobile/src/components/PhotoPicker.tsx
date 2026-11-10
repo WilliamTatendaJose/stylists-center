@@ -35,6 +35,8 @@ interface PhotoPickerProps {
   maxPhotos?: number;
   helpText?: string;
   uploadEndpoint?: string;
+  /** Long-edge cap (px) applied before upload. Identity documents pass a larger value. */
+  maxLongEdge?: number;
 }
 
 export function PhotoPicker({
@@ -46,9 +48,13 @@ export function PhotoPicker({
   maxPhotos = 5,
   helpText,
   uploadEndpoint,
+  maxLongEdge,
 }: PhotoPickerProps) {
-  const upload = useUploadImage(uploadEndpoint);
+  const upload = useUploadImage(uploadEndpoint, maxLongEdge === undefined ? {} : { maxLongEdge });
   const remaining = maxPhotos - urls.length;
+  // A single-photo slot that is already filled offers to replace it, rather
+  // than showing a greyed-out "Photo added" button that does nothing.
+  const replacing = maxPhotos === 1 && urls.length === 1;
 
   const choose = async () => {
     onError('');
@@ -61,18 +67,18 @@ export function PhotoPicker({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
-      selectionLimit: remaining,
+      selectionLimit: replacing ? 1 : remaining,
       quality: 0.7,
     });
     if (result.canceled) return;
 
     try {
       const uploaded: string[] = [];
-      for (const asset of result.assets.slice(0, remaining)) {
+      for (const asset of result.assets.slice(0, replacing ? 1 : remaining)) {
         const image = await upload.mutateAsync(asset);
         uploaded.push(image.url);
       }
-      onChange([...urls, ...uploaded]);
+      onChange(replacing ? uploaded : [...urls, ...uploaded]);
     } catch (error) {
       onError(
         describeError(error, "Couldn't upload that photo. Choose another photo and try again."),
@@ -95,7 +101,7 @@ export function PhotoPicker({
         <View style={styles.grid}>
           {urls.map((url, index) => (
             <View key={url} style={styles.photoWrap}>
-              <ImagePlaceholder uri={apiAssetUrl(url)} radius={12} style={styles.photo} />
+              <ImagePlaceholder uri={apiAssetUrl(url)} radius={12} style={styles.photo} thumbnail />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Remove photo ${String(index + 1)}`}
@@ -112,24 +118,28 @@ export function PhotoPicker({
           ))}
         </View>
       ) : null}
-      <Button
-        label={
-          upload.isPending
-            ? 'Uploading…'
-            : remaining > 0
-              ? maxPhotos === 1
-                ? 'Choose photo'
-                : 'Add photos'
-              : maxPhotos === 1
-                ? 'Photo added'
-                : `${String(maxPhotos)} photos added`
-        }
-        variant="secondary"
-        block
-        loading={upload.isPending}
-        disabled={disabled || remaining <= 0}
-        onPress={() => void choose()}
-      />
+      {remaining > 0 || replacing || upload.isPending ? (
+        <Button
+          label={
+            upload.isPending
+              ? 'Uploading…'
+              : replacing
+                ? 'Replace photo'
+                : maxPhotos === 1
+                  ? 'Choose photo'
+                  : 'Add photos'
+          }
+          variant="secondary"
+          block
+          loading={upload.isPending}
+          disabled={disabled || upload.isPending}
+          onPress={() => void choose()}
+        />
+      ) : (
+        <Text variant="metaSmall" color="neutral600">
+          {`${String(maxPhotos)} photos added. Remove one to add another.`}
+        </Text>
+      )}
     </View>
   );
 }

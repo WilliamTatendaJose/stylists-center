@@ -41,6 +41,18 @@ const HEADER_BORDER_COLOR: Record<ScreenTheme, string> = {
   dark: color.onDark.border,
 };
 
+/**
+ * What a virtualised list inside <Screen> must spread onto its FlatList /
+ * SectionList so it gets exactly the padding, pull-to-refresh and scroll
+ * indicator behaviour the built-in ScrollView body has.
+ */
+export interface ScreenListProps {
+  style: ViewStyle;
+  contentContainerStyle: ViewStyle[];
+  refreshControl: ScrollViewProps['refreshControl'];
+  showsVerticalScrollIndicator: false;
+}
+
 export interface ScreenProps {
   theme?: ScreenTheme;
   /**
@@ -69,7 +81,16 @@ export interface ScreenProps {
   /** Plays the scIn enter animation. Off for screens replaced via router.replace, where a re-entrance animation would be visually wrong (e.g. Bookings after Booked). */
   enter?: boolean;
   contentStyle?: ViewStyle | ViewStyle[];
-  children: ReactNode;
+  /**
+   * List-friendly mode: instead of wrapping `children` in Screen's ScrollView
+   * (never nest a vertical list inside it), Screen renders what this returns
+   * in the scrolling slot. Spread the given props onto the FlatList /
+   * SectionList; the safe-area / tab-bar padding then lives on the list's
+   * content container, so rows scroll under the same insets as before.
+   * Takes precedence over `scroll` and `children`.
+   */
+  renderList?: (listProps: ScreenListProps) => ReactNode;
+  children?: ReactNode;
 }
 
 const styles = StyleSheet.create({
@@ -96,6 +117,7 @@ export function Screen({
   refreshControl,
   enter = true,
   contentStyle,
+  renderList,
   children,
 }: ScreenProps) {
   const { colors, isDark } = useTheme();
@@ -133,6 +155,16 @@ export function Screen({
     borderTopColor: effectiveTheme === 'dark' ? colors.divider : color.divider,
   };
 
+  const listProps: ScreenListProps = {
+    style: styles.flexOne,
+    contentContainerStyle: [
+      contentPadding,
+      ...(Array.isArray(contentStyle) ? contentStyle : contentStyle ? [contentStyle] : []),
+    ],
+    refreshControl,
+    showsVerticalScrollIndicator: false,
+  };
+
   const body = (
     <View style={[contentPadding, !scroll ? styles.flexOne : null, contentStyle]}>{children}</View>
   );
@@ -158,7 +190,9 @@ export function Screen({
         style={styles.flexOne}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {scroll ? (
+        {renderList ? (
+          <View style={styles.flexOne}>{renderList(listProps)}</View>
+        ) : scroll ? (
           <ScrollView
             style={styles.flexOne}
             showsVerticalScrollIndicator={false}

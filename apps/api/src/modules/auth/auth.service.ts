@@ -253,6 +253,7 @@ export class AuthService {
       selectedAccountType: user.selectedAccountType,
       onboardingComplete: user.onboardingCompletedAt !== null,
       hasProviderProfile: !!user.providerProfile,
+      providerProfileId: user.providerProfile?.id ?? null,
       verificationStatus: user.verificationStatus,
       profileComplete: isProfileComplete(user.displayName, user.email ?? user.phone ?? ''),
       bookingRemindersEnabled: user.bookingRemindersEnabled,
@@ -434,7 +435,11 @@ export class AuthService {
       throw new UnauthorizedException('Session no longer valid');
     }
 
-    const user = await this.prisma.user.findUnique({ where: { id: payload.sub } });
+    // Runs on every authenticated request, so fetch only the columns checked.
+    const user = await this.prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { id: true, tokenVersion: true, deletedAt: true, disabledAt: true },
+    });
     if (user?.tokenVersion !== payload.ver || user.deletedAt !== null || user.disabledAt !== null) {
       throw new UnauthorizedException('Session no longer valid');
     }

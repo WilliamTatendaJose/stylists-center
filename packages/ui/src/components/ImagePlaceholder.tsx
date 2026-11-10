@@ -1,8 +1,10 @@
-import { Image, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Image } from 'expo-image';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 import { Image as ImageIcon } from 'lucide-react-native';
 import { type RadiusToken, radius } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { useTheme } from '../theme.js';
+import { thumbnailUrl } from './thumbnailUrl.js';
 
 export interface ImagePlaceholderProps {
   /** A real photo URL, once one exists — every call site in M1 omits this (see plan §11 R10: no photography supplied). */
@@ -10,6 +12,12 @@ export interface ImagePlaceholderProps {
   radius?: RadiusToken | number;
   label?: string;
   style?: ViewStyle;
+  /**
+   * Opt in when the image is shown small (list rows, grids, previews): for
+   * `/uploads/` URLs the API's ~480 px thumbnail is requested instead of the
+   * full photo. Leave off for hero/detail images that need full resolution.
+   */
+  thumbnail?: boolean;
 }
 
 const styles = StyleSheet.create({
@@ -34,14 +42,27 @@ function resolveRadius(value: ImagePlaceholderProps['radius']): number {
  * real image once `uri` is supplied; until then, a neutral tile with an
  * icon and optional caption, matching the handoff's empty state.
  */
-export function ImagePlaceholder({ uri, radius: radiusProp, label, style }: ImagePlaceholderProps) {
+export function ImagePlaceholder({
+  uri,
+  radius: radiusProp,
+  label,
+  style,
+  thumbnail = false,
+}: ImagePlaceholderProps) {
   const { colors } = useTheme();
   const radiusStyle: ViewStyle = { borderRadius: resolveRadius(radiusProp) };
 
   if (uri) {
     return (
       <View style={[styles.base, radiusStyle, style]}>
-        <Image source={{ uri }} style={styles.fill} accessibilityIgnoresInvertColors />
+        <Image
+          source={{ uri: thumbnail ? thumbnailUrl(uri) : uri }}
+          style={styles.fill}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={150}
+          accessibilityIgnoresInvertColors
+        />
       </View>
     );
   }

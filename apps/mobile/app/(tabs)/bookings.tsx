@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { RefreshControl, StyleSheet, View } from 'react-native';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { RefreshControl, SectionList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Star } from 'lucide-react-native';
 import { space } from '@sc/tokens';
@@ -69,32 +69,57 @@ const styles = StyleSheet.create({
   reviewCount: { marginBottom: space.l },
 });
 
+/**
+ * Row actions take the booking as an argument so ONE stable set of handlers
+ * can serve every row — per-row closures would defeat `memo` on every render.
+ */
+interface BookingActions {
+  onConfirmCompletion: (booking: BookingRowDto) => void;
+  onRate: (booking: BookingRowDto) => void;
+  onReport: (booking: BookingRowDto) => void;
+  onCancel: (booking: BookingRowDto) => void;
+  onOnMyWay: (booking: BookingRowDto) => void;
+  onDirections: (booking: BookingRowDto) => void;
+  onReschedule: (booking: BookingRowDto) => void;
+  onBookAgain: (booking: BookingRowDto) => void;
+}
+
 interface BookingCardProps {
   booking: BookingRowDto;
   confirmPending: boolean;
-  onConfirmCompletion: () => void;
-  onRate: () => void;
-  onReport: () => void;
-  onCancel: () => void;
-  onOnMyWay: () => void;
-  onDirections: () => void;
-  onReschedule: () => void;
-  onBookAgain: () => void;
+  actions: BookingActions;
 }
 
-function BookingCard({
+const BookingCard = memo(function BookingCard({
   booking,
   confirmPending,
-  onConfirmCompletion,
-  onRate,
-  onReport,
-  onCancel,
-  onOnMyWay,
-  onDirections,
-  onReschedule,
-  onBookAgain,
+  actions,
 }: BookingCardProps) {
   const { colors } = useTheme();
+  const onConfirmCompletion = () => {
+    actions.onConfirmCompletion(booking);
+  };
+  const onRate = () => {
+    actions.onRate(booking);
+  };
+  const onReport = () => {
+    actions.onReport(booking);
+  };
+  const onCancel = () => {
+    actions.onCancel(booking);
+  };
+  const onOnMyWay = () => {
+    actions.onOnMyWay(booking);
+  };
+  const onDirections = () => {
+    actions.onDirections(booking);
+  };
+  const onReschedule = () => {
+    actions.onReschedule(booking);
+  };
+  const onBookAgain = () => {
+    actions.onBookAgain(booking);
+  };
   const reconcile = needsCashReconciliation(booking);
   const canCompleteEcocash = canConfirmEcocashCompletion(booking);
   const statusLabel =
@@ -117,7 +142,7 @@ function BookingCard({
             {booking.serviceName} · {booking.whenLabel}
           </Text>
           <Text variant="metaSmall" color="neutral600">
-            {booking.paymentMethod === 'ecocash' ? 'EcoCash' : 'Cash'} ·{' '}
+            {booking.paymentMethod === 'ecocash' ? 'Paynow' : 'Cash'} ·{' '}
             {formatUsd(booking.priceUsdCents)}
           </Text>
         </View>
@@ -212,13 +237,22 @@ function BookingCard({
       ) : null}
     </Card>
   );
+});
+
+interface BookingSection {
+  title: 'Upcoming' | 'Past';
+  data: BookingRowDto[];
 }
+
+const keyExtractor = (booking: BookingRowDto) => booking.id;
 
 /** Bookings (handoff screen 9): awaiting-stylist, cash-reconciliation, and completed row states. */
 export default function Bookings() {
   const { colors } = useTheme();
   const { data: bookings = [], isError, isLoading, refetch, isRefetching } = useMyBookings();
   const confirmCompletion = useConfirmCompletion();
+  const confirmMutate = confirmCompletion.mutate;
+  const confirmPending = confirmCompletion.isPending;
   const createReview = useCreateReview();
   const createReport = useCreateReport();
   const cancelBooking = useCancelBooking();
@@ -265,12 +299,12 @@ export default function Bookings() {
     };
   }, [bookings]);
 
-  const openRate = (booking: BookingRowDto) => {
+  const openRate = useCallback((booking: BookingRowDto) => {
     setRating(0);
     setReviewText('');
     setRateError(null);
     setRateTarget(booking);
-  };
+  }, []);
 
   const closeRate = () => {
     setRateTarget(null);
@@ -334,13 +368,126 @@ export default function Bookings() {
     });
   };
 
-  const goOnMyWay = (booking: BookingRowDto) => {
-    router.push({ pathname: '/map/trip', params: { id: booking.providerId } });
-  };
+  const actions = useMemo<BookingActions>(
+    () => ({
+      onConfirmCompletion: (booking) => {
+        setConfirmError(null);
+        confirmMutate(booking.id, {
+          onError: (error) => {
+            setConfirmError(describeError(error, "Couldn't confirm that booking. Try again."));
+          },
+        });
+      },
+      onRate: openRate,
+      onReport: (booking) => {
+        setReportOutcome(null);
+        setReportTarget(booking);
+      },
+      onCancel: (booking) => {
+        setCancelError(null);
+        setCancelTarget(booking);
+      },
+      onOnMyWay: (booking) => {
+        router.push({ pathname: '/map/trip', params: { id: booking.providerId } });
+      },
+      onDirections: (booking) => {
+        router.push({ pathname: '/map/directions', params: { id: booking.providerId } });
+      },
+      onReschedule: (booking) => {
+        startReschedule(booking.id, booking.providerId, booking.serviceId);
+        router.push('/book/slot');
+      },
+      onBookAgain: (booking) => {
+        setProvider(booking.providerId);
+        setService(booking.serviceId);
+        router.push('/book/slot');
+      },
+    }),
+    [confirmMutate, openRate, startReschedule, setProvider, setService],
+  );
 
-  const goDirections = (booking: BookingRowDto) => {
-    router.push({ pathname: '/map/directions', params: { id: booking.providerId } });
-  };
+  // Two groups rather than one stream: an appointment that has not happened
+  // yet needs different attention from a receipt, and mixing them buried the
+  // next one under history.
+  const sections = useMemo<BookingSection[]>(() => {
+    const result: BookingSection[] = [];
+    if (upcoming.length) result.push({ title: 'Upcoming', data: upcoming });
+    if (past.length) result.push({ title: 'Past', data: past });
+    return result;
+  }, [upcoming, past]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: BookingRowDto }) => (
+      <BookingCard booking={item} confirmPending={confirmPending} actions={actions} />
+    ),
+    [confirmPending, actions],
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: BookingSection }) => (
+      <SectionLabel label={section.title} count={section.data.length} />
+    ),
+    [],
+  );
+
+  const listHeader = (
+    <>
+      {reportOutcome ? (
+        <Text
+          variant="meta"
+          color={reportOutcome.ok ? 'neutral700' : colors.accent700}
+          style={styles.reportedNote}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+        >
+          {reportOutcome.message}
+        </Text>
+      ) : null}
+
+      {confirmError ? (
+        <Text
+          variant="meta"
+          color={colors.accent700}
+          style={styles.reportedNote}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+        >
+          {confirmError}
+        </Text>
+      ) : null}
+
+      {/* Only a hard failure earns the panel. An error over bookings we
+          already have is a failed refresh, and burying a working list under
+          it helps nobody. */}
+      {isError && bookings.length === 0 ? (
+        <EmptyPanel
+          title="Couldn't load your bookings"
+          body="Check your connection and pull down to try again."
+        />
+      ) : isError ? (
+        <Text variant="meta" color="neutral700" style={styles.reportedNote}>
+          Showing your last update — couldn&apos;t reach the server just now.
+        </Text>
+      ) : null}
+    </>
+  );
+
+  const listEmpty = !isError ? (
+    <EmptyPanel
+      body={
+        isLoading
+          ? 'Loading your bookings…'
+          : 'No bookings yet — find a stylist and send a request.'
+      }
+    />
+  ) : null;
+
+  const listFooter = (
+    <Text variant="metaSmall" color="neutral600" style={styles.footerNote}>
+      Repeated no-shows — five, tracked by us — remove an account from Style Center. Every ban
+      states its reason and can be appealed.
+    </Text>
+  );
 
   return (
     <>
@@ -357,119 +504,21 @@ export default function Bookings() {
             colors={[colors.accent]}
           />
         }
-      >
-        {reportOutcome ? (
-          <Text
-            variant="meta"
-            color={reportOutcome.ok ? 'neutral700' : colors.accent700}
-            style={styles.reportedNote}
-            accessibilityLiveRegion="polite"
-            accessibilityRole="alert"
-          >
-            {reportOutcome.message}
-          </Text>
-        ) : null}
-
-        {confirmError ? (
-          <Text
-            variant="meta"
-            color={colors.accent700}
-            style={styles.reportedNote}
-            accessibilityLiveRegion="polite"
-            accessibilityRole="alert"
-          >
-            {confirmError}
-          </Text>
-        ) : null}
-
-        {/* Only a hard failure earns the panel. An error over bookings we
-            already have is a failed refresh, and burying a working list under
-            it helps nobody. */}
-        {isError && bookings.length === 0 ? (
-          <EmptyPanel
-            title="Couldn't load your bookings"
-            body="Check your connection and pull down to try again."
+        renderList={(listProps) => (
+          <SectionList
+            {...listProps}
+            sections={sections}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
+            stickySectionHeadersEnabled={false}
+            extraData={confirmPending}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
+            ListFooterComponent={listFooter}
           />
-        ) : isError ? (
-          <Text variant="meta" color="neutral700" style={styles.reportedNote}>
-            Showing your last update — couldn&apos;t reach the server just now.
-          </Text>
-        ) : null}
-
-        {!isError && bookings.length === 0 ? (
-          <EmptyPanel
-            body={
-              isLoading
-                ? 'Loading your bookings…'
-                : 'No bookings yet — find a stylist and send a request.'
-            }
-          />
-        ) : null}
-
-        {/* Two groups rather than one stream: an appointment that has not
-            happened yet needs different attention from a receipt, and mixing
-            them buried the next one under history. */}
-        {(
-          [
-            ['Upcoming', upcoming],
-            ['Past', past],
-          ] as const
-        ).map(([label, group]) =>
-          group.length === 0 ? null : (
-            <View key={label}>
-              <SectionLabel label={label} count={group.length} />
-              {group.map((booking) => (
-                <BookingCard
-                  key={booking.id}
-                  booking={booking}
-                  confirmPending={confirmCompletion.isPending}
-                  onConfirmCompletion={() => {
-                    setConfirmError(null);
-                    confirmCompletion.mutate(booking.id, {
-                      onError: (error) => {
-                        setConfirmError(
-                          describeError(error, "Couldn't confirm that booking. Try again."),
-                        );
-                      },
-                    });
-                  }}
-                  onRate={() => {
-                    openRate(booking);
-                  }}
-                  onReport={() => {
-                    setReportOutcome(null);
-                    setReportTarget(booking);
-                  }}
-                  onCancel={() => {
-                    setCancelError(null);
-                    setCancelTarget(booking);
-                  }}
-                  onOnMyWay={() => {
-                    goOnMyWay(booking);
-                  }}
-                  onDirections={() => {
-                    goDirections(booking);
-                  }}
-                  onReschedule={() => {
-                    startReschedule(booking.id, booking.providerId, booking.serviceId);
-                    router.push('/book/slot');
-                  }}
-                  onBookAgain={() => {
-                    setProvider(booking.providerId);
-                    setService(booking.serviceId);
-                    router.push('/book/slot');
-                  }}
-                />
-              ))}
-            </View>
-          ),
         )}
-
-        <Text variant="metaSmall" color="neutral600" style={styles.footerNote}>
-          Repeated no-shows — five, tracked by us — remove an account from Style Center. Every ban
-          states its reason and can be appealed.
-        </Text>
-      </Screen>
+      />
 
       <Sheet open={!!rateTarget} onClose={closeRate}>
         <Text variant="cardTitle" style={styles.rateTitle}>

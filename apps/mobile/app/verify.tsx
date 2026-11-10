@@ -6,6 +6,7 @@ import { useBack } from '../src/navigation/useBack.js';
 import { useSubmitVerification, useVerification } from '../src/api/hooks/useVerification.js';
 import { describeError } from '../src/api/errorMessage.js';
 import { PhotoPicker } from '../src/components/PhotoPicker.js';
+import { DOCUMENT_UPLOAD_MAX_EDGE } from '../src/media/prepareImageForUpload.js';
 
 const styles = StyleSheet.create({
   intro: { marginBottom: space.xl },
@@ -109,6 +110,8 @@ export default function VerifyIdentity() {
           urls={idDocumentUrl}
           maxPhotos={1}
           uploadEndpoint="/v1/me/images"
+          // Reviewers must read ID print, so keep more resolution than gallery photos.
+          maxLongEdge={DOCUMENT_UPLOAD_MAX_EDGE}
           helpText="Use a readable national ID, passport, or driver licence."
           disabled={isVerified || submitVerification.isPending}
           onChange={setIdDocumentUrl}
@@ -121,6 +124,8 @@ export default function VerifyIdentity() {
           urls={selfieImageUrl}
           maxPhotos={1}
           uploadEndpoint="/v1/me/images"
+          // Reviewers must read ID print, so keep more resolution than gallery photos.
+          maxLongEdge={DOCUMENT_UPLOAD_MAX_EDGE}
           helpText="Take a clear face photo in good light; do not use someone else’s photo."
           disabled={isVerified || submitVerification.isPending}
           onChange={setSelfieImageUrl}

@@ -1,6 +1,12 @@
 import { useEffect } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ConversationDto, MessageDto } from '@sc/shared';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
+import { CHAT_MESSAGES_DEFAULT_LIMIT, type ConversationDto, type MessageDto } from '@sc/shared';
 import type { DocumentPickerAsset } from 'expo-document-picker';
 import { File } from 'expo-file-system';
 import { apiFetch } from '../client.js';
@@ -44,19 +50,49 @@ export function useStartOrderConversation() {
   });
 }
 
-/** `GET /v1/conversations/:id/messages` — also marks the thread read server-side. */
+/**
+ * The thread is an infinite query whose pages are each ascending `MessageDto[]`
+ * and are stored newest page first: pages[0] is the latest page, later pages
+ * are progressively older. The cursor is the id of the oldest message of the
+ * last page. A refetch (realtime cue, send) re-walks the loaded pages, so the
+ * pages stay contiguous while new messages arrive.
+ */
+type MessagePages = InfiniteData<MessageDto[], string | undefined>;
+
+/** Oldest page first, each page already ascending: plain chronological order. */
+function flattenMessagePages(data: MessagePages): MessageDto[] {
+  const seen = new Set<string>();
+  return [...data.pages]
+    .reverse()
+    .flat()
+    .filter((message) => {
+      if (seen.has(message.id)) return false;
+      seen.add(message.id);
+      return true;
+    });
+}
+
+/** `GET /v1/conversations/:id/messages` — latest page first, older pages on demand; also marks the thread read server-side. */
 export function useConversationMessages(conversationId: string | null) {
   const queryClient = useQueryClient();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: messagesKey(conversationId),
-    queryFn: async () => {
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam }) => {
+      const query = new URLSearchParams({ limit: String(CHAT_MESSAGES_DEFAULT_LIMIT) });
+      if (pageParam) query.set('before', pageParam);
       const messages = await apiFetch<MessageDto[]>(
-        `/v1/conversations/${String(conversationId)}/messages`,
+        `/v1/conversations/${String(conversationId)}/messages?${query.toString()}`,
       );
-      // This GET also marks the thread read on the server.
-      void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY, exact: true });
+      // Only the latest page marks the thread read on the server.
+      if (!pageParam) {
+        void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY, exact: true });
+      }
       return messages;
     },
+    getNextPageParam: (lastPage) =>
+      lastPage.length >= CHAT_MESSAGES_DEFAULT_LIMIT ? lastPage[0]?.id : undefined,
+    select: flattenMessagePages,
     enabled: !!conversationId,
   });
 }
@@ -92,9 +128,14 @@ export function useSendMessage(conversationId: string | null) {
     onSuccess: (message) => {
       // Put the acknowledged message on screen immediately; the refetch still
       // reconciles read receipts and any simultaneous incoming messages.
-      queryClient.setQueryData<MessageDto[]>(messagesKey(conversationId), (current = []) =>
-        current.some((row) => row.id === message.id) ? current : [...current, message],
-      );
+      queryClient.setQueryData<MessagePages>(messagesKey(conversationId), (current) => {
+        if (!current) return current;
+        const [latest = [], ...older] = current.pages;
+        if (current.pages.some((page) => page.some((row) => row.id === message.id))) {
+          return current;
+        }
+        return { ...current, pages: [[...latest, message], ...older] };
+      });
       void queryClient.invalidateQueries({ queryKey: messagesKey(conversationId) });
       void queryClient.invalidateQueries({ queryKey: CONVERSATIONS_KEY, exact: true });
     },

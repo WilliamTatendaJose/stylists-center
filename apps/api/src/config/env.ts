@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { payChannelSchema } from '@sc/shared';
 
 /**
  * Boot-time environment validation. Fails fast with a clear error instead of
@@ -70,6 +71,23 @@ export const envSchema = z
     // development so the fake adapter keeps local and integration tests free;
     // production requires the set belonging to whichever gateway is selected.
     PAYMENT_PROVIDER: z.enum(['fake', 'paynow', 'pesepay']).default('fake'),
+    /**
+     * Comma-separated allow-list of the channels to offer, e.g.
+     * "ecocash,onemoney,card". Narrows what the live gateway supports to what
+     * the merchant account actually has switched on, so a method Paynow has
+     * not activated can be hidden without an app release. Unset offers every
+     * channel the gateway supports.
+     */
+    PAYMENT_CHANNELS: z
+      .string()
+      .optional()
+      .transform((value) =>
+        value
+          ?.split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
+      )
+      .pipe(z.array(payChannelSchema).min(1).optional()),
     PAYNOW_INTEGRATION_ID: z.string().min(1).optional(),
     PAYNOW_INTEGRATION_KEY: z.string().min(20).optional(),
     PAYNOW_RETURN_URL: z.url().optional(),

@@ -2,7 +2,6 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   etaMinutes,
-  KOMBI_FARE_USD_CENTS,
   type GeoSearchResponse,
   type RouteResponse,
   type RouteStepDto,
@@ -140,6 +139,12 @@ export class GeoService {
     };
   }
 
+  /**
+   * The old flat kombi fare, kept only because installed 0.1.0 apps render it
+   * and would show "$NaN" without it. Not a calculation: remove with 0.1.0.
+   */
+  private static readonly LEGACY_KOMBI_FARE_USD_CENTS = 200;
+
   async route(providerId: string, lat: number, lng: number): Promise<RouteResponse> {
     const row = await this.geo.findProviderById(providerId, lat, lng);
     if (!row) throw new NotFoundException('Provider not found');
@@ -152,7 +157,7 @@ export class GeoService {
       return {
         distanceKm: real.distanceKm,
         etaMinutes: real.etaMinutes,
-        kombiFareUsdCents: KOMBI_FARE_USD_CENTS,
+        kombiFareUsdCents: GeoService.LEGACY_KOMBI_FARE_USD_CENTS,
         steps: real.steps,
         destination,
         coordinates: real.coordinates,
@@ -162,7 +167,7 @@ export class GeoService {
     return {
       distanceKm: row.distanceKm,
       etaMinutes: etaMinutes(row.distanceKm),
-      kombiFareUsdCents: KOMBI_FARE_USD_CENTS,
+      kombiFareUsdCents: GeoService.LEGACY_KOMBI_FARE_USD_CENTS,
       steps: buildFallbackSteps(row.distanceKm),
       destination,
       coordinates: [

@@ -67,13 +67,19 @@ export class ProvidersService {
    * 60-second poll, which is a whole catalogue over a metered connection.
    */
   async listAvailable(params: {
+    viewerId?: string;
     lat: number;
     lng: number;
     radiusKm?: number | null;
     limit: number;
     offset: number;
   }): Promise<ProviderPageDto> {
-    return this.page({ ...params, onlyAcceptingBookings: true });
+    const { viewerId, ...rest } = params;
+    return this.page({
+      ...rest,
+      onlyAcceptingBookings: true,
+      ...(viewerId ? { excludeUserId: viewerId } : {}),
+    });
   }
 
   /**
@@ -86,6 +92,7 @@ export class ProvidersService {
    * them because they are off today is worse than showing them as unavailable.
    */
   async search(params: {
+    viewerId?: string;
     query: string;
     lat: number;
     lng: number;
@@ -93,8 +100,12 @@ export class ProvidersService {
     limit: number;
     offset: number;
   }): Promise<ProviderPageDto> {
-    const { query, ...rest } = params;
-    return this.page({ ...rest, searchTerm: query });
+    const { query, viewerId, ...rest } = params;
+    return this.page({
+      ...rest,
+      searchTerm: query,
+      ...(viewerId ? { excludeUserId: viewerId } : {}),
+    });
   }
 
   /**
@@ -110,6 +121,7 @@ export class ProvidersService {
     offset: number;
     searchTerm?: string;
     onlyAcceptingBookings?: boolean;
+    excludeUserId?: string;
   }): Promise<ProviderPageDto> {
     const { limit, offset } = options;
     const rows = await this.geo.findProvidersWithinRadius({

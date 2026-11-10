@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env';
+import { AuthModule } from '../auth/auth.module';
 import { FakeEcoCashAdapter } from './fake-ecocash.adapter';
 import { PaynowAdapter } from './paynow.adapter';
 import { PesepayAdapter } from './pesepay.adapter';
@@ -10,6 +11,7 @@ import { PaymentsService } from './payments.service';
 import { PaymentStatusService } from './payment-status.service';
 
 @Module({
+  imports: [AuthModule],
   controllers: [PaymentsController],
   providers: [
     PaymentsService,

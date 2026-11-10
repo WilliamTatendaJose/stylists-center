@@ -8,7 +8,6 @@ import {
   canCancelOrder,
   canCollectOrder,
   formatOrderReference,
-  normalizePhone,
   orderTotalUsdCents,
   type CreateOrderInput,
   type CreateOrderResponse,
@@ -19,10 +18,12 @@ import {
   type ProductSort,
   type CreateProductReviewInput,
   type ProductReviewsDto,
+  type PaymentAction,
 } from '@sc/shared';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { payerPhoneFor } from '../payments/pay-channels';
 import { PaymentStatusService } from '../payments/payment-status.service';
 import { PushService } from '../notifications/push.service';
 import { Inject } from '@nestjs/common';
@@ -56,8 +57,11 @@ export class MarketService {
     sort?: ProductSort;
     limit: number;
     offset: number;
+    /** The shopper, whose own products are left out of what they can buy. */
+    viewerId?: string;
   }): Promise<ProductPageDto> {
     const {
+      viewerId,
       lat,
       lng,
       radiusKm = null,
@@ -89,6 +93,7 @@ export class MarketService {
         ? Prisma.sql`AND (p.name ILIKE ${`%${term}%`} OR p.description ILIKE ${`%${term}%`} OR word_similarity(${term}, p.name) >= 0.35)`
         : Prisma.empty;
     const categoryFilter = category ? Prisma.sql`AND p.category = ${category}` : Prisma.empty;
+    const selfFilter = viewerId ? Prisma.sql`AND pr."userId" <> ${viewerId}` : Prisma.empty;
     const minPriceFilter =
       minPriceUsdCents === undefined
         ? Prisma.empty
@@ -116,7 +121,7 @@ export class MarketService {
         ST_Distance(pr.location, ${point}) / 1000 AS "distanceKm"
       FROM "Product" p
       JOIN "ProviderProfile" pr ON pr.id = p."providerId"
-      WHERE p.active = true AND p."stockQty" > 0 ${radiusFilter} ${searchFilter} ${categoryFilter} ${minPriceFilter} ${maxPriceFilter}
+      WHERE p.active = true AND p."stockQty" > 0 ${radiusFilter} ${searchFilter} ${categoryFilter} ${selfFilter} ${minPriceFilter} ${maxPriceFilter}
       ORDER BY ${sortClause}, p.id
       LIMIT ${limit + 1} OFFSET ${offset}
     `;
@@ -169,6 +174,11 @@ export class MarketService {
         providerId: input.providerId,
         paymentMethod: input.paymentMethod,
         payerPhone: input.payerPhone ?? null,
+        // Only when not EcoCash, so checkouts fingerprinted before channels
+        // existed still match their own retries.
+        ...(input.payChannel && input.payChannel !== 'ecocash'
+          ? { payChannel: input.payChannel }
+          : {}),
         items: [...input.items].sort((a, b) => a.productId.localeCompare(b.productId)),
       });
       const previous = await tx.order.findUnique({
@@ -191,6 +201,16 @@ export class MarketService {
           },
         };
       }
+      // A seller buying their own stock would pay into their own escrow and
+      // collect it back as earnings — a way to fake sales and reviews.
+      const seller = await tx.providerProfile.findUnique({
+        where: { id: input.providerId },
+        select: { userId: true },
+      });
+      if (seller?.userId === buyerId) {
+        throw new BadRequestException("You can't buy your own products");
+      }
+
       const productIds = input.items.map((i) => i.productId);
       if (new Set(productIds).size !== productIds.length) {
         throw new BadRequestException('The same product appears more than once');
@@ -293,23 +313,22 @@ export class MarketService {
 
       let checkoutUrl: string | undefined;
       let instructions: string | undefined;
+      // Not stored on the order: a replayed checkout key gets the instructions
+      // text (which carries any InnBucks code) but no structured action.
+      let action: PaymentAction | undefined;
       if (input.paymentMethod === 'ecocash') {
         const buyer = await tx.user.findUniqueOrThrow({
           where: { id: buyerId },
           select: { phone: true },
         });
-        // The number the buyer typed at checkout, which need not be the line
-        // they log in with. Normalised so the adapter always receives E.164.
-        const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
-        const paymentPhone = payerPhone ?? buyer.phone;
-        if (!paymentPhone) {
-          throw new BadRequestException('Enter the EcoCash phone number for this payment');
-        }
+        const payChannel = input.payChannel ?? 'ecocash';
+        const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, buyer.phone);
         const intent = await this.paymentGateway.createCheckout({
           reference: order.reference,
           amountUsdCents: totalUsdCents,
           description: `Market order ${order.reference}`,
-          phone: paymentPhone,
+          channel: payChannel,
+          ...(paymentPhone ? { phone: paymentPhone } : {}),
           allowHostedCheckout: false,
         });
         await tx.payment.create({
@@ -320,8 +339,11 @@ export class MarketService {
             amountUsdCents: totalUsdCents,
             externalRef: intent.externalRef,
             reference: order.reference,
+            channel: payChannel,
+            otpUrl: intent.otpUrl ?? null,
           },
         });
+        action = intent.action;
         checkoutUrl = intent.checkoutUrl;
         instructions = intent.instructions;
         await tx.order.update({
@@ -339,6 +361,7 @@ export class MarketService {
           totalUsdCents,
           ...(checkoutUrl ? { checkoutUrl } : {}),
           ...(instructions ? { instructions } : {}),
+          ...(action ? { action } : {}),
         },
       };
     });
@@ -362,8 +385,11 @@ export class MarketService {
   async listOrders(buyerId: string): Promise<OrderRowDto[]> {
     const orders = await this.prisma.order.findMany({
       where: { buyerId },
+      // toOrderRow is typed against the full relation rows, so the include
+      // stays; the cap is what bounds the payload.
       include: { provider: true, items: true, productReviews: true },
       orderBy: { createdAt: 'desc' },
+      take: 100,
     });
     return orders.map(toOrderRow);
   }
