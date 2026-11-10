@@ -4,6 +4,7 @@ import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminTrustService } from './admin-trust.service';
 import { CreateManualBanDto, ResolveAppealDto, UpdateReportStatusDto } from './dto';
 import { AdminRoles } from '../admin-auth/admin-roles';
+import { readPage } from '../../common/paging';
 
 @AdminRoles('support')
 @Controller('admin')
@@ -12,8 +13,15 @@ export class AdminTrustController {
   constructor(private readonly adminTrust: AdminTrustService) {}
 
   @Get('reports')
-  listReports(@Query('status') status?: string) {
-    return this.adminTrust.listReports(reportStatusSchema.safeParse(status).data);
+  listReports(
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.adminTrust.listReports(
+      reportStatusSchema.safeParse(status).data,
+      readPage(limit, offset),
+    );
   }
 
   @Get('reports/:id')
@@ -27,8 +35,15 @@ export class AdminTrustController {
   }
 
   @Get('bans')
-  listBans(@Query('appealStatus') appealStatus?: string) {
-    return this.adminTrust.listBans(appealStatusSchema.safeParse(appealStatus).data);
+  listBans(
+    @Query('appealStatus') appealStatus?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.adminTrust.listBans(
+      appealStatusSchema.safeParse(appealStatus).data,
+      readPage(limit, offset),
+    );
   }
 
   @Get('bans/:id')

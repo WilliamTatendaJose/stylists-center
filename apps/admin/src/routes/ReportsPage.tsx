@@ -4,6 +4,7 @@ import { REPORT_REASON_LABELS, REPORT_STATUS_LABELS, requiresAdminReview } from 
 import type { ReportStatus } from '@sc/shared';
 import { useReports } from '../api/trust';
 import { Badge } from '../components/Badge';
+import { Pager } from '../components/Pager';
 
 const FILTERS: { label: string; value: ReportStatus | undefined }[] = [
   { label: 'Open', value: 'open' },
@@ -19,8 +20,10 @@ const STATUS_TONE: Record<ReportStatus, 'accent' | 'neutral' | 'dark'> = {
 };
 
 export function ReportsPage() {
+  const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState<ReportStatus | undefined>('open');
-  const { data: reports, isLoading, isError } = useReports(filter);
+  const { data, isLoading, isError } = useReports({ status: filter, offset });
+  const reports = data?.items;
 
   return (
     <div>
@@ -33,6 +36,7 @@ export function ReportsPage() {
               type="button"
               onClick={() => {
                 setFilter(f.value);
+                setOffset(0);
               }}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 filter === f.value
@@ -79,6 +83,9 @@ export function ReportsPage() {
           </Link>
         ))}
       </div>
+      {data ? (
+        <Pager offset={offset} shown={data.items.length} total={data.total} onChange={setOffset} />
+      ) : null}
     </div>
   );
 }

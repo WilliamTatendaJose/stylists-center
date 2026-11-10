@@ -1,23 +1,25 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
   AdminBanRowDto,
   AdminReportRowDto,
   AppealStatus,
   CreateManualBanInput,
+  Paged,
   ReportStatus,
   ResolveAppealInput,
   UpdateReportStatusInput,
 } from '@sc/shared';
 import { apiFetch } from './client';
+import { listQuery, type ListParams } from './paging';
 
 const REPORTS_KEY = ['admin', 'reports'] as const;
 const BANS_KEY = ['admin', 'bans'] as const;
 
-export function useReports(status?: ReportStatus) {
+export function useReports(params: ListParams & { status?: ReportStatus | undefined } = {}) {
   return useQuery({
-    queryKey: [...REPORTS_KEY, status ?? 'all'],
-    queryFn: () =>
-      apiFetch<AdminReportRowDto[]>(`/v1/admin/reports${status ? `?status=${status}` : ''}`),
+    queryKey: [...REPORTS_KEY, params],
+    queryFn: () => apiFetch<Paged<AdminReportRowDto>>(`/v1/admin/reports${listQuery(params)}`),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -40,13 +42,11 @@ export function useUpdateReportStatus(id: string) {
   });
 }
 
-export function useBans(appealStatus?: AppealStatus) {
+export function useBans(params: ListParams & { appealStatus?: AppealStatus | undefined } = {}) {
   return useQuery({
-    queryKey: [...BANS_KEY, appealStatus ?? 'all'],
-    queryFn: () =>
-      apiFetch<AdminBanRowDto[]>(
-        `/v1/admin/bans${appealStatus ? `?appealStatus=${appealStatus}` : ''}`,
-      ),
+    queryKey: [...BANS_KEY, params],
+    queryFn: () => apiFetch<Paged<AdminBanRowDto>>(`/v1/admin/bans${listQuery(params)}`),
+    placeholderData: keepPreviousData,
   });
 }
 

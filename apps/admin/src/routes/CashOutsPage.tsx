@@ -3,6 +3,7 @@ import { formatUsd } from '@sc/shared';
 import type { AdminCashOutRowDto } from '@sc/shared';
 import { useCashOuts, useSettleCashOut } from '../api/wallet';
 import { ApiError } from '../api/client';
+import { Pager, SearchBox } from '../components/Pager';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
 import { TextField } from '../components/ui/Field';
@@ -102,7 +103,10 @@ function CashOutRow({ cashOut }: { cashOut: AdminCashOutRowDto }) {
 }
 
 export function CashOutsPage() {
-  const { data: cashOuts, isLoading, isError } = useCashOuts();
+  const [offset, setOffset] = useState(0);
+  const [q, setQ] = useState('');
+  const { data, isLoading, isError } = useCashOuts({ q, offset });
+  const cashOuts = data?.items;
   const pendingCount = cashOuts?.filter((c) => !c.settled).length ?? 0;
 
   return (
@@ -114,6 +118,15 @@ export function CashOutsPage() {
         real-world transfer (EcoCash, cash, bank) has actually happened.
       </p>
 
+      <div className="mb-4">
+        <SearchBox
+          placeholder="Search name or phone"
+          onSearch={(value) => {
+            setQ(value);
+            setOffset(0);
+          }}
+        />
+      </div>
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
       {isError ? (
         <p className="text-sm text-accent-700 dark:text-dark-accent">
@@ -132,6 +145,9 @@ export function CashOutsPage() {
           <CashOutRow key={cashOut.transactionId} cashOut={cashOut} />
         ))}
       </div>
+      {data ? (
+        <Pager offset={offset} shown={data.items.length} total={data.total} onChange={setOffset} />
+      ) : null}
     </div>
   );
 }

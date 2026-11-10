@@ -3,6 +3,7 @@ import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminProvidersService } from './admin-providers.service';
 import { UpdateProviderAdminDto } from './dto';
 import { AdminRoles } from '../admin-auth/admin-roles';
+import { readPage, searchTerm } from '../../common/paging';
 
 function parseBoolean(value?: string): boolean | undefined {
   if (value === 'true') return true;
@@ -16,8 +17,25 @@ export class AdminProvidersController {
   constructor(private readonly adminProviders: AdminProvidersService) {}
 
   @Get()
-  list(@Query('verified') verified?: string) {
-    return this.adminProviders.list(parseBoolean(verified));
+  list(
+    @Query('verified') verified?: string,
+    @Query('subscription') subscription?: string,
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.adminProviders.list({
+      verified: parseBoolean(verified),
+      subscription:
+        subscription === 'active' || subscription === 'lapsed' ? subscription : undefined,
+      q: searchTerm(q),
+      page: readPage(limit, offset),
+    });
+  }
+
+  @Get('subscription-summary')
+  subscriptionSummary() {
+    return this.adminProviders.subscriptionSummary();
   }
 
   @Get(':id')

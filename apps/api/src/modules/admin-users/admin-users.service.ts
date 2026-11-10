@@ -52,7 +52,7 @@ export class AdminUsersService {
       this.prisma.user.findMany({
         where,
         include: { providerProfile: { select: { id: true } } },
-        orderBy: { createdAt: 'desc' },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit,
         skip: input.offset,
       }),

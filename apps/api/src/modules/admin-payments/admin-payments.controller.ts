@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, Query } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminPaymentsService } from './admin-payments.service';
 import { RecordPayoutDto } from './dto';
 import { AdminRoles } from '../admin-auth/admin-roles';
+import { readPage, searchTerm } from '../../common/paging';
 
 @AdminRoles('finance')
 @Controller('admin/payments')
@@ -16,8 +17,12 @@ export class AdminPaymentsController {
   }
 
   @Get('providers')
-  providerPayouts() {
-    return this.adminPayments.providerPayouts();
+  providerPayouts(
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.adminPayments.providerPayouts({ q: searchTerm(q), page: readPage(limit, offset) });
   }
 
   @Post('providers/:providerId/payouts')

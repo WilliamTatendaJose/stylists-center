@@ -54,6 +54,7 @@ const OPEN_TO_EVERY_ROLE = new Set([
   'GET admin/catalog/cities',
   'GET admin/providers',
   'GET admin/providers/:id',
+  'GET admin/providers/subscription-summary',
 ]);
 
 interface Route {

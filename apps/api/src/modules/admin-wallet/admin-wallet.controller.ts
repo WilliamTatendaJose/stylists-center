@@ -1,8 +1,9 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards, Query } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminWalletService } from './admin-wallet.service';
 import { RecordCashOutSettlementDto } from './dto';
 import { AdminRoles } from '../admin-auth/admin-roles';
+import { readPage, searchTerm } from '../../common/paging';
 
 @AdminRoles('finance')
 @Controller('admin/wallet')
@@ -11,8 +12,12 @@ export class AdminWalletController {
   constructor(private readonly adminWallet: AdminWalletService) {}
 
   @Get('cash-outs')
-  listCashOuts() {
-    return this.adminWallet.listCashOuts();
+  listCashOuts(
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.adminWallet.listCashOuts({ q: searchTerm(q), page: readPage(limit, offset) });
   }
 
   @Post('cash-outs/:transactionId/settle')

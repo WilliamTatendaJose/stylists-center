@@ -4,6 +4,34 @@ import { imageUrlSchema } from './uploads.js';
 import { verificationStatusSchema } from './verification.js';
 
 /**
+ * One page of an admin list. Every list endpoint that can grow with the
+ * business returns this shape, taking `limit` (default 50, max 200),
+ * `offset`, and where it makes sense `q` for search.
+ */
+export function pagedSchema<T extends z.ZodType>(item: T) {
+  return z.object({
+    items: z.array(item),
+    total: z.number().int().nonnegative(),
+    limit: z.number().int().positive(),
+    offset: z.number().int().nonnegative(),
+  });
+}
+export interface Paged<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** Subscription totals across every provider, for the Subscriptions page header. */
+export const adminSubscriptionSummarySchema = z.object({
+  activeCount: z.number().int().nonnegative(),
+  lapsedCount: z.number().int().nonnegative(),
+  mrrUsdCents: z.number().int().nonnegative(),
+});
+export type AdminSubscriptionSummaryDto = z.infer<typeof adminSubscriptionSummarySchema>;
+
+/**
  * Admin console DTOs (apps/admin). Deliberately separate from the client/
  * provider DTOs in auth.ts — an admin session is a different identity with
  * a different login flow (email + password, not phone + OTP), so nothing

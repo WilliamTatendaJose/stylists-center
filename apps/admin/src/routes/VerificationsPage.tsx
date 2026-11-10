@@ -5,6 +5,7 @@ import { ApiError } from '../api/client';
 import { adminAssetUrl } from '../api/media';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
+import { Pager, SearchBox } from '../components/Pager';
 
 const FILTERS: { label: string; value: VerificationStatus | undefined }[] = [
   { label: 'Pending', value: 'pending' },
@@ -120,8 +121,11 @@ function VerificationCard({ row }: { row: AdminVerificationRowDto }) {
 }
 
 export function VerificationsPage() {
+  const [offset, setOffset] = useState(0);
+  const [q, setQ] = useState('');
   const [filter, setFilter] = useState<VerificationStatus | undefined>('pending');
-  const { data: rows, isLoading, isError } = useVerifications(filter);
+  const { data, isLoading, isError } = useVerifications({ status: filter, q, offset });
+  const rows = data?.items;
 
   return (
     <div>
@@ -139,6 +143,7 @@ export function VerificationsPage() {
               type="button"
               onClick={() => {
                 setFilter(item.value);
+                setOffset(0);
               }}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 filter === item.value
@@ -152,6 +157,15 @@ export function VerificationsPage() {
         </div>
       </div>
 
+      <div className="mb-4">
+        <SearchBox
+          placeholder="Search name, phone or email"
+          onSearch={(value) => {
+            setQ(value);
+            setOffset(0);
+          }}
+        />
+      </div>
       {isLoading ? <p className="text-sm text-neutral-600 dark:text-dark-muted">Loading…</p> : null}
       {isError ? (
         <p className="text-sm text-accent-700 dark:text-dark-accent">
@@ -168,6 +182,9 @@ export function VerificationsPage() {
           <VerificationCard key={row.id} row={row} />
         ))}
       </div>
+      {data ? (
+        <Pager offset={offset} shown={data.items.length} total={data.total} onChange={setOffset} />
+      ) : null}
     </div>
   );
 }
