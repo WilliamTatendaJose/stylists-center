@@ -2,7 +2,9 @@ import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminWalletService } from './admin-wallet.service';
 import { RecordCashOutSettlementDto } from './dto';
+import { AdminRoles } from '../admin-auth/admin-roles';
 
+@AdminRoles('finance')
 @Controller('admin/wallet')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminWalletController {

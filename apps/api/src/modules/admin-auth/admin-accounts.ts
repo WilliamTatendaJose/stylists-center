@@ -9,13 +9,13 @@ type AdminClient = Pick<PrismaClient, 'adminUser' | 'adminRefreshToken' | '$tran
 export type BootstrapOutcome = 'skipped' | 'created' | 'restored';
 
 /**
- * Creates the first admin account when no usable one exists — the only way
+ * Creates the first owner account when no usable owner exists — the only way
  * into a fresh database without shell access, since staff have no self-serve
- * signup. "Usable" means enabled and not deleted: a database whose every
- * admin was disabled or deleted is just as locked out as an empty one, so the
- * named account is (re)created or restored in that case too.
+ * signup. "Usable" means enabled and not deleted: a database whose owners
+ * were all disabled or deleted can't manage staff any more, so the named
+ * account is (re)created, restored or promoted to owner in that case too.
  *
- * Never touches anything once a usable admin exists, so leaving the variables
+ * Never touches anything once a usable owner exists, so leaving the variables
  * set can't overwrite a password someone has since changed.
  */
 export async function bootstrapFirstAdmin(
@@ -23,18 +23,28 @@ export async function bootstrapFirstAdmin(
   email: string,
   password: string,
 ): Promise<BootstrapOutcome> {
-  const usable = await prisma.adminUser.count({ where: { disabled: false, deletedAt: null } });
+  const usable = await prisma.adminUser.count({
+    where: { role: 'owner', disabled: false, deletedAt: null },
+  });
   if (usable > 0) return 'skipped';
 
   const passwordHash = await hashPassword(password);
   const existing = await prisma.adminUser.findUnique({ where: { email } });
   if (!existing) {
-    await prisma.adminUser.create({ data: { email, passwordHash, displayName: 'Admin' } });
+    await prisma.adminUser.create({
+      data: { email, passwordHash, displayName: 'Admin', role: 'owner' },
+    });
     return 'created';
   }
   await prisma.adminUser.update({
     where: { email },
-    data: { passwordHash, disabled: false, deletedAt: null, tokenVersion: { increment: 1 } },
+    data: {
+      passwordHash,
+      role: 'owner',
+      disabled: false,
+      deletedAt: null,
+      tokenVersion: { increment: 1 },
+    },
   });
   return 'restored';
 }
@@ -64,7 +74,9 @@ export async function resetAdminPassword(
     if (!options.create) {
       throw new Error(`No admin account for ${email}. Pass --create to make one.`);
     }
-    await prisma.adminUser.create({ data: { email, passwordHash, displayName: 'Admin' } });
+    await prisma.adminUser.create({
+      data: { email, passwordHash, displayName: 'Admin', role: 'owner' },
+    });
     return 'created';
   }
   await prisma.$transaction([

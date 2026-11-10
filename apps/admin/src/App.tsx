@@ -20,6 +20,7 @@ import { StaffPage } from './routes/StaffPage';
 import { VerificationsPage } from './routes/VerificationsPage';
 import { UsersPage } from './routes/UsersPage';
 import { AccountPage } from './routes/AccountPage';
+import { canOpen } from './roles';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const admin = useAuthStore((s) => s.admin);
@@ -40,6 +41,11 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   // keep the user on the page where they can fix that.
   if (admin.mfaSetupRequired && location.pathname !== '/account') {
     return <Navigate to="/account" replace />;
+  }
+  // Hidden pages are also refused by the API; this just avoids a page full
+  // of 403s when someone follows an old link.
+  if (!canOpen(admin.role, location.pathname)) {
+    return <Navigate to="/overview" replace />;
   }
   return <>{children}</>;
 }

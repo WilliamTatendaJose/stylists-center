@@ -1,7 +1,9 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminAuditService } from './admin-audit.service';
+import { OwnerOnly } from '../admin-auth/admin-roles';
 
+@OwnerOnly()
 @Controller('admin/audit-log')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminAuditController {

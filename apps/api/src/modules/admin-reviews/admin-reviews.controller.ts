@@ -1,7 +1,9 @@
 import { Controller, Delete, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminReviewsService } from './admin-reviews.service';
+import { AdminRoles } from '../admin-auth/admin-roles';
 
+@AdminRoles('support')
 @Controller('admin/reviews')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminReviewsController {

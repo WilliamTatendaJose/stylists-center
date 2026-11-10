@@ -12,19 +12,22 @@ import { ApiError } from '../api/client';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
-import { TextField } from '../components/ui/Field';
+import { SelectField, TextField } from '../components/ui/Field';
+import type { AdminRoleName } from '@sc/shared';
+import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '../roles';
 
 function CreateStaffForm({ onDone }: { onDone: () => void }) {
   const createStaff = useCreateStaff();
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState<AdminRoleName>('support');
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
     setError(null);
     createStaff.mutate(
-      { email: email.trim(), displayName: displayName.trim(), password },
+      { email: email.trim(), displayName: displayName.trim(), password, role },
       {
         onSuccess: onDone,
         onError: (err) => {
@@ -36,7 +39,7 @@ function CreateStaffForm({ onDone }: { onDone: () => void }) {
 
   return (
     <Card className="mb-6">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <TextField
           label="Email"
           type="email"
@@ -60,6 +63,7 @@ function CreateStaffForm({ onDone }: { onDone: () => void }) {
             setPassword(e.target.value);
           }}
         />
+        <RoleSelect value={role} onChange={setRole} />
       </div>
       {error ? <p className="mb-3 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
       <div className="flex flex-wrap gap-2">
@@ -74,9 +78,43 @@ function CreateStaffForm({ onDone }: { onDone: () => void }) {
   );
 }
 
+function RoleSelect({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: AdminRoleName;
+  onChange: (role: AdminRoleName) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div>
+      <SelectField
+        label="Role"
+        value={value}
+        disabled={disabled}
+        onChange={(e) => {
+          onChange(e.target.value as AdminRoleName);
+        }}
+      >
+        {(['support', 'finance', 'owner'] as const).map((r) => (
+          <option key={r} value={r}>
+            {ROLE_LABELS[r]}
+          </option>
+        ))}
+      </SelectField>
+      <p className="-mt-3 mb-4 text-xs text-neutral-500 dark:text-dark-muted">
+        {ROLE_DESCRIPTIONS[value]}
+      </p>
+    </div>
+  );
+}
+
 function EditStaffForm({ staff, onDone }: { staff: AdminStaffRowDto; onDone: () => void }) {
   const updateStaff = useUpdateStaff(staff.id);
+  const isSelf = useAuthStore((s) => s.admin?.id === staff.id);
   const [displayName, setDisplayName] = useState(staff.displayName);
+  const [role, setRole] = useState<AdminRoleName>(staff.role);
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
@@ -87,7 +125,7 @@ function EditStaffForm({ staff, onDone }: { staff: AdminStaffRowDto; onDone: () 
     }
     setError(null);
     updateStaff.mutate(
-      { displayName: nextName },
+      { displayName: nextName, ...(role !== staff.role ? { role } : {}) },
       {
         onSuccess: onDone,
         onError: (err) => {
@@ -107,6 +145,12 @@ function EditStaffForm({ staff, onDone }: { staff: AdminStaffRowDto; onDone: () 
             setDisplayName(e.target.value);
           }}
         />
+        <RoleSelect value={role} onChange={setRole} disabled={isSelf} />
+        {isSelf ? (
+          <p className="-mt-2 mb-4 text-xs text-neutral-500 dark:text-dark-muted">
+            Another owner has to change your role.
+          </p>
+        ) : null}
       </div>
       {error ? <p className="mb-3 text-sm text-accent-700 dark:text-dark-accent">{error}</p> : null}
       <div className="flex flex-wrap gap-2">
@@ -241,6 +285,10 @@ function StaffRow({ staff }: { staff: AdminStaffRowDto }) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Badge
+            label={ROLE_LABELS[staff.role]}
+            tone={staff.role === 'owner' ? 'dark' : 'neutral'}
+          />
           <Badge
             label={isDeleted ? 'Deleted' : staff.disabled ? 'Disabled' : 'Active'}
             tone={isDeleted || staff.disabled ? 'accent' : 'neutral'}

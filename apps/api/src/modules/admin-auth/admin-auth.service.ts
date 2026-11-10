@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import type { AdminIdentity, AdminSession } from '@sc/shared';
 import { AdminMfaService } from './admin-mfa.service';
 import { PrismaService } from '../prisma/prisma.service';
+import type { AdminRole } from '../../generated/prisma';
 import type { Env } from '../../config/env';
 import { verifyPassword } from './password';
 
@@ -130,6 +131,7 @@ export class AdminAuthService {
       id: admin.id,
       email: admin.email,
       displayName: admin.displayName,
+      role: admin.role,
       mfaEnabled,
       mfaSetupRequired: !mfaEnabled && this.config.get('ADMIN_MFA_REQUIRED', { infer: true }),
     };
@@ -190,7 +192,9 @@ export class AdminAuthService {
     return this.toIdentity(admin);
   }
 
-  async verifyAccessToken(token: string): Promise<{ id: string; mfaEnabled: boolean }> {
+  async verifyAccessToken(
+    token: string,
+  ): Promise<{ id: string; mfaEnabled: boolean; role: AdminRole }> {
     let payload: { sub: string; ver: number };
     try {
       payload = await this.jwt.verifyAsync<{ sub: string; ver: number }>(token, {
@@ -208,7 +212,7 @@ export class AdminAuthService {
       throw new UnauthorizedException('Session no longer valid');
     }
 
-    return { id: admin.id, mfaEnabled: admin.totpEnabledAt !== null };
+    return { id: admin.id, mfaEnabled: admin.totpEnabledAt !== null, role: admin.role };
   }
 
   private async issueRefreshToken(
@@ -252,6 +256,7 @@ interface AdminRow {
   id: string;
   email: string;
   displayName: string;
+  role: AdminRole;
   tokenVersion: number;
   totpEnabledAt: Date | null;
 }

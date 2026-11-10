@@ -3,7 +3,9 @@ import { appealStatusSchema, reportStatusSchema } from '@sc/shared';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminTrustService } from './admin-trust.service';
 import { CreateManualBanDto, ResolveAppealDto, UpdateReportStatusDto } from './dto';
+import { AdminRoles } from '../admin-auth/admin-roles';
 
+@AdminRoles('support')
 @Controller('admin')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminTrustController {

@@ -775,11 +775,20 @@ model AuditLog {
 /// (email + password, not phone + OTP): staff aren't clients or providers,
 /// and the two login flows should never be able to authenticate as each
 /// other by construction, not just by convention.
+/// What an admin may do in the console. Owners can do everything; see
+/// admin-auth/admin-roles.ts for which areas finance and support can reach.
+enum AdminRole {
+  owner
+  finance
+  support
+}
+
 model AdminUser {
   id                 String    @id @default(uuid())
   email              String    @unique
   passwordHash       String
   displayName        String
+  role               AdminRole @default(support)
   /// Same lever as User.tokenVersion: bump to invalidate every live admin session instantly (disabling a staff account).
   tokenVersion       Int       @default(0)
   /// A revoked staff account — kept rather than deleted so AuditLog.adminActor

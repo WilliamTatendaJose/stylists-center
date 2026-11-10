@@ -11,9 +11,11 @@ import type { Request } from 'express';
 import type { Env } from '../../config/env';
 import { AdminAuthService } from './admin-auth.service';
 import { ALLOW_WITHOUT_MFA } from './allow-without-mfa.decorator';
+import { ADMIN_ROLES, roleAllowed } from './admin-roles';
+import type { AdminRole } from '../../generated/prisma';
 
 export interface AdminAuthenticatedRequest extends Request {
-  admin?: { id: string; mfaEnabled: boolean };
+  admin?: { id: string; mfaEnabled: boolean; role: AdminRole };
 }
 
 /**
@@ -23,7 +25,8 @@ export interface AdminAuthenticatedRequest extends Request {
  * which AuditInterceptor also reads (see audit.interceptor.ts).
  *
  * With ADMIN_MFA_REQUIRED on, an account that hasn't enrolled in 2FA is
- * refused everywhere except routes marked @AllowWithoutMfa().
+ * refused everywhere except routes marked @AllowWithoutMfa(). Routes marked
+ * @AdminRoles()/@OwnerOnly() are refused to other roles (see admin-roles.ts).
  */
 @Injectable()
 export class AdminJwtAuthGuard implements CanActivate {
@@ -56,6 +59,18 @@ export class AdminJwtAuthGuard implements CanActivate {
         statusCode: 403,
         code: 'MFA_SETUP_REQUIRED',
         message: 'Set up two-factor sign-in on your account page to continue.',
+      });
+    }
+
+    const allowed = this.reflector.getAllAndOverride<AdminRole[] | undefined>(ADMIN_ROLES, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (!roleAllowed(req.admin.role, allowed)) {
+      throw new ForbiddenException({
+        statusCode: 403,
+        code: 'ROLE_FORBIDDEN',
+        message: "Your role doesn't have access to this. Ask an owner if you need it.",
       });
     }
     return true;

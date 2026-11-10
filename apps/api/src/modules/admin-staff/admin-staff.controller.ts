@@ -13,7 +13,9 @@ import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { CurrentAdmin } from '../admin-auth/current-admin.decorator';
 import { AdminStaffService } from './admin-staff.service';
 import { CreateStaffDto, UpdateStaffDto } from './dto';
+import { OwnerOnly } from '../admin-auth/admin-roles';
 
+@OwnerOnly()
 @Controller('admin/staff')
 @UseGuards(AdminJwtAuthGuard)
 export class AdminStaffController {

@@ -16,10 +16,15 @@ export const adminLoginSchema = z.object({
 });
 export type AdminLoginInput = z.infer<typeof adminLoginSchema>;
 
+/** owner: everything. finance: money. support: users and trust. See admin-roles.ts in the API. */
+export const adminRoleSchema = z.enum(['owner', 'finance', 'support']);
+export type AdminRoleName = z.infer<typeof adminRoleSchema>;
+
 export const adminIdentitySchema = z.object({
   id: z.uuid(),
   email: z.email(),
   displayName: z.string(),
+  role: adminRoleSchema,
   /** Whether this account signs in with an authenticator-app code as well as its password. */
   mfaEnabled: z.boolean(),
   /** True when ADMIN_MFA_REQUIRED is on and this account hasn't enrolled yet: only account setup is allowed. */
@@ -395,6 +400,7 @@ export const adminStaffRowSchema = z.object({
   id: z.uuid(),
   email: z.email(),
   displayName: z.string(),
+  role: adminRoleSchema,
   disabled: z.boolean(),
   mfaEnabled: z.boolean(),
   createdAt: z.iso.datetime(),
@@ -405,6 +411,7 @@ export type AdminStaffRowDto = z.infer<typeof adminStaffRowSchema>;
 export const createStaffSchema = z.object({
   email: z.email(),
   displayName: z.string().trim().min(1).max(200),
+  role: adminRoleSchema,
   password: z.string().min(8).max(200),
 });
 export type CreateStaffInput = z.infer<typeof createStaffSchema>;
@@ -412,12 +419,14 @@ export type CreateStaffInput = z.infer<typeof createStaffSchema>;
 export const updateStaffSchema = z
   .object({
     displayName: z.string().trim().min(1).max(200).optional(),
+    role: adminRoleSchema.optional(),
     disabled: z.boolean().optional(),
     password: z.string().min(8).max(200).optional(),
   })
   .refine(
     (input) =>
       input.displayName !== undefined ||
+      input.role !== undefined ||
       input.disabled !== undefined ||
       input.password !== undefined,
     { message: 'Provide at least one field to update' },
