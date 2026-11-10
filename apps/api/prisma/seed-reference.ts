@@ -8,19 +8,38 @@ import { CATEGORIES, HARARE_CITY } from './reference-data.js';
  * without — no demo users, providers, bookings, or admin credentials (that is
  * prisma/seed.ts, which is for development databases only).
  *
- * Only inserts what is missing and never overwrites, so names an admin has
- * since edited in the console survive a re-run.
+ * Only inserts what is missing, matched by id *or* name (names aren't unique
+ * in the schema, and rows added through the admin console have random ids),
+ * and never overwrites, so a re-run can't duplicate or undo console edits.
  */
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
 async function main() {
-  const city = await prisma.city.createMany({ data: [HARARE_CITY], skipDuplicates: true });
-  const categories = await prisma.category.createMany({ data: CATEGORIES, skipDuplicates: true });
+  let cities = 0;
+  const cityExists = await prisma.city.findFirst({
+    where: { OR: [{ id: HARARE_CITY.id }, { name: HARARE_CITY.name }] },
+  });
+  if (!cityExists) {
+    await prisma.city.create({ data: HARARE_CITY });
+    cities += 1;
+  }
+
+  let categories = 0;
+  for (const category of CATEGORIES) {
+    const exists = await prisma.category.findFirst({
+      where: { OR: [{ id: category.id }, { name: category.name, parentId: null }] },
+    });
+    if (!exists) {
+      await prisma.category.create({ data: category });
+      categories += 1;
+    }
+  }
+
   // eslint-disable-next-line no-console
   console.log(
-    `Reference data: ${String(city.count)} city and ${String(categories.count)} categories added (existing rows left untouched).`,
+    `Reference data: ${String(cities)} city and ${String(categories)} categories added (existing rows left untouched).`,
   );
 }
 
