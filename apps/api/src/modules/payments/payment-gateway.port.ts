@@ -1,3 +1,5 @@
+import type { PayChannel, PaymentAction } from '@sc/shared';
+
 export const PAYMENT_GATEWAY = Symbol('PAYMENT_GATEWAY');
 
 /** The gateways this app can be pointed at, as they are recorded on `Payment.provider`. */
@@ -25,6 +27,8 @@ export interface PaymentCheckoutInput {
   phone?: string;
   /** Prevent a phone-prompt failure from opening a hosted browser checkout. */
   allowHostedCheckout?: boolean;
+  /** The wallet or card to charge. Defaults to EcoCash, the only channel older app builds send. */
+  channel?: PayChannel;
 }
 
 export interface PaymentIntentResult {
@@ -34,6 +38,14 @@ export interface PaymentIntentResult {
   checkoutUrl?: string;
   /** USSD/mobile prompt instructions for the customer — set instead of checkoutUrl when `phone` was supplied. */
   instructions?: string;
+  /** Set when the customer must enter an InnBucks code or an O'mari OTP. Safe to send to the client. */
+  action?: PaymentAction;
+  /**
+   * Where an O'mari OTP must be posted. Server-only: stored on the Payment row
+   * and never returned to the client, so the app can only submit a code
+   * through the API's own authenticated endpoint.
+   */
+  otpUrl?: string;
   provider: PaymentProvider;
 }
 
@@ -59,7 +71,19 @@ export interface PaymentConfirmation {
  * never leave the server.
  */
 export interface PaymentGatewayPort {
+  /**
+   * The channels this gateway can take, before the PAYMENT_CHANNELS allow-list
+   * narrows them. Absent means EcoCash only — what every gateway here did
+   * before channels existed.
+   */
+  readonly supportedChannels?: readonly PayChannel[];
   createCheckout(input: PaymentCheckoutInput): Promise<PaymentIntentResult>;
+  /**
+   * Forwards an O'mari one-time code to the gateway. Resolves once the gateway
+   * accepted it; the payment's verdict still arrives through polling or the
+   * callback, exactly as for every other channel. Throws a 400 for a wrong code.
+   */
+  submitOtp?(otpUrl: string, otp: string): Promise<void>;
   /**
    * True when the gateway signed this callback and the signature checks out.
    * A gateway that does not sign its callbacks at all returns false here and

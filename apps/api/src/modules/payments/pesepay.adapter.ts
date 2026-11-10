@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv } from 'node:crypto';
+import type { PayChannel } from '@sc/shared';
 import type { Env } from '../../config/env';
 import type {
   PaymentCheckoutInput,
@@ -15,6 +16,7 @@ import type {
   PaymentPollStatus,
 } from './payment-gateway.port';
 import { pesepayLedgerStatus } from './pesepay-status';
+import { assertChannelOffered } from './pay-channels';
 import { toLocalPhone } from './phone-format';
 
 const LIVE_BASE_URL = 'https://api.pesepay.com/api/payments-engine';
@@ -75,10 +77,25 @@ interface PesepayCredentials {
 export class PesepayAdapter implements PaymentGatewayPort {
   private readonly logger = new Logger(PesepayAdapter.name);
 
+  /**
+   * EcoCash in-app plus the hosted page for cards. Pesepay's codes for the
+   * other wallets are not wired up: it is the standby gateway, and Paynow is
+   * the one live in production.
+   */
+  readonly supportedChannels: readonly PayChannel[] = ['ecocash', 'card'];
+
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   async createCheckout(input: PaymentCheckoutInput): Promise<PaymentIntentResult> {
     const creds = this.credentials();
+    const channel = input.channel ?? 'ecocash';
+    assertChannelOffered(channel, this, this.config.get('PAYMENT_CHANNELS', { infer: true }));
+    if (channel === 'card') {
+      if (input.allowHostedCheckout === false) {
+        throw new BadRequestException('Card payments are not available for this purchase');
+      }
+      return this.createHostedCheckout(input, creds);
+    }
 
     // Seamless checkout only reaches a number registered for the chosen mobile
     // money network. A customer paying by card, or whose login number is not
@@ -102,6 +119,13 @@ export class PesepayAdapter implements PaymentGatewayPort {
       }
     }
 
+    return this.createHostedCheckout(input, creds);
+  }
+
+  private async createHostedCheckout(
+    input: PaymentCheckoutInput,
+    creds: PesepayCredentials,
+  ): Promise<PaymentIntentResult> {
     const transaction = await this.send<PesepayTransaction>(
       'POST',
       '/v1/payments/initiate',

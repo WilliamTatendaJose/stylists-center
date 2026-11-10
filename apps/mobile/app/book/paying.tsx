@@ -5,10 +5,14 @@ import * as WebBrowser from 'expo-web-browser';
 import { Check } from 'lucide-react-native';
 import { Screen, Text, Button, useTheme } from '@sc/ui';
 import { space } from '@sc/tokens';
+import { PAY_CHANNEL_LABELS } from '@sc/shared';
 import { useBookingPaymentStatus } from '../../src/api/hooks/useBookings.js';
 import { usePendingPaymentStore } from '../../src/state/index.js';
+import { PaymentActionPanel } from '../../src/components/PaymentActionPanel.js';
 
 const POLL_TIMEOUT_MS = 90_000;
+/** InnBucks and O'mari need the customer to switch apps or read an SMS, which takes longer than a prompt. */
+const ACTION_POLL_TIMEOUT_MS = 5 * 60_000;
 
 const styles = StyleSheet.create({
   body: { alignItems: 'center', paddingTop: space.xxl },
@@ -62,15 +66,20 @@ export default function Paying() {
 
   useEffect(() => {
     if (!status || SUCCESS_STATUSES.has(status)) return;
-    const timer = setTimeout(() => setTimedOut(true), POLL_TIMEOUT_MS);
+    const timer = setTimeout(
+      () => setTimedOut(true),
+      pending?.action ? ACTION_POLL_TIMEOUT_MS : POLL_TIMEOUT_MS,
+    );
     return () => clearTimeout(timer);
-  }, [status]);
+  }, [status, pending?.action]);
 
   if (!pending) return null;
 
   const paid = status ? SUCCESS_STATUSES.has(status) : false;
   const failed = status ? FAILURE_STATUSES.has(status) : false;
   const viaBrowser = Boolean(pending.checkoutUrl);
+  const channelLabel = PAY_CHANNEL_LABELS[pending.payChannel ?? 'ecocash'];
+  const action = pending.action;
 
   // Confirmed payments are NOT auto-forwarded. The whole point of this screen
   // is that the person sees Paynow's actual answer — bouncing straight to
@@ -84,7 +93,7 @@ export default function Paying() {
       serviceName: pending.serviceName,
       whenLabel: pending.whenLabel,
       areaName: pending.areaName,
-      paymentLabel: 'Paynow — EcoCash, paid',
+      paymentLabel: `Paynow — ${channelLabel}, paid`,
     };
     clearPending();
     router.replace({ pathname: '/book/done', params: done });
@@ -123,7 +132,11 @@ export default function Paying() {
                 ? 'Still waiting on Paynow'
                 : viaBrowser
                   ? 'Finish paying in Paynow'
-                  : 'Check your phone'}
+                  : action?.kind === 'innbucks'
+                    ? 'Approve in InnBucks'
+                    : action?.kind === 'otp'
+                      ? "Enter your O'mari code"
+                      : 'Check your phone'}
         </Text>
         <Text variant="body" color="neutral700" style={styles.instructions}>
           {paid
@@ -135,8 +148,11 @@ export default function Paying() {
                 : (pending.instructions ??
                   (viaBrowser
                     ? 'Complete the payment in the Paynow window. This screen updates on its own once it clears.'
-                    : 'Approve the EcoCash prompt on your phone to confirm this booking.'))}
+                    : `Approve the ${channelLabel} prompt on your phone to confirm this booking.`))}
         </Text>
+        {action && !paid && !showExit ? (
+          <PaymentActionPanel action={action} reference={pending.reference} />
+        ) : null}
       </View>
     </Screen>
   );

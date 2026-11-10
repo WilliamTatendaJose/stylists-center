@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { payerPhoneSchema, paymentMethodSchema } from './bookings.js';
+import { payChannelSchema, paymentActionSchema } from './payments.js';
 import { imageUrlSchema } from './uploads.js';
 
 export const productCategorySchema = z.enum([
@@ -110,6 +111,11 @@ export const createOrderSchema = z.object({
     .max(20),
   /** Required in practice for EcoCash — the number the prompt is sent to. Falls back to the account phone when absent. */
   payerPhone: payerPhoneSchema.optional(),
+  /**
+   * Which wallet pays an online order. Card is refused here: a cart can split
+   * into several orders, and each would need its own browser page.
+   */
+  payChannel: payChannelSchema.exclude(['card']).optional(),
 });
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
 
@@ -121,6 +127,8 @@ export const createOrderResponseSchema = z.object({
   checkoutUrl: z.url().optional(),
   /** Present when the gateway pushed an EcoCash prompt to the buyer's phone — show this while polling payment-status. */
   instructions: z.string().optional(),
+  /** Present when the buyer must enter an InnBucks code or an O'mari OTP before the payment can settle. */
+  action: paymentActionSchema.optional(),
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
 

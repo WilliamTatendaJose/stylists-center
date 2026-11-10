@@ -6,3 +6,4 @@ export * from './useGeo.js';
 export * from './useProviders.js';
 export * from './useWallet.js';
 export * from './useVerification.js';
+export * from './usePayments.js';

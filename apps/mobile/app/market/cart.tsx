@@ -4,8 +4,10 @@ import { router } from 'expo-router';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import {
   formatUsd,
-  isValidMobileMoneyPhone,
+  PAY_CHANNEL_LABELS,
+  PHONE_PAY_CHANNELS,
   type CreateOrderResponse,
+  type PayChannel,
   type PaymentMethod,
 } from '@sc/shared';
 import { space } from '@sc/tokens';
@@ -19,11 +21,12 @@ import {
   RadioCard,
   RuleList,
   EmptyPanel,
-  TextField,
   useTheme,
 } from '@sc/ui';
 import { useCreateOrder } from '../../src/api/hooks/useMarket.js';
 import { useMe } from '../../src/api/hooks/useMe.js';
+import { usePayChannels } from '../../src/api/hooks/usePayments.js';
+import { OnlinePaymentFields, payerPhoneError } from '../../src/components/OnlinePaymentFields.js';
 import {
   cartTotalUsdCents,
   groupCartBySeller,
@@ -54,8 +57,6 @@ const styles = StyleSheet.create({
   section: { marginTop: space.xl, marginBottom: space.l },
   sectionLabel: { marginBottom: space.m },
   radioGap: { marginBottom: space.s },
-  phoneField: { marginTop: space.l },
-  phoneHelp: { marginTop: space.s },
   footer: { gap: space.s },
 });
 
@@ -86,6 +87,11 @@ export default function Cart() {
   const [sellerErrors, setSellerErrors] = useState<Record<string, string>>({});
   const [payerPhone, setPayerPhone] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  // No card here: a cart can split into several orders, and each would need
+  // its own browser page. The API refuses card for orders too.
+  const { channels } = usePayChannels({ excludeCard: true });
+  const [chosenChannel, setChosenChannel] = useState<PayChannel>('ecocash');
+  const payChannel = channels.includes(chosenChannel) ? chosenChannel : (channels[0] ?? 'ecocash');
 
   // Prefilled with the account number as the common case, still editable —
   // the line someone pays from is not necessarily the one they log in with.
@@ -119,8 +125,10 @@ export default function Cart() {
   const placeOrders = async () => {
     // Catch a bad number before placing anything: these orders consume stock,
     // and a rejected phone would otherwise fail them one seller at a time.
-    if (paymentMethod === 'ecocash' && !isValidMobileMoneyPhone(payerPhone.trim())) {
-      setPhoneError('Enter a valid mobile number, for example 077 000 0000.');
+    const numberError =
+      paymentMethod === 'ecocash' ? payerPhoneError(payChannel, payerPhone) : null;
+    if (numberError) {
+      setPhoneError(numberError);
       return;
     }
     setPhoneError(null);
@@ -135,7 +143,10 @@ export default function Cart() {
             checkoutKey: getCheckoutKey(group.providerId),
             paymentMethod,
             items: group.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
-            ...(paymentMethod === 'ecocash' ? { payerPhone: payerPhone.trim() } : {}),
+            ...(paymentMethod === 'ecocash' && payChannel !== 'card' ? { payChannel } : {}),
+            ...(paymentMethod === 'ecocash' && PHONE_PAY_CHANNELS.has(payChannel)
+              ? { payerPhone: payerPhone.trim() }
+              : {}),
           })
           .then((created) => ({ group, created })),
       ),
@@ -173,7 +184,7 @@ export default function Cart() {
     // In-app EcoCash starts one phone prompt per order. Every order waits on
     // its real result rather than treating a successful API request as paid.
     const awaitingPayment = succeeded.some(
-      ({ created }) => created.instructions ?? created.checkoutUrl,
+      ({ created }) => created.instructions ?? created.checkoutUrl ?? created.action,
     );
     if (awaitingPayment) {
       // The waiting screen stays inside Style Center and polls each order.
@@ -183,6 +194,7 @@ export default function Cart() {
         providerName: group.providerName,
         totalUsdCents: created.totalUsdCents,
         requiresHostedCheckout: Boolean(created.checkoutUrl),
+        ...(created.action ? { action: created.action } : {}),
       }));
       const firstInstructions = succeeded.find(({ created }) => created.instructions)?.created
         .instructions;
@@ -192,6 +204,7 @@ export default function Cart() {
           orders: JSON.stringify(pendingOrders),
           ...(remainingCount ? { remainingCount: String(remainingCount) } : {}),
           ...(firstInstructions ? { instructions: firstInstructions } : {}),
+          payChannel,
         },
       });
       return;
@@ -325,7 +338,7 @@ export default function Cart() {
         <View style={styles.radioGap}>
           <RadioCard
             title="Pay in app"
-            description="Approve an EcoCash prompt on your phone. Stay in Style Center while we confirm the payment."
+            description={`Pay with ${channels.map((c) => PAY_CHANNEL_LABELS[c]).join(', ')}. Stay in Style Center while we confirm the payment.`}
             dot
             selected={paymentMethod === 'ecocash'}
             onPress={() => {
@@ -344,27 +357,20 @@ export default function Cart() {
         />
 
         {paymentMethod === 'ecocash' ? (
-          <View style={styles.phoneField}>
-            <TextField
-              label="EcoCash number"
-              value={payerPhone}
-              onChangeText={(value) => {
-                setPayerPhone(value);
-                setPhoneError(null);
-              }}
-              placeholder="077 000 0000"
-              keyboardType="phone-pad"
-            />
-            <Text
-              variant="metaSmall"
-              color={phoneError ? colors.accent700 : 'neutral600'}
-              style={styles.phoneHelp}
-              {...(phoneError ? { accessibilityLiveRegion: 'polite' as const } : {})}
-            >
-              {phoneError ??
-                "We'll send the payment prompt here. It doesn't have to be your login number."}
-            </Text>
-          </View>
+          <OnlinePaymentFields
+            channels={channels}
+            channel={payChannel}
+            onChannelChange={(next) => {
+              setChosenChannel(next);
+              setPhoneError(null);
+            }}
+            phone={payerPhone}
+            onPhoneChange={(value) => {
+              setPayerPhone(value);
+              setPhoneError(null);
+            }}
+            phoneError={phoneError}
+          />
         ) : null}
       </View>
 

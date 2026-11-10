@@ -1,6 +1,7 @@
 export * from './auth.js';
 export * from './matching.js';
 export * from './bookings.js';
+export * from './payments.js';
 export * from './providers.js';
 export * from './wallet.js';
 export * from './chat.js';

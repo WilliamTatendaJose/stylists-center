@@ -5,6 +5,8 @@ import { firebaseExchangeSchema, meSchema, selectAccountTypeSchema } from './aut
 import { conversationSchema } from './chat.js';
 import { imageUrlSchema } from './uploads.js';
 import { paySubscriptionSchema } from './subscription.js';
+import { createOrderSchema } from './market.js';
+import { paymentActionSchema, submitPaymentOtpSchema } from './payments.js';
 import {
   adminLoginSchema,
   createAdminUserSchema,
@@ -233,5 +235,54 @@ describe('admin schemas', () => {
     expect(updateProviderAdminSchema.safeParse({ subscriptionPriceUsdCents: 500 }).success).toBe(
       true,
     );
+  });
+});
+
+describe('payment channel schemas', () => {
+  const booking = {
+    providerId: '7f2f9d7e-1d2a-4f5b-9c3e-0a1b2c3d4e5f',
+    serviceId: '8a3b0e8f-2e3b-4a6c-8d4f-1b2c3d4e5f6a',
+    startsAt: '2026-12-01T08:00:00.000Z',
+    paymentMethod: 'ecocash',
+  } as const;
+
+  it('accepts a booking from an older app that sends no channel', () => {
+    expect(createBookingSchema.safeParse(booking).success).toBe(true);
+  });
+
+  it('accepts every channel on a booking and rejects an unknown one', () => {
+    for (const payChannel of ['ecocash', 'onemoney', 'innbucks', 'omari', 'card']) {
+      expect(createBookingSchema.safeParse({ ...booking, payChannel }).success).toBe(true);
+    }
+    expect(createBookingSchema.safeParse({ ...booking, payChannel: 'paypal' }).success).toBe(false);
+  });
+
+  it('refuses card on a market order', () => {
+    const order = {
+      providerId: booking.providerId,
+      checkoutKey: 'checkout-key-123',
+      paymentMethod: 'ecocash',
+      items: [{ productId: booking.serviceId, quantity: 1 }],
+    };
+    expect(createOrderSchema.safeParse({ ...order, payChannel: 'innbucks' }).success).toBe(true);
+    expect(createOrderSchema.safeParse({ ...order, payChannel: 'card' }).success).toBe(false);
+  });
+
+  it('accepts only a 4-8 digit OTP', () => {
+    expect(submitPaymentOtpSchema.safeParse({ reference: 'BK-1', otp: '012345' }).success).toBe(
+      true,
+    );
+    expect(submitPaymentOtpSchema.safeParse({ reference: 'BK-1', otp: '12a456' }).success).toBe(
+      false,
+    );
+    expect(submitPaymentOtpSchema.safeParse({ reference: 'BK-1', otp: '123' }).success).toBe(false);
+  });
+
+  it('parses both action kinds', () => {
+    expect(
+      paymentActionSchema.safeParse({ kind: 'innbucks', authorizationCode: '123456789' }).success,
+    ).toBe(true);
+    expect(paymentActionSchema.safeParse({ kind: 'otp' }).success).toBe(true);
+    expect(paymentActionSchema.safeParse({ kind: 'qr' }).success).toBe(false);
   });
 });

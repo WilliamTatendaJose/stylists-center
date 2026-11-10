@@ -1,10 +1,14 @@
 import { create } from 'zustand';
+import type { PayChannel, PaymentAction } from '@sc/shared';
 
 export interface PendingSubscription {
   reference?: string;
   priceUsdCents: number;
   instructions?: string;
   checkoutUrl?: string;
+  /** An InnBucks code to show, or an O'mari OTP to collect, before the payment can settle. */
+  action?: PaymentAction;
+  payChannel?: PayChannel;
 }
 
 interface PendingSubscriptionState {

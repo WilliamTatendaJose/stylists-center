@@ -392,6 +392,10 @@ model Payment {
   externalRef    String?
   /// The gateway reference this payment was initiated under. Bookings and orders carry their own `reference` column, but a subscription has no such row — without this, a Paynow callback for a subscription had nothing to match against and was rejected as unknown. Nullable because rows written before this column existed cannot be backfilled.
   reference      String?
+  /// Which wallet or card paid ('ecocash' | 'onemoney' | 'innbucks' | 'omari' | 'card'). A string for the same reason `provider` is; null on rows written before channels existed (all EcoCash) and on fake/internal rows.
+  channel        String?
+  /// Where an O'mari one-time code must be posted (Paynow's `remoteotpurl`). Server-only — never sent to a client.
+  otpUrl         String?
   createdAt      DateTime @default(now())
 
   @@index([bookingId])

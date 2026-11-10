@@ -13,7 +13,6 @@ import {
   formatBookingWhen,
   isSubscriptionActive,
   needsCashReconciliation,
-  normalizePhone,
   type BookingStatus,
   type CreateProviderProductInput,
   type UpdateProviderProductInput,
@@ -50,6 +49,7 @@ import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { payerPhoneFor } from '../payments/pay-channels';
 import { PaymentStatusService } from '../payments/payment-status.service';
 import { applySubscriptionPayment } from '../payments/payments.service';
 import { toBookingRowDto } from '../bookings/mappers';
@@ -701,18 +701,15 @@ export class ProviderService {
       where: { providerProfile: { id: providerProfileId } },
       select: { phone: true },
     });
-    // The number the stylist typed, which need not be their login line.
-    const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
-    const paymentPhone = payerPhone ?? user.phone;
-    if (!paymentPhone) {
-      throw new BadRequestException('Enter the EcoCash phone number for this payment');
-    }
+    const payChannel = input.payChannel ?? 'ecocash';
+    const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, user.phone);
     const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
     const intent = await this.paymentGateway.createCheckout({
       reference,
       amountUsdCents,
       description: 'Style Center monthly subscription',
-      phone: paymentPhone,
+      channel: payChannel,
+      ...(paymentPhone ? { phone: paymentPhone } : {}),
     });
     await this.prisma.payment.create({
       data: {
@@ -722,6 +719,8 @@ export class ProviderService {
         amountUsdCents,
         externalRef: intent.externalRef,
         reference,
+        channel: payChannel,
+        otpUrl: intent.otpUrl ?? null,
       },
     });
     // The fake dev adapter settles instantly ('held'); Paynow returns
@@ -734,6 +733,8 @@ export class ProviderService {
       pending: !paidNow,
       ...(intent.checkoutUrl ? { checkoutUrl: intent.checkoutUrl } : {}),
       ...(intent.instructions ? { instructions: intent.instructions } : {}),
+      ...(intent.action ? { action: intent.action } : {}),
+      reference,
     };
   }
 

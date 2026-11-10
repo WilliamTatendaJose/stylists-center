@@ -1,20 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Redirect } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
-import { formatUsd, isValidMobileMoneyPhone } from '@sc/shared';
+import { formatUsd, PAY_CHANNEL_LABELS, PHONE_PAY_CHANNELS, type PayChannel } from '@sc/shared';
 import { space } from '@sc/tokens';
-import {
-  Button,
-  RadioCard,
-  RuleList,
-  Screen,
-  ScreenHeader,
-  Text,
-  TextField,
-  useTheme,
-} from '@sc/ui';
+import { Button, RadioCard, RuleList, Screen, ScreenHeader, Text, useTheme } from '@sc/ui';
 import { usePaySubscription, useProviderSubscription } from '../../src/api/hooks/useProviders.js';
 import { useMe } from '../../src/api/hooks/useMe.js';
+import { usePayChannels } from '../../src/api/hooks/usePayments.js';
+import { OnlinePaymentFields, payerPhoneError } from '../../src/components/OnlinePaymentFields.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { usePendingSubscriptionStore } from '../../src/state/index.js';
@@ -23,8 +16,6 @@ const styles = StyleSheet.create({
   footer: { gap: space.s },
   section: { marginBottom: space.xxl },
   sectionLabel: { marginBottom: space.m },
-  phoneField: { marginTop: space.l },
-  phoneHelp: { marginTop: space.s },
 });
 
 /** Subscription checkout lives outside `(provider)`, exactly like client booking checkout lives outside `(tabs)`. */
@@ -42,6 +33,9 @@ export default function SubscriptionPayment() {
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [handingOff, setHandingOff] = useState(false);
   const [complete, setComplete] = useState(false);
+  const { channels } = usePayChannels();
+  const [chosenChannel, setChosenChannel] = useState<PayChannel>('ecocash');
+  const payChannel = channels.includes(chosenChannel) ? chosenChannel : (channels[0] ?? 'ecocash');
 
   useEffect(() => {
     if (me?.phone) setPayerPhone((current) => current || me.phone || '');
@@ -52,15 +46,20 @@ export default function SubscriptionPayment() {
 
   const startPayment = () => {
     if (!subscription) return;
-    if (!isValidMobileMoneyPhone(payerPhone.trim())) {
-      setPhoneError('Enter a valid mobile number, for example 077 000 0000.');
+    const numberError = payerPhoneError(payChannel, payerPhone);
+    if (numberError) {
+      setPhoneError(numberError);
       return;
     }
     setPhoneError(null);
     setPaymentError(null);
     clearPending();
     paySubscription.mutate(
-      { paymentMethod: 'ecocash', payerPhone: payerPhone.trim() },
+      {
+        paymentMethod: 'ecocash',
+        payChannel,
+        ...(PHONE_PAY_CHANNELS.has(payChannel) ? { payerPhone: payerPhone.trim() } : {}),
+      },
       {
         onSuccess: (result) => {
           if (result.pending) {
@@ -68,6 +67,9 @@ export default function SubscriptionPayment() {
               priceUsdCents: subscription.priceUsdCents,
               ...(result.instructions ? { instructions: result.instructions } : {}),
               ...(result.checkoutUrl ? { checkoutUrl: result.checkoutUrl } : {}),
+              ...(result.action ? { action: result.action } : {}),
+              ...(result.reference ? { reference: result.reference } : {}),
+              payChannel,
             });
             setHandingOff(true);
             return;
@@ -139,32 +141,25 @@ export default function SubscriptionPayment() {
         </Text>
         <RadioCard
           title="Paynow — pay securely"
-          description="Pay by EcoCash. We activate your subscription only after Paynow verifies it."
+          description={`Pay with ${channels.map((c) => PAY_CHANNEL_LABELS[c]).join(', ')}. We activate your subscription only after Paynow verifies it.`}
           dot
           selected
           onPress={() => undefined}
         />
-        <View style={styles.phoneField}>
-          <TextField
-            label="EcoCash number"
-            value={payerPhone}
-            onChangeText={(value) => {
-              setPayerPhone(value);
-              setPhoneError(null);
-            }}
-            placeholder="077 000 0000"
-            keyboardType="phone-pad"
-          />
-          <Text
-            variant="metaSmall"
-            color={phoneError ? colors.accent700 : 'neutral600'}
-            style={styles.phoneHelp}
-            {...(phoneError ? { accessibilityLiveRegion: 'polite' as const } : {})}
-          >
-            {phoneError ??
-              "We'll send the payment prompt here. It doesn't have to be your login number."}
-          </Text>
-        </View>
+        <OnlinePaymentFields
+          channels={channels}
+          channel={payChannel}
+          onChannelChange={(next) => {
+            setChosenChannel(next);
+            setPhoneError(null);
+          }}
+          phone={payerPhone}
+          onPhoneChange={(value) => {
+            setPayerPhone(value);
+            setPhoneError(null);
+          }}
+          phoneError={phoneError}
+        />
       </View>
     </Screen>
   );

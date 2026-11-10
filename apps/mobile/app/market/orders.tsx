@@ -93,7 +93,7 @@ const OrderCard = memo(function OrderCard({
               {order.reference} · {order.areaName}
             </Text>
             <Text variant="metaSmall" color="neutral600">
-              {order.paymentMethod === 'ecocash' ? 'EcoCash — paid' : 'Cash on collection'} ·{' '}
+              {order.paymentMethod === 'ecocash' ? 'Paynow — paid' : 'Cash on collection'} ·{' '}
               {formatUsd(order.totalUsdCents)}
             </Text>
           </View>

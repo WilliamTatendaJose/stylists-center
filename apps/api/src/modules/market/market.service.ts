@@ -8,7 +8,6 @@ import {
   canCancelOrder,
   canCollectOrder,
   formatOrderReference,
-  normalizePhone,
   orderTotalUsdCents,
   type CreateOrderInput,
   type CreateOrderResponse,
@@ -19,10 +18,12 @@ import {
   type ProductSort,
   type CreateProductReviewInput,
   type ProductReviewsDto,
+  type PaymentAction,
 } from '@sc/shared';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
+import { payerPhoneFor } from '../payments/pay-channels';
 import { PaymentStatusService } from '../payments/payment-status.service';
 import { PushService } from '../notifications/push.service';
 import { Inject } from '@nestjs/common';
@@ -293,23 +294,22 @@ export class MarketService {
 
       let checkoutUrl: string | undefined;
       let instructions: string | undefined;
+      // Not stored on the order: a replayed checkout key gets the instructions
+      // text (which carries any InnBucks code) but no structured action.
+      let action: PaymentAction | undefined;
       if (input.paymentMethod === 'ecocash') {
         const buyer = await tx.user.findUniqueOrThrow({
           where: { id: buyerId },
           select: { phone: true },
         });
-        // The number the buyer typed at checkout, which need not be the line
-        // they log in with. Normalised so the adapter always receives E.164.
-        const payerPhone = input.payerPhone ? normalizePhone(input.payerPhone) : null;
-        const paymentPhone = payerPhone ?? buyer.phone;
-        if (!paymentPhone) {
-          throw new BadRequestException('Enter the EcoCash phone number for this payment');
-        }
+        const payChannel = input.payChannel ?? 'ecocash';
+        const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, buyer.phone);
         const intent = await this.paymentGateway.createCheckout({
           reference: order.reference,
           amountUsdCents: totalUsdCents,
           description: `Market order ${order.reference}`,
-          phone: paymentPhone,
+          channel: payChannel,
+          ...(paymentPhone ? { phone: paymentPhone } : {}),
           allowHostedCheckout: false,
         });
         await tx.payment.create({
@@ -320,8 +320,11 @@ export class MarketService {
             amountUsdCents: totalUsdCents,
             externalRef: intent.externalRef,
             reference: order.reference,
+            channel: payChannel,
+            otpUrl: intent.otpUrl ?? null,
           },
         });
+        action = intent.action;
         checkoutUrl = intent.checkoutUrl;
         instructions = intent.instructions;
         await tx.order.update({
@@ -339,6 +342,7 @@ export class MarketService {
           totalUsdCents,
           ...(checkoutUrl ? { checkoutUrl } : {}),
           ...(instructions ? { instructions } : {}),
+          ...(action ? { action } : {}),
         },
       };
     });

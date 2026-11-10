@@ -173,7 +173,7 @@ const JobCard = memo(function JobCard({
             {booking.serviceName} · {booking.whenLabel}
           </Text>
           <Text variant="metaSmall" color="neutral600">
-            {booking.paymentMethod === 'ecocash' ? 'EcoCash' : 'Cash'} ·{' '}
+            {booking.paymentMethod === 'ecocash' ? 'Paynow' : 'Cash'} ·{' '}
             {formatUsd(booking.priceUsdCents)} · {booking.reference}
           </Text>
         </View>

@@ -130,6 +130,11 @@ FIREBASE_PROJECT_ID=style-center-5162a
 FIREBASE_CLIENT_EMAIL=...iam.gserviceaccount.com  # required for admin user CRUD and revocation checks
 FIREBASE_PRIVATE_KEY=...   # required with client email; keep escaped \\n sequences
 PAYMENT_PROVIDER=paynow   # or pesepay — only the chosen gateway's variables below are required
+# Optional. Which payment methods the app offers, comma-separated, from:
+# ecocash, onemoney, innbucks, omari, card. Unset offers everything the gateway
+# supports (Paynow: all five; Pesepay: ecocash, card). Trim it to what the
+# merchant account actually has activated — no app release needed.
+# PAYMENT_CHANNELS=ecocash,onemoney,innbucks,omari,card
 
 # If PAYMENT_PROVIDER=paynow. Paynow's test integration IDs reject transactions
 # with an email field — never add one to the checkout request.

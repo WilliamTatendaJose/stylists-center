@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { payerPhoneSchema } from './bookings.js';
+import { payChannelSchema, paymentActionSchema } from './payments.js';
 
 /** `GET /v1/provider/subscription` — the My page subscription card's only data source. */
 export const providerSubscriptionSchema = z.object({
@@ -16,6 +17,8 @@ export const paySubscriptionSchema = z.object({
   paymentMethod: z.literal('ecocash'),
   /** Required in practice for EcoCash — the number the prompt is sent to. Falls back to the account phone when absent. */
   payerPhone: payerPhoneSchema.optional(),
+  /** Which wallet or card pays. Absent from older app builds, which only knew EcoCash. */
+  payChannel: payChannelSchema.optional(),
 });
 export type PaySubscriptionInput = z.infer<typeof paySubscriptionSchema>;
 
@@ -33,6 +36,10 @@ export const paySubscriptionResponseSchema = z.object({
   checkoutUrl: z.string().optional(),
   /** Present when the gateway pushed an EcoCash prompt to the provider's phone — show while polling. */
   instructions: z.string().optional(),
+  /** Present when the stylist must enter an InnBucks code or an O'mari OTP before the payment can settle. */
+  action: paymentActionSchema.optional(),
+  /** The reference this payment was started under — what an O'mari code is submitted against. */
+  reference: z.string().optional(),
 });
 export type PaySubscriptionResponse = z.infer<typeof paySubscriptionResponseSchema>;
 

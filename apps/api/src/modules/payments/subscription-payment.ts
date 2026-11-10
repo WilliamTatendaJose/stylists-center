@@ -53,6 +53,7 @@ export function recordSubscriptionPaymentStatus(
         feeUsdCents: input.status === 'refunded' ? 0 : prior.feeUsdCents,
         externalRef: input.externalRef ?? prior.externalRef,
         reference: input.reference,
+        channel: prior.channel,
       },
     });
 
