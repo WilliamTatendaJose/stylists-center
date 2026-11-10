@@ -1,24 +1,56 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuthStore } from './state/authStore';
 import { Layout } from './routes/Layout';
 import { LoginPage } from './routes/LoginPage';
-import { OverviewPage } from './routes/OverviewPage';
-import { ReportsPage } from './routes/ReportsPage';
-import { ReportDetailPage } from './routes/ReportDetailPage';
-import { BansPage } from './routes/BansPage';
-import { ProvidersPage } from './routes/ProvidersPage';
-import { SubscriptionsPage } from './routes/SubscriptionsPage';
-import { PaymentsPage } from './routes/PaymentsPage';
-import { CashOutsPage } from './routes/CashOutsPage';
-import { AuditLogPage } from './routes/AuditLogPage';
-import { LookupPage } from './routes/LookupPage';
-import { BookingDetailPage } from './routes/BookingDetailPage';
-import { OrderDetailPage } from './routes/OrderDetailPage';
-import { ReviewsPage } from './routes/ReviewsPage';
-import { CatalogPage } from './routes/CatalogPage';
-import { StaffPage } from './routes/StaffPage';
-import { VerificationsPage } from './routes/VerificationsPage';
-import { UsersPage } from './routes/UsersPage';
+
+// Each page is loaded as its own chunk on first visit, so the login screen
+// and initial load don't pay for every admin page.
+const OverviewPage = lazy(() =>
+  import('./routes/OverviewPage').then((m) => ({ default: m.OverviewPage })),
+);
+const ReportsPage = lazy(() =>
+  import('./routes/ReportsPage').then((m) => ({ default: m.ReportsPage })),
+);
+const ReportDetailPage = lazy(() =>
+  import('./routes/ReportDetailPage').then((m) => ({ default: m.ReportDetailPage })),
+);
+const BansPage = lazy(() => import('./routes/BansPage').then((m) => ({ default: m.BansPage })));
+const ProvidersPage = lazy(() =>
+  import('./routes/ProvidersPage').then((m) => ({ default: m.ProvidersPage })),
+);
+const SubscriptionsPage = lazy(() =>
+  import('./routes/SubscriptionsPage').then((m) => ({ default: m.SubscriptionsPage })),
+);
+const PaymentsPage = lazy(() =>
+  import('./routes/PaymentsPage').then((m) => ({ default: m.PaymentsPage })),
+);
+const CashOutsPage = lazy(() =>
+  import('./routes/CashOutsPage').then((m) => ({ default: m.CashOutsPage })),
+);
+const AuditLogPage = lazy(() =>
+  import('./routes/AuditLogPage').then((m) => ({ default: m.AuditLogPage })),
+);
+const LookupPage = lazy(() =>
+  import('./routes/LookupPage').then((m) => ({ default: m.LookupPage })),
+);
+const BookingDetailPage = lazy(() =>
+  import('./routes/BookingDetailPage').then((m) => ({ default: m.BookingDetailPage })),
+);
+const OrderDetailPage = lazy(() =>
+  import('./routes/OrderDetailPage').then((m) => ({ default: m.OrderDetailPage })),
+);
+const ReviewsPage = lazy(() =>
+  import('./routes/ReviewsPage').then((m) => ({ default: m.ReviewsPage })),
+);
+const CatalogPage = lazy(() =>
+  import('./routes/CatalogPage').then((m) => ({ default: m.CatalogPage })),
+);
+const StaffPage = lazy(() => import('./routes/StaffPage').then((m) => ({ default: m.StaffPage })));
+const VerificationsPage = lazy(() =>
+  import('./routes/VerificationsPage').then((m) => ({ default: m.VerificationsPage })),
+);
+const UsersPage = lazy(() => import('./routes/UsersPage').then((m) => ({ default: m.UsersPage })));
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const admin = useAuthStore((s) => s.admin);
@@ -39,36 +71,38 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<LoginPage />} />
-      <Route
-        path="/"
-        element={
-          <RequireAuth>
-            <Layout />
-          </RequireAuth>
-        }
-      >
-        <Route index element={<Navigate to="/overview" replace />} />
-        <Route path="overview" element={<OverviewPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="reports/:id" element={<ReportDetailPage />} />
-        <Route path="bans" element={<BansPage />} />
-        <Route path="providers" element={<ProvidersPage />} />
-        <Route path="users" element={<UsersPage />} />
-        <Route path="verifications" element={<VerificationsPage />} />
-        <Route path="subscriptions" element={<SubscriptionsPage />} />
-        <Route path="payments" element={<PaymentsPage />} />
-        <Route path="cash-outs" element={<CashOutsPage />} />
-        <Route path="lookup" element={<LookupPage />} />
-        <Route path="lookup/bookings/:id" element={<BookingDetailPage />} />
-        <Route path="lookup/orders/:id" element={<OrderDetailPage />} />
-        <Route path="reviews" element={<ReviewsPage />} />
-        <Route path="catalog" element={<CatalogPage />} />
-        <Route path="staff" element={<StaffPage />} />
-        <Route path="audit-log" element={<AuditLogPage />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<div className="p-6 text-neutral-600 dark:text-dark-muted">Loading…</div>}>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <RequireAuth>
+              <Layout />
+            </RequireAuth>
+          }
+        >
+          <Route index element={<Navigate to="/overview" replace />} />
+          <Route path="overview" element={<OverviewPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="reports/:id" element={<ReportDetailPage />} />
+          <Route path="bans" element={<BansPage />} />
+          <Route path="providers" element={<ProvidersPage />} />
+          <Route path="users" element={<UsersPage />} />
+          <Route path="verifications" element={<VerificationsPage />} />
+          <Route path="subscriptions" element={<SubscriptionsPage />} />
+          <Route path="payments" element={<PaymentsPage />} />
+          <Route path="cash-outs" element={<CashOutsPage />} />
+          <Route path="lookup" element={<LookupPage />} />
+          <Route path="lookup/bookings/:id" element={<BookingDetailPage />} />
+          <Route path="lookup/orders/:id" element={<OrderDetailPage />} />
+          <Route path="reviews" element={<ReviewsPage />} />
+          <Route path="catalog" element={<CatalogPage />} />
+          <Route path="staff" element={<StaffPage />} />
+          <Route path="audit-log" element={<AuditLogPage />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
