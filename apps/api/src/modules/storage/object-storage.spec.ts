@@ -1,9 +1,20 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { LocalDiskStorage, S3Storage, STORED_OBJECT_NAME } from './object-storage';
+import {
+  LocalDiskStorage,
+  S3Storage,
+  STORED_OBJECT_NAME,
+  THUMBNAIL_OBJECT_NAME,
+  thumbnailName,
+} from './object-storage';
 
 const NAME = '3a6f010d-1d13-4a06-a747-0ae1b4be35d0.jpg';
 
@@ -18,6 +29,15 @@ describe('STORED_OBJECT_NAME', () => {
     for (const name of ['../etc/passwd', `..%2F${NAME}`, `a/${NAME}`, 'x.jpg', `${NAME}.html`]) {
       expect(STORED_OBJECT_NAME.test(name)).toBe(false);
     }
+  });
+});
+
+describe('thumbnailName', () => {
+  it('derives a sibling key that the public name pattern refuses', () => {
+    const thumb = thumbnailName(NAME);
+    expect(thumb).toBe('3a6f010d-1d13-4a06-a747-0ae1b4be35d0.thumb.jpg');
+    expect(THUMBNAIL_OBJECT_NAME.test(thumb)).toBe(true);
+    expect(STORED_OBJECT_NAME.test(thumb)).toBe(false);
   });
 });
 
@@ -43,6 +63,12 @@ describe('LocalDiskStorage', () => {
 
     await storage.delete(NAME);
     expect(await storage.locate(NAME)).toBeNull();
+  });
+
+  it('reports whether an object exists', async () => {
+    expect(await storage.exists(NAME)).toBe(false);
+    await storage.put(NAME, Buffer.from('bytes'));
+    expect(await storage.exists(NAME)).toBe(true);
   });
 
   it('treats deleting a missing file as success', async () => {
@@ -95,5 +121,31 @@ describe('S3Storage', () => {
     expect(url.searchParams.get('X-Amz-Expires')).toBe('3600');
     expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[a-f0-9]{64}$/);
     expect(location.expiresInSeconds).toBe(3600);
+  });
+
+  it('checks existence with HEAD and maps a 404 to false', async () => {
+    const sent: unknown[] = [];
+    const client = {
+      send: (command: unknown) => {
+        sent.push(command);
+        return sent.length === 1
+          ? Promise.resolve({})
+          : Promise.reject(Object.assign(new Error('nope'), { name: 'NotFound' }));
+      },
+    };
+    const storage = new S3Storage(options, client as unknown as S3Client);
+
+    expect(await storage.exists(NAME)).toBe(true);
+    expect(await storage.exists(NAME)).toBe(false);
+    expect(sent[0]).toBeInstanceOf(HeadObjectCommand);
+    expect((sent[0] as HeadObjectCommand).input).toEqual({ Bucket: 'sc-uploads', Key: NAME });
+  });
+
+  it('does not hide other S3 failures behind a false', async () => {
+    const client = {
+      send: () => Promise.reject(Object.assign(new Error('denied'), { name: 'AccessDenied' })),
+    };
+    const storage = new S3Storage(options, client as unknown as S3Client);
+    await expect(storage.exists(NAME)).rejects.toThrow('denied');
   });
 });

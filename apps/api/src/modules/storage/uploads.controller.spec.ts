@@ -6,9 +6,14 @@ import { UploadsController } from './uploads.controller';
 
 const NAME = '3a6f010d-1d13-4a06-a747-0ae1b4be35d0.png';
 
-function harness(location: StoredObjectLocation | null) {
-  const locate = vi.fn(() => Promise.resolve(location));
-  const storage: ObjectStorage = { put: vi.fn(), delete: vi.fn(), locate };
+const THUMB = '3a6f010d-1d13-4a06-a747-0ae1b4be35d0.thumb.jpg';
+
+function harness(location: StoredObjectLocation | null, existing: string[] = []) {
+  const locate = vi.fn((name: string) =>
+    Promise.resolve(name === THUMB ? { kind: 'file' as const, path: `/data/${THUMB}` } : location),
+  );
+  const exists = vi.fn((name: string) => Promise.resolve(existing.includes(name)));
+  const storage: ObjectStorage = { put: vi.fn(), delete: vi.fn(), locate, exists };
   const response = {
     setHeader: vi.fn(),
     redirect: vi.fn(),
@@ -16,6 +21,7 @@ function harness(location: StoredObjectLocation | null) {
   };
   return {
     locate,
+    exists,
     response,
     controller: new UploadsController(storage),
     res: response as unknown as Response,
@@ -23,6 +29,28 @@ function harness(location: StoredObjectLocation | null) {
 }
 
 describe('UploadsController', () => {
+  it('serves the thumbnail for ?variant=thumb when one exists', async () => {
+    const { controller, response, res } = harness({ kind: 'file', path: `/data/${NAME}` }, [THUMB]);
+    await controller.serve(NAME, res, 'thumb');
+    expect(response.sendFile).toHaveBeenCalledWith(`/data/${THUMB}`);
+  });
+
+  it('falls back to the original when there is no thumbnail', async () => {
+    const { controller, response, res } = harness({ kind: 'file', path: `/data/${NAME}` });
+    await controller.serve(NAME, res, 'thumb');
+    expect(response.sendFile).toHaveBeenCalledWith(`/data/${NAME}`);
+  });
+
+  it('ignores unknown variants and still validates the name', async () => {
+    const { controller, response, exists, res } = harness({ kind: 'file', path: `/data/${NAME}` }, [
+      THUMB,
+    ]);
+    await controller.serve(NAME, res, 'huge');
+    expect(response.sendFile).toHaveBeenCalledWith(`/data/${NAME}`);
+    expect(exists).not.toHaveBeenCalled();
+    await expect(controller.serve(THUMB, res, 'thumb')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('redirects to the presigned link and caches the redirect for less than its lifetime', async () => {
     const { controller, response, res } = harness({
       kind: 'redirect',

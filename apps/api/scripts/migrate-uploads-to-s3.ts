@@ -2,7 +2,11 @@ import 'dotenv/config';
 import { readdir, readFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { HeadObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { S3Storage, STORED_OBJECT_NAME } from '../src/modules/storage/object-storage.js';
+import {
+  S3Storage,
+  STORED_OBJECT_NAME,
+  THUMBNAIL_OBJECT_NAME,
+} from '../src/modules/storage/object-storage.js';
 
 /**
  * One-off copy of an existing UPLOAD_DIR (the old Railway volume) into the
@@ -56,7 +60,11 @@ async function main() {
     client,
   );
 
-  const names = (await readdir(directory)).filter((name) => STORED_OBJECT_NAME.test(name));
+  // Thumbnails (`<uuid>.thumb.jpg`) sit in the same directory but do not match
+  // STORED_OBJECT_NAME, so they are selected explicitly or they would be left behind.
+  const names = (await readdir(directory)).filter(
+    (name) => STORED_OBJECT_NAME.test(name) || THUMBNAIL_OBJECT_NAME.test(name),
+  );
   let copied = 0;
   let skipped = 0;
   for (const name of names) {

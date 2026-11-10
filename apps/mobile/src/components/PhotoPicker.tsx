@@ -35,6 +35,8 @@ interface PhotoPickerProps {
   maxPhotos?: number;
   helpText?: string;
   uploadEndpoint?: string;
+  /** Long-edge cap (px) applied before upload. Identity documents pass a larger value. */
+  maxLongEdge?: number;
 }
 
 export function PhotoPicker({
@@ -46,8 +48,9 @@ export function PhotoPicker({
   maxPhotos = 5,
   helpText,
   uploadEndpoint,
+  maxLongEdge,
 }: PhotoPickerProps) {
-  const upload = useUploadImage(uploadEndpoint);
+  const upload = useUploadImage(uploadEndpoint, maxLongEdge === undefined ? {} : { maxLongEdge });
   const remaining = maxPhotos - urls.length;
 
   const choose = async () => {
@@ -95,7 +98,7 @@ export function PhotoPicker({
         <View style={styles.grid}>
           {urls.map((url, index) => (
             <View key={url} style={styles.photoWrap}>
-              <ImagePlaceholder uri={apiAssetUrl(url)} radius={12} style={styles.photo} />
+              <ImagePlaceholder uri={apiAssetUrl(url)} radius={12} style={styles.photo} thumbnail />
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Remove photo ${String(index + 1)}`}

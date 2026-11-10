@@ -1,5 +1,6 @@
 import {
   DeleteObjectCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   GetObjectCommand,
   S3Client,
@@ -15,6 +16,19 @@ import { resolve } from 'node:path';
  */
 export const STORED_OBJECT_NAME = /^[a-f0-9-]{36}\.(?:jpe?g|png|webp|pdf|txt|csv|docx?|xlsx?)$/i;
 
+/**
+ * Thumbnails live next to their original as `<uuid>.thumb.jpg`. They are never
+ * addressed by clients directly: `GET /uploads/<name>?variant=thumb` validates
+ * `<name>` against STORED_OBJECT_NAME and derives this key with
+ * `thumbnailName`, so the public route still accepts only the original names.
+ */
+export const THUMBNAIL_OBJECT_NAME = /^[a-f0-9-]{36}\.thumb\.jpg$/i;
+
+/** Storage key of the thumbnail for an original object name. */
+export function thumbnailName(name: string): string {
+  return `${name.replace(/\.[^.]+$/, '')}.thumb.jpg`;
+}
+
 export const UPLOAD_URL_PREFIX = '/uploads/';
 
 /** How long a presigned download link stays valid. */
@@ -28,6 +42,8 @@ export interface ObjectStorage {
   put(name: string, body: Buffer, contentType: string): Promise<void>;
   /** Removes an object; succeeds silently when it is already gone. */
   delete(name: string): Promise<void>;
+  /** Whether an object exists. Used to fall back from a thumbnail to the original. */
+  exists(name: string): Promise<boolean>;
   /** Where GET /uploads/<name> should send the client, or null if there is nothing there. */
   locate(name: string): Promise<StoredObjectLocation | null>;
 }
@@ -52,6 +68,10 @@ export class LocalDiskStorage implements ObjectStorage {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
+  }
+
+  async exists(name: string): Promise<boolean> {
+    return (await this.locate(name)) !== null;
   }
 
   async locate(name: string): Promise<StoredObjectLocation | null> {
@@ -122,6 +142,17 @@ export class S3Storage implements ObjectStorage {
   async delete(name: string): Promise<void> {
     // S3 DeleteObject already succeeds for a missing key.
     await this.client.send(new DeleteObjectCommand({ Bucket: this.options.bucket, Key: name }));
+  }
+
+  async exists(name: string): Promise<boolean> {
+    try {
+      await this.client.send(new HeadObjectCommand({ Bucket: this.options.bucket, Key: name }));
+      return true;
+    } catch (error) {
+      const failure = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (failure.name === 'NotFound' || failure.$metadata?.httpStatusCode === 404) return false;
+      throw error;
+    }
   }
 
   async locate(name: string): Promise<StoredObjectLocation | null> {
