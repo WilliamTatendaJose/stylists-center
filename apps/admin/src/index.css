@@ -42,6 +42,30 @@ body {
   @apply bg-white text-neutral-900 dark:bg-dark-bg dark:text-dark-text;
 }
 
+/**
+ * Tells the browser which palette native controls should use: the open list
+ * of a <select>, date pickers, scrollbars. Without it they stay light in dark
+ * mode, so a dropdown opened with light popup colours and our near-white text
+ * on top: unreadable options (the role picker on the Staff page).
+ */
+:root {
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
+}
+
+/**
+ * Some browsers (Chromium on Windows, Firefox) paint <option> rows from the
+ * select's own background. Ours is a translucent overlay in dark mode, so give
+ * options a solid surface colour.
+ */
+.dark option,
+.dark optgroup {
+  background-color: var(--color-dark-surface);
+  color: var(--color-dark-text);
+}
+
 #root {
   min-height: 100vh;
 }
