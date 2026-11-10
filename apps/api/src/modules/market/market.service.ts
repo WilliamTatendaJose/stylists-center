@@ -167,7 +167,10 @@ export class MarketService {
     const result = await this.prisma.$transaction(async (tx) => {
       // Serialize retries for this buyer/request before touching stock or the
       // payment gateway. A second request waits for the first to commit.
-      await tx.$queryRaw`
+      // $executeRaw, not $queryRaw: pg_advisory_xact_lock returns `void`,
+      // which Prisma's pg adapter cannot deserialize as a result row, so
+      // $queryRaw threw on every checkout before any order was written.
+      await tx.$executeRaw`
         SELECT pg_advisory_xact_lock(hashtextextended(${`${buyerId}:${input.checkoutKey}`}, 0))
       `;
       const fingerprint = JSON.stringify({

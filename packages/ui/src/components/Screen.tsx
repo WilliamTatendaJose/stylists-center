@@ -152,7 +152,12 @@ export function Screen({
     paddingHorizontal: layout.screenX,
     paddingTop: space.ml,
     paddingBottom: resolveFooterBottomPadding(insets.bottom),
-    borderTopColor: effectiveTheme === 'dark' ? colors.divider : color.divider,
+    borderTopColor:
+      effectiveTheme === 'dark'
+        ? colors.divider
+        : effectiveTheme === 'accent'
+          ? color.onAccent.rule
+          : color.divider,
   };
 
   const listProps: ScreenListProps = {
