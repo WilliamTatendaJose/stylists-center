@@ -1,4 +1,4 @@
-import { StyleSheet, View, type ViewStyle } from 'react-native';
+import { ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import { radius, space } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { Pressable } from '../primitives/Pressable.js';
@@ -18,9 +18,12 @@ export interface DateStripProps {
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: space.xs },
+  row: { gap: space.xs },
   card: {
-    flex: 1,
+    // A fixed width that fits "WED" and a two-digit day on one line each.
+    // With `flex: 1`, a two-week strip squeezed 14 cards into the screen
+    // width and broke "TUE" and "10" across two lines.
+    width: 60,
     alignItems: 'center',
     borderWidth: 1,
     borderRadius: radius.thumb,
@@ -28,11 +31,15 @@ const styles = StyleSheet.create({
   },
 });
 
-/** The 4-card date strip on Choose a slot: uppercase weekday + day number. */
+/** The date strip on Choose a slot: uppercase weekday + day number, scrolled sideways. */
 export function DateStrip({ dates, value, onChange }: DateStripProps) {
   const { colors } = useTheme();
   return (
-    <View style={styles.row}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.row}
+    >
       {dates.map((d) => {
         const selected = d.value === value;
         const cardStyle: ViewStyle = {
@@ -60,6 +67,6 @@ export function DateStrip({ dates, value, onChange }: DateStripProps) {
           </Pressable>
         );
       })}
-    </View>
+    </ScrollView>
   );
 }
