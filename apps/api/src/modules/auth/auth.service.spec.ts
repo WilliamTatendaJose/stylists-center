@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import type { FirebaseIdentityService } from './firebase-identity.service';
 import { UserLifecycleService } from './user-lifecycle.service';
 import { ImageStorageService } from '../provider/image-storage.service';
+import { LocalDiskStorage } from '../storage/object-storage';
 import { TrustService } from '../trust/trust.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
@@ -18,7 +19,9 @@ const BASE_ENV: Env = {
   PORT: 4000,
   DATABASE_URL: TEST_DATABASE_URL,
   REDIS_URL: 'redis://localhost:6380',
+  STORAGE_DRIVER: 'local',
   UPLOAD_DIR: 'uploads',
+  S3_REGION: 'auto',
   JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
   JWT_REFRESH_PEPPER: 'test-refresh-pepper-at-least-32-characters-long',
   ADMIN_JWT_ACCESS_SECRET: 'test-admin-access-secret-at-least-32-characters-long',
@@ -68,7 +71,7 @@ describe('AuthService Firebase exchange', () => {
       config,
       new TrustService(prisma),
       firebaseIdentity,
-      new UserLifecycleService(prisma, new ImageStorageService(config)),
+      new UserLifecycleService(prisma, new ImageStorageService(new LocalDiskStorage('uploads'))),
     );
 
     const city = await prisma.city.create({

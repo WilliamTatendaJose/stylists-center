@@ -3,6 +3,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { formatBookingReference, SUBSCRIPTION_CYCLE_DAYS } from '@sc/shared';
 import { PrismaClient } from '../src/generated/prisma/index.js';
 import { hashPassword } from '../src/modules/admin-auth/password.js';
+import { CATEGORIES, CATEGORY_IDS, HARARE_CITY, HARARE_CITY_ID } from './reference-data.js';
 
 /**
  * Every id below is fixed rather than @default(uuid())'d, and matches
@@ -15,29 +16,8 @@ const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL }),
 });
 
-const HARARE_CITY_ID = '33333333-3333-4333-8333-333333333333';
 const CLIENT_USER_ID = '11111111-1111-4111-8111-111111111111';
 const COIN_USD_CENTS = Number.parseInt(process.env.COIN_USD_CENTS ?? '20', 10);
-
-const CATEGORY_IDS = {
-  hairBraiding: '19d5bd66-1556-48de-b31f-2d800ae08fca',
-  hairdressing: 'e1725438-a6c8-48b3-b234-af6fb80dd01e',
-  barbering: 'e628d57b-b942-44ba-9582-a92708214826',
-  nails: 'ae40c0cf-611c-4cfb-8e2b-d1af636f9079',
-  makeup: '8a4bccca-69c2-4701-9d4b-92164a5c93c0',
-  beautyTreatments: '478b480d-a14b-4eb7-9d87-742f3e80b22e',
-  other: '5855db43-08ee-4843-9f90-09238bfd12e8',
-} as const;
-
-const CATEGORIES = [
-  { id: CATEGORY_IDS.hairBraiding, name: 'Hair Braiding' },
-  { id: CATEGORY_IDS.hairdressing, name: 'Hairdressing' },
-  { id: CATEGORY_IDS.barbering, name: 'Barbering' },
-  { id: CATEGORY_IDS.nails, name: 'Nails' },
-  { id: CATEGORY_IDS.makeup, name: 'Makeup' },
-  { id: CATEGORY_IDS.beautyTreatments, name: 'Beauty Treatments' },
-  { id: CATEGORY_IDS.other, name: 'Other' },
-];
 
 const PROVIDER_IDS = {
   tariro: 'e628d57b-b942-44ba-9582-a92708214826',
@@ -214,17 +194,7 @@ async function main() {
   await prisma.city.upsert({
     where: { id: HARARE_CITY_ID },
     update: {},
-    create: {
-      id: HARARE_CITY_ID,
-      name: 'Harare',
-      timezone: 'Africa/Harare',
-      centroidLat: -17.8252,
-      centroidLng: 31.0335,
-      bboxWest: 30.9,
-      bboxSouth: -18.0,
-      bboxEast: 31.2,
-      bboxNorth: -17.6,
-    },
+    create: HARARE_CITY,
   });
 
   for (const category of CATEGORIES) {

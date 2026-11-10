@@ -33,8 +33,7 @@ export class ReminderProcessor extends WorkerHost {
         },
       });
       if (
-        !booking ||
-        booking.status !== 'confirmed' ||
+        booking?.status !== 'confirmed' ||
         booking.startsAt.toISOString() !== data.startsAt ||
         booking.startsAt <= new Date()
       )
@@ -62,8 +61,7 @@ export class ReminderProcessor extends WorkerHost {
         where: { id: data.orderId },
         include: { buyer: { select: { pickupRemindersEnabled: true } } },
       });
-      if (!order || order.status !== 'ready_for_collection' || !order.buyer.pickupRemindersEnabled)
-        return;
+      if (order?.status !== 'ready_for_collection' || !order.buyer.pickupRemindersEnabled) return;
       await this.push.sendToUser(order.buyerId, {
         title: 'Order waiting for pickup',
         body: `Order ${order.reference} is ready for collection.`,

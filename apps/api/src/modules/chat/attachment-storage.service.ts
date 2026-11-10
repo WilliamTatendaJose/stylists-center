@@ -1,10 +1,8 @@
-import { BadRequestException, Injectable, type OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { basename, extname, resolve } from 'node:path';
-import type { Env } from '../../config/env';
-import { detectImageExtension, uploadDirectory } from '../provider/image-storage.service';
+import { basename, extname } from 'node:path';
+import { detectImageExtension } from '../provider/image-storage.service';
+import { OBJECT_STORAGE, UPLOAD_URL_PREFIX, type ObjectStorage } from '../storage/object-storage';
 
 export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_CHAT_ATTACHMENTS = 5;
@@ -72,16 +70,8 @@ function safeOriginalName(value: string): string {
 
 /** Stores chat files under random server names while preserving a safe display name. */
 @Injectable()
-export class AttachmentStorageService implements OnModuleInit {
-  private readonly directory: string;
-
-  constructor(config: ConfigService<Env, true>) {
-    this.directory = uploadDirectory(config);
-  }
-
-  async onModuleInit(): Promise<void> {
-    await mkdir(this.directory, { recursive: true });
-  }
+export class AttachmentStorageService {
+  constructor(@Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage) {}
 
   async saveMany(files: UploadedAttachmentFile[]): Promise<StoredAttachment[]> {
     if (files.length > MAX_CHAT_ATTACHMENTS) {
@@ -105,9 +95,9 @@ export class AttachmentStorageService implements OnModuleInit {
     }
 
     const storedName = `${randomUUID()}${extension === '.jpeg' ? '.jpg' : extension}`;
-    await writeFile(resolve(this.directory, storedName), file.buffer, { flag: 'wx' });
+    await this.storage.put(storedName, file.buffer, fileType.mimeType);
     return {
-      url: `/uploads/${storedName}`,
+      url: `${UPLOAD_URL_PREFIX}${storedName}`,
       name,
       mimeType: fileType.mimeType,
       sizeBytes: file.buffer.length,

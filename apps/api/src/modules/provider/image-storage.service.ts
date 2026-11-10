@@ -1,10 +1,12 @@
-import { BadRequestException, Injectable, type OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { resolve } from 'node:path';
 import type { UploadedImageDto } from '@sc/shared';
-import type { Env } from '../../config/env';
+import {
+  OBJECT_STORAGE,
+  STORED_OBJECT_NAME,
+  UPLOAD_URL_PREFIX,
+  type ObjectStorage,
+} from '../storage/object-storage';
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -12,10 +14,6 @@ export interface UploadedImageFile {
   buffer: Buffer;
   mimetype: string;
   size: number;
-}
-
-export function uploadDirectory(config: ConfigService<Env, true>): string {
-  return resolve(process.cwd(), config.get('UPLOAD_DIR', { infer: true }));
 }
 
 export function detectImageExtension(buffer: Buffer): 'jpg' | 'png' | 'webp' | null {
@@ -38,18 +36,12 @@ export function detectImageExtension(buffer: Buffer): 'jpg' | 'png' | 'webp' | n
   return null;
 }
 
+const IMAGE_CONTENT_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' } as const;
+
 /** Stores provider-owned photos under unguessable names after checking their real bytes. */
 @Injectable()
-export class ImageStorageService implements OnModuleInit {
-  private readonly directory: string;
-
-  constructor(config: ConfigService<Env, true>) {
-    this.directory = uploadDirectory(config);
-  }
-
-  async onModuleInit(): Promise<void> {
-    await mkdir(this.directory, { recursive: true });
-  }
+export class ImageStorageService {
+  constructor(@Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage) {}
 
   async save(file: UploadedImageFile | undefined): Promise<UploadedImageDto> {
     if (!file?.buffer.length) throw new BadRequestException('Choose an image to upload');
@@ -63,19 +55,15 @@ export class ImageStorageService implements OnModuleInit {
     }
 
     const filename = `${randomUUID()}.${extension}`;
-    await writeFile(resolve(this.directory, filename), file.buffer, { flag: 'wx' });
-    return { url: `/uploads/${filename}` };
+    await this.storage.put(filename, file.buffer, IMAGE_CONTENT_TYPES[extension]);
+    return { url: `${UPLOAD_URL_PREFIX}${filename}` };
   }
 
   /** Permanently removes an API-owned upload after a verification decision. */
   async remove(url: string | null | undefined): Promise<void> {
-    if (!url?.startsWith('/uploads/')) return;
-    const filename = url.slice('/uploads/'.length);
-    if (!/^[a-f0-9-]{36}\.(?:jpe?g|png|webp)$/i.test(filename)) return;
-    try {
-      await unlink(resolve(this.directory, filename));
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-    }
+    if (!url?.startsWith(UPLOAD_URL_PREFIX)) return;
+    const filename = url.slice(UPLOAD_URL_PREFIX.length);
+    if (!STORED_OBJECT_NAME.test(filename) || !/\.(?:jpe?g|png|webp)$/i.test(filename)) return;
+    await this.storage.delete(filename);
   }
 }

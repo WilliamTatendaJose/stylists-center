@@ -4,11 +4,9 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ConfigService } from '@nestjs/config';
 import { RequestMethod } from '@nestjs/common';
 import helmet from 'helmet';
-import type { Response } from 'express';
 import { ZodValidationPipe } from 'nestjs-zod';
 import { AppModule } from './app.module';
 import type { Env } from './config/env';
-import { uploadDirectory } from './modules/provider/image-storage.service';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -30,17 +28,13 @@ async function bootstrap() {
       '.well-known/assetlinks.json',
       { path: 'provider-share/:id', method: RequestMethod.GET },
       { path: 'invite/:code', method: RequestMethod.GET },
+      // Stored upload URLs are origin-relative /uploads/<name> (see
+      // UploadsController), so this path must not move with the API version.
+      { path: 'uploads/:name', method: RequestMethod.GET },
     ],
   });
 
   app.use(helmet());
-  app.useStaticAssets(uploadDirectory(config), {
-    prefix: '/uploads/',
-    setHeaders: (response: Response) => {
-      response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-      response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    },
-  });
   // Only the admin console is a browser client — the mobile app's requests
   // aren't subject to CORS at all. `credentials: true` is what lets the
   // browser attach the admin refresh cookie, which is why the origin can't

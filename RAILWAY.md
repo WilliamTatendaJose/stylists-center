@@ -64,8 +64,21 @@ over a `geography` column). Deploy it from a Dockerfile instead:
 - **New service → Empty Service → Deploy from Dockerfile**
 - Root Directory: `infra/docker/postgres`
 - Dockerfile Path: `Dockerfile`
-- Variables: `POSTGRES_USER=sc`, `POSTGRES_PASSWORD=<generate>`, `POSTGRES_DB=sc_prod`
+- Variables: `POSTGRES_USER=sc`, `POSTGRES_PASSWORD=<generate>`, `POSTGRES_DB=sc_prod`,
+  `PGDATA=/var/lib/postgresql/data/pgdata`
 - **Attach a Volume** at `/var/lib/postgresql/data` (data is lost on redeploy without one)
+
+**`PGDATA` must be exactly `/var/lib/postgresql/data/pgdata`, inside the
+volume.** It has to be a subdirectory because the volume's root contains
+`lost+found`, and `initdb` refuses a non-empty directory. **Don't set it
+from Git Bash on Windows:** Git Bash rewrites any argument starting with `/`
+into a Windows path, so `railway variables --set PGDATA=/var/...` stores
+`C:/Users/<you>/AppData/Local/Programs/Git/var/...`. Postgres then writes
+its data outside the volume, and **every restart of `db` silently wipes the
+database** (this happened in November 2026). Set it in the dashboard, from
+PowerShell, or prefix the command with `MSYS_NO_PATHCONV=1`. To check, the
+`db` deploy log must not show `initdb` running on a normal restart.
+
 - Internal port: `5432` (default, no need to expose publicly)
 
 ## 2. `redis`
@@ -88,8 +101,10 @@ deployed the same way as `db`, not the plugin:
   pnpm workspace, so the build needs the whole monorepo as context)
 - Dockerfile Path: `apps/api/Dockerfile`
 - Healthcheck Path: `/healthz`
-- **Attach a Volume** at `/app/apps/api/uploads` (matches `UPLOAD_DIR=uploads`
-  resolved against the container's cwd — see the note on object storage below)
+- **No volume needed** once uploads are in R2 (`STORAGE_DRIVER=s3`, below).
+  Only with `STORAGE_DRIVER=local` does it need a Volume at
+  `/app/apps/api/uploads` (`UPLOAD_DIR=uploads` resolved against the
+  container's cwd).
 
 Variables:
 
@@ -98,7 +113,12 @@ NODE_ENV=production
 PORT=4000
 DATABASE_URL=postgresql://${{db.POSTGRES_USER}}:${{db.POSTGRES_PASSWORD}}@${{db.RAILWAY_PRIVATE_DOMAIN}}:5432/${{db.POSTGRES_DB}}
 REDIS_URL=redis://${{redis.RAILWAY_PRIVATE_DOMAIN}}:6379
-UPLOAD_DIR=uploads
+STORAGE_DRIVER=s3
+S3_ENDPOINT=https://<cloudflare account id>.r2.cloudflarestorage.com
+S3_REGION=auto
+S3_BUCKET=sc-uploads
+S3_ACCESS_KEY_ID=<R2 token for sc-uploads only>
+S3_SECRET_ACCESS_KEY=<R2 token secret>
 JWT_ACCESS_SECRET=<openssl rand -base64 48>
 JWT_REFRESH_PEPPER=<openssl rand -base64 48>
 ADMIN_JWT_ACCESS_SECRET=<openssl rand -base64 48>
@@ -138,6 +158,46 @@ The container runs `prisma migrate deploy` before `node dist/main.js` on
 every boot (see the Dockerfile `CMD`) — safe on redeploys, since Prisma
 tracks applied migrations and each one runs at most once.
 
+### Uploads in Cloudflare R2
+
+Provider photos, ID/selfie checks and chat attachments go to a **private** R2
+bucket. Postgres keeps storing `/uploads/<name>` paths, exactly as before;
+`GET /uploads/<name>` on the API now answers with a 302 to a presigned link
+that is valid for an hour (`apps/api/src/modules/storage/`). So:
+
+- no mobile or admin change, and no data migration — old and new rows use
+  the same URL shape;
+- the bucket is never public, so ID documents can't be listed or linked
+  permanently, and nobody needs to set up a public R2 domain;
+- the bytes go straight from R2 to the phone. R2 doesn't charge for
+  downloads, and they no longer count against Railway egress.
+
+Setup, in the Cloudflare dashboard → R2:
+
+1. Create a bucket `sc-uploads` (leave public access **off**).
+2. Manage R2 API Tokens → Create API token → **Object Read & Write**,
+   restricted to `sc-uploads` only. Copy the Access Key ID, Secret Access
+   Key and the S3 endpoint (`https://<account id>.r2.cloudflarestorage.com`)
+   into the `api` variables above.
+3. Redeploy `api`. Nothing else needs a CORS rule: images and file links are
+   plain GETs following a redirect, not script requests.
+
+**Moving files off an existing volume.** If the old `api` volume still holds
+uploads, copy them into the bucket _before_ removing it, from inside the
+running service (where the volume is mounted) with the S3 variables set:
+
+```bash
+railway ssh --service api -- pnpm storage:migrate
+```
+
+It skips anything already in the bucket, so it is safe to re-run, and it
+deletes nothing locally. Check a few old photos in the admin console, then
+detach the volume. If the volume is already gone, those files are lost and
+the rows pointing at them will show broken images until users re-upload.
+
+For local development nothing changes: `STORAGE_DRIVER` defaults to `local`
+and files stay under `apps/api/uploads`.
+
 ## 4. `admin`
 
 - **New service → Deploy from GitHub repo**
@@ -161,25 +221,104 @@ and redeploy (Vite inlines it at build time, so a rebuild is required). The
 client now strips a trailing `/v1` defensively, so either form works once
 `admin` is rebuilt from a commit that includes that change.
 
+## 5. `backup` — nightly Postgres dump to R2
+
+`db` is a self-managed container on a volume, so nothing backs it up unless
+this service does. It runs `pg_dump` over the private network, checks the dump
+is readable (`pg_restore --list`), uploads it to a second, private R2 bucket,
+and exits. Railway only bills while it runs.
+
+In Cloudflare → R2:
+
+1. Create a bucket `sc-backups` (public access off), separate from
+   `sc-uploads`, so the API's credentials can't touch backups.
+2. Create an API token with **Object Read & Write** on `sc-backups` only.
+3. Bucket → Settings → **Object lifecycle rules** → delete objects with
+   prefix `postgres/` after e.g. 30 days. Without this, backups pile up
+   forever. That is cheap (a dump of a database this size is a few MB), but
+   it is untidy.
+
+In Railway:
+
+- **New service → Empty Service → Deploy from Dockerfile**
+- Root Directory: `infra/docker/backup`, Dockerfile Path: `Dockerfile`
+- Settings → **Cron Schedule**: `0 1 * * *` (01:00 UTC, 03:00 in Harare)
+- No volume, no public domain, no healthcheck
+- Variables:
+
+```
+DATABASE_URL=postgresql://${{db.POSTGRES_USER}}:${{db.POSTGRES_PASSWORD}}@${{db.RAILWAY_PRIVATE_DOMAIN}}:5432/${{db.POSTGRES_DB}}
+BACKUP_S3_ENDPOINT=https://<cloudflare account id>.r2.cloudflarestorage.com
+BACKUP_S3_BUCKET=sc-backups
+AWS_ACCESS_KEY_ID=<R2 token for sc-backups only>
+AWS_SECRET_ACCESS_KEY=<R2 token secret>
+```
+
+Trigger one run by hand straight after setup, and confirm a
+`postgres/sc-<timestamp>.dump` object shows up in the bucket. A failed run
+exits non-zero and shows as failed in the service's deployment history.
+Railway won't alert you about it, so look at that history now and then.
+
+**Restoring** (practise this once before you need it). Download a dump from
+the R2 dashboard, then:
+
+```bash
+# Into a scratch database first, to check it:
+createdb -h localhost -p 5433 -U sc sc_restore_check
+psql -h localhost -p 5433 -U sc -d sc_restore_check -c 'CREATE EXTENSION postgis; CREATE EXTENSION pg_trgm;'
+pg_restore --no-owner --no-privileges -h localhost -p 5433 -U sc -d sc_restore_check sc-<timestamp>.dump
+```
+
+Into production: stop `api`, restore into an empty `db` with the same
+`pg_restore` command (pointing at the Railway database), then start `api`.
+`prisma migrate deploy` on boot sees the restored migration history and
+does nothing.
+
 ## First deploy order
 
 1. `db`, then `redis` — wait for both to come up healthy.
-2. `api` — first boot runs migrations against the empty `db` and seeds
-   nothing automatically. Create the bootstrap admin account once with
-   `railway run --service api pnpm --filter @sc/api seed:admin` — **not**
-   `pnpm seed`, which also inserts `prisma/seed.ts`'s demo categories,
-   providers, and bookings (fixture data meant for a dev database, tied to
-   ids the mobile app's local fixtures reference). Set
-   `ADMIN_BOOTSTRAP_EMAIL`/`ADMIN_BOOTSTRAP_PASSWORD` as `api` service
-   variables first if you don't want the default
-   `admin@stylistscenter.local` / `ChangeMe123!` (change the password
-   immediately after first login either way).
+2. `api`: first boot runs migrations against the empty `db`. Set
+   `ADMIN_BOOTSTRAP_EMAIL`/`ADMIN_BOOTSTRAP_PASSWORD` first, so the first
+   admin account is created on boot (see "Admin access and password resets"
+   below). Then load the city and categories once:
+   `railway ssh --service api -- pnpm seed:reference`. **Never** run
+   `pnpm seed` against production: it inserts demo users, providers and
+   bookings, plus an admin with a published password.
 3. `admin` — needs `api`'s public domain for `VITE_API_URL` at build time,
    so it has to build after `api` has one.
 4. Go back to `api` and set `ADMIN_WEB_ORIGIN` to `admin`'s public domain
    once that exists (there's a one-time chicken-and-egg here: both domains
    need to exist before both env vars are correct — redeploy `api` after
    `admin`'s domain is known).
+
+## Admin access and password resets
+
+There are three cases, from most to least common:
+
+| Situation                                       | What to do                                                                                                                 |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| A staff member forgot their password            | Another admin opens **Staff → Reset password** in the console. The new password signs out that person's existing sessions. |
+| A mobile user (client or stylist) forgot theirs | They tap **Forgot password** on the sign-in screen. Firebase emails them a reset link. Nothing to do on the server.        |
+| No admin can sign in at all                     | Break-glass, below.                                                                                                        |
+
+**Fresh or locked-out database, no shell needed.** On the `api` service set
+`ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` (12+ characters) and
+redeploy. On boot, if there is no enabled admin (the database is empty, or
+every admin is disabled or deleted), that account is created or restored. If
+any enabled admin exists, the variables do nothing, so leaving them set can't
+undo a password changed later. Delete them once you've signed in and changed
+the password anyway, so a stale credential isn't sitting in the dashboard.
+
+**Locked out of a specific account, with a shell:**
+
+```bash
+railway ssh --service api
+pnpm admin:reset-password owner@example.com            # prompts, input hidden
+pnpm admin:reset-password new@example.com --create     # creates it if missing
+```
+
+This needs 12+ characters, re-enables the account, and signs out every
+session it had.
 
 ## Verify
 
@@ -271,10 +410,9 @@ in this repo has been set up for it yet.
 
 ## Known gaps, deliberately not solved here
 
-- **Uploads are on a single-instance Volume**, not object storage. Fine at
-  one `api` replica; if this ever needs to scale horizontally, provider
-  photos need to move to S3/R2 first — `ImageStorageService` is the only
-  place that would need to change.
+- **Backups are daily, not point-in-time.** A disk loss can cost up to a
+  day of bookings and wallet movements. Moving to a managed Postgres with
+  PITR is the next step once that window is unacceptable.
 - **Mobile app** deploys through EAS, not Railway — `apps/mobile/.env`'s
   `EXPO_PUBLIC_API_URL` needs to point at `api`'s public domain for release
   builds.

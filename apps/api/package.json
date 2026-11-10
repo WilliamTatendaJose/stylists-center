@@ -14,9 +14,14 @@
     "prisma:migrate": "prisma migrate deploy",
     "db:reset": "prisma migrate reset --force",
     "seed": "tsx prisma/seed.ts",
-    "seed:admin": "tsx prisma/seed-admin.ts"
+    "seed:admin": "tsx prisma/seed-admin.ts",
+    "storage:migrate": "tsx scripts/migrate-uploads-to-s3.ts",
+    "seed:reference": "tsx prisma/seed-reference.ts",
+    "admin:reset-password": "tsx prisma/admin-reset-password.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1164.0",
+    "@aws-sdk/s3-request-presigner": "^3.1164.0",
     "@nestjs/bullmq": "^11.0.3",
     "@nestjs/common": "^11.1.28",
     "@nestjs/config": "^4.0.4",
@@ -34,10 +39,10 @@
     "bullmq": "^5.81.2",
     "dotenv": "^17.4.2",
     "firebase-admin": "^14.3.0",
-    "pg": "^8.22.0",
     "helmet": "^8.3.0",
     "ioredis": "^5.11.1",
     "nestjs-zod": "^5.5.0",
+    "pg": "^8.22.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "socket.io": "^4.8.3",
