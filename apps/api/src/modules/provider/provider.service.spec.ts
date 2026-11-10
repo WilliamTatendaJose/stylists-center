@@ -119,6 +119,7 @@ describe('ProviderService management', () => {
     await prisma.order.deleteMany({ where: { providerId } });
     await prisma.product.deleteMany({ where: { providerId } });
     await prisma.service.deleteMany({ where: { providerId } });
+    await prisma.payout.deleteMany({ where: { providerId } });
     await prisma.providerProfile.delete({ where: { id: providerId } });
     await prisma.user.deleteMany({ where: { id: { in: [providerUserId, buyerId] } } });
     await prisma.category.delete({ where: { id: categoryId } });
@@ -301,6 +302,23 @@ describe('ProviderService management', () => {
       [`PE-${stamp}-A`, 'released', 'order'],
     ]);
     expect(mine[0]).toMatchObject({ counterpartyName: 'Test Buyer', feeUsdCents: 0 });
+
+    // Released is not paid out: only an admin-recorded payout makes it so.
+    expect(mine[2]).toMatchObject({ status: 'released', paidOut: false });
+    expect(after.awaitingPayoutUsdCents).toBe(after.releasedUsdCents - after.paidOutUsdCents);
+
+    await prisma.payout.create({
+      data: {
+        providerId,
+        amountUsdCents: after.releasedUsdCents - after.paidOutUsdCents,
+        note: 'test',
+      },
+    });
+    const paid = await provider.getEarnings(providerId);
+    const paidEntry = paid.entries.find((entry) => entry.reference === `PE-${stamp}-A`);
+    expect(paidEntry).toMatchObject({ status: 'released', paidOut: true });
+    expect(paid.awaitingPayoutUsdCents).toBe(0);
+    expect(paid.paidOutUsdCents).toBe(paid.releasedUsdCents);
   });
 
   describe('subscription', () => {

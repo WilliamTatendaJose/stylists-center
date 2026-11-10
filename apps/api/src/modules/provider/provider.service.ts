@@ -837,9 +837,10 @@ export class ProviderService {
 
   /**
    * The provider side of the same Payment ledger every escrow movement in
-   * this codebase writes to. `releasedUsdCents` is what has actually
-   * settled (net of the platform fee); `pendingUsdCents` is still held —
-   * work in progress, not a payout yet. Refunded/failed entries count
+   * this codebase writes to. `releasedUsdCents` is what escrow has let go
+   * of into the provider's balance (net of the platform fee) — earned, not
+   * necessarily paid: `paidOutUsdCents` is what an admin has recorded as
+   * actually transferred. `pendingUsdCents` is still held — work in progress. Refunded/failed entries count
    * toward neither total but still appear in the list, since a stylist
    * needs to see a refund happened, not just that it isn't money for them.
    */
@@ -867,7 +868,7 @@ export class ProviderService {
         ORDER BY ${subjectKey}, p."createdAt" DESC, p.id DESC
       )`;
 
-    const [[totals], rows] = await Promise.all([
+    const [[totals], rows, payouts] = await Promise.all([
       // Totals cover every subject, not just the 100 listed below.
       this.prisma.$queryRaw<{ released: bigint; pending: bigint }[]>`
         ${latestPayments}
@@ -886,6 +887,7 @@ export class ProviderService {
           feeUsdCents: number;
           status: string;
           createdAt: Date;
+          releasedRunning: bigint;
         }[]
       >`
         ${latestPayments}
@@ -896,7 +898,14 @@ export class ProviderService {
                l."amountUsdCents",
                l."feeUsdCents",
                l.status,
-               l."createdAt"
+               l."createdAt",
+               -- Released earnings up to and including this row, oldest
+               -- first, over ALL of the provider's subjects (the window runs
+               -- before the LIMIT). Payouts are recorded as lump sums, so
+               -- they are attributed to the oldest released jobs first.
+               coalesce(sum(l."amountUsdCents" - l."feeUsdCents")
+                 FILTER (WHERE l.status = 'released')
+                 OVER (ORDER BY l."createdAt", l.id), 0)::bigint AS "releasedRunning"
         FROM latest l
         LEFT JOIN "Booking" b ON b.id = l."bookingId"
         LEFT JOIN "User" bc ON bc.id = b."clientId"
@@ -905,7 +914,14 @@ export class ProviderService {
         ORDER BY l."createdAt" DESC, l.id DESC
         LIMIT 100
       `,
+      // What an admin has actually recorded as paid to this provider.
+      this.prisma.payout.aggregate({
+        where: { providerId: providerProfileId },
+        _sum: { amountUsdCents: true },
+      }),
     ]);
+    const paidOutUsdCents = payouts._sum.amountUsdCents ?? 0;
+    const releasedUsdCents = Number(totals?.released ?? 0);
 
     // History is a provider-facing statement of where each job/order stands
     // now, not the internal escrow audit trail. Rendering every ledger row
@@ -920,11 +936,16 @@ export class ProviderService {
       feeUsdCents: payment.feeUsdCents,
       status: payment.status as ProviderEarningsEntryDto['status'],
       createdAt: payment.createdAt.toISOString(),
+      // "Released" only means escrow let go of it into the provider's balance;
+      // it is paid out once recorded payouts cover it.
+      paidOut: payment.status === 'released' && Number(payment.releasedRunning) <= paidOutUsdCents,
     }));
 
     return {
-      releasedUsdCents: Number(totals?.released ?? 0),
+      releasedUsdCents,
       pendingUsdCents: Number(totals?.pending ?? 0),
+      paidOutUsdCents,
+      awaitingPayoutUsdCents: Math.max(0, releasedUsdCents - paidOutUsdCents),
       entries,
     };
   }

@@ -8,9 +8,11 @@ import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 
 const STATUS_LABEL: Record<ProviderEarningsEntryDto['status'], string> = {
   pending: 'Payment pending',
-  paid: 'Paid — payout pending',
+  paid: 'Client paid — held until done',
   held: 'In progress',
-  released: 'Paid out',
+  // Released from escrow into your balance. Whether it has actually been
+  // paid out is the entry's `paidOut` flag, set from admin-recorded payouts.
+  released: 'Awaiting payout',
   refunded: 'Refunded',
   failed: 'Failed',
   disputed: 'Disputed',
@@ -41,8 +43,8 @@ const EntryCard = memo(function EntryCard({ entry }: { entry: ProviderEarningsEn
         <Text variant="bodyStrong">{formatUsd(entry.amountUsdCents - entry.feeUsdCents)}</Text>
       </View>
       <Badge
-        label={STATUS_LABEL[entry.status]}
-        tone={entry.status === 'released' ? 'accent100' : 'neutral'}
+        label={entry.paidOut ? 'Paid out' : STATUS_LABEL[entry.status]}
+        tone={entry.paidOut ? 'accent100' : 'neutral'}
       />
     </Card>
   );
@@ -77,7 +79,8 @@ export default function Earnings() {
   const listHeader = (
     <>
       <View style={styles.statRow}>
-        <StatTile value={formatUsd(data.releasedUsdCents)} caption="Paid out" />
+        <StatTile value={formatUsd(data.paidOutUsdCents)} caption="Paid out" />
+        <StatTile value={formatUsd(data.awaitingPayoutUsdCents)} caption="Awaiting payout" />
         <StatTile value={formatUsd(data.pendingUsdCents)} caption="In progress" />
       </View>
 
