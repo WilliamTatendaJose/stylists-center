@@ -1,7 +1,7 @@
-﻿import { useState } from 'react';
-import { Share, StyleSheet, View } from 'react-native';
+﻿import { memo, useState } from 'react';
+import { FlatList, Share, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { formatInHarare, formatUsd } from '@sc/shared';
+import { formatInHarare, formatUsd, type WalletTransactionDto } from '@sc/shared';
 import {
   Screen,
   ScreenHeader,
@@ -67,6 +67,7 @@ const styles = StyleSheet.create({
   inviteTitle: { marginBottom: space.s },
   inviteBody: { marginBottom: space.l },
   inviteField: { marginBottom: space.m },
+  sectionEnd: { height: space.xxl },
   transactionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -79,6 +80,49 @@ const styles = StyleSheet.create({
   transactionMeta: { marginTop: 2 },
   transactionAmount: { alignItems: 'flex-end', gap: space.xs },
 });
+
+const keyExtractor = (transaction: WalletTransactionDto) => transaction.id;
+
+const TransactionRow = memo(function TransactionRow({
+  transaction,
+}: {
+  transaction: WalletTransactionDto;
+}) {
+  const { colors } = useTheme();
+  return (
+    <View style={[styles.transactionRow, { borderBottomColor: colors.divider }]}>
+      <View style={styles.transactionCopy}>
+        <Text variant="bodyStrong">
+          {transaction.type === 'referral_coin'
+            ? 'Referral reward'
+            : transaction.type === 'cash_out'
+              ? 'Cash out'
+              : 'Wallet adjustment'}
+        </Text>
+        <Text variant="metaSmall" color="neutral600" style={styles.transactionMeta}>
+          {transaction.reference ?? 'Wallet activity'} ·{' '}
+          {formatInHarare(transaction.createdAt, 'd MMM, HH:mm')}
+        </Text>
+      </View>
+      <View style={styles.transactionAmount}>
+        <Text variant="bodyStrong" color={transaction.coins >= 0 ? colors.accent : undefined}>
+          {transaction.coins > 0 ? '+' : ''}
+          {transaction.coins} coins
+        </Text>
+        {transaction.type === 'cash_out' ? (
+          <Badge
+            label={transaction.settled ? 'Paid' : 'Processing'}
+            tone={transaction.settled ? 'accent100' : 'neutral'}
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+});
+
+const renderTransaction = ({ item }: { item: WalletTransactionDto }) => (
+  <TransactionRow transaction={item} />
+);
 
 /** Agent wallet (handoff screen 11). Non-agents get an explicit "become an agent" CTA â€” unspecified in the handoff, but this tab needs some state for a client who hasn't verified yet. */
 export default function WalletScreen() {
@@ -260,22 +304,8 @@ export default function WalletScreen() {
     });
   };
 
-  return (
-    <Screen
-      hasTabBar
-      header={
-        <ScreenHeader
-          title="Agent wallet"
-          showBack={false}
-          right={
-            <View style={styles.headerRight}>
-              <Badge label="Verified agent" tone="accent100" />
-              <RoleSwitcher />
-            </View>
-          }
-        />
-      }
-    >
+  const listHeader = (
+    <>
       <View style={styles.balanceBlock}>
         <Text variant="sectionLabel" style={styles.balanceTitle}>
           Available balance
@@ -389,50 +419,43 @@ export default function WalletScreen() {
         </Text>
       </View>
 
-      <View style={styles.section}>
-        <Text variant="sectionLabel" style={styles.sectionLabel}>
-          Wallet activity
-        </Text>
-        {transactions?.length ? (
-          transactions.map((transaction) => (
-            <View
-              key={transaction.id}
-              style={[styles.transactionRow, { borderBottomColor: colors.divider }]}
-            >
-              <View style={styles.transactionCopy}>
-                <Text variant="bodyStrong">
-                  {transaction.type === 'referral_coin'
-                    ? 'Referral reward'
-                    : transaction.type === 'cash_out'
-                      ? 'Cash out'
-                      : 'Wallet adjustment'}
-                </Text>
-                <Text variant="metaSmall" color="neutral600" style={styles.transactionMeta}>
-                  {transaction.reference ?? 'Wallet activity'} ·{' '}
-                  {formatInHarare(transaction.createdAt, 'd MMM, HH:mm')}
-                </Text>
-              </View>
-              <View style={styles.transactionAmount}>
-                <Text
-                  variant="bodyStrong"
-                  color={transaction.coins >= 0 ? colors.accent : undefined}
-                >
-                  {transaction.coins > 0 ? '+' : ''}
-                  {transaction.coins} coins
-                </Text>
-                {transaction.type === 'cash_out' ? (
-                  <Badge
-                    label={transaction.settled ? 'Paid' : 'Processing'}
-                    tone={transaction.settled ? 'accent100' : 'neutral'}
-                  />
-                ) : null}
-              </View>
+      <Text variant="sectionLabel" style={styles.sectionLabel}>
+        Wallet activity
+      </Text>
+    </>
+  );
+
+  const listEmpty = <EmptyPanel body="Referral rewards and cash-outs will appear here." />;
+
+  // Closes the section the way its old wrapper's bottom margin did.
+  const listFooter = <View style={styles.sectionEnd} />;
+
+  return (
+    <Screen
+      hasTabBar
+      header={
+        <ScreenHeader
+          title="Agent wallet"
+          showBack={false}
+          right={
+            <View style={styles.headerRight}>
+              <Badge label="Verified agent" tone="accent100" />
+              <RoleSwitcher />
             </View>
-          ))
-        ) : (
-          <EmptyPanel body="Referral rewards and cash-outs will appear here." />
-        )}
-      </View>
-    </Screen>
+          }
+        />
+      }
+      renderList={(listProps) => (
+        <FlatList
+          {...listProps}
+          data={transactions ?? []}
+          keyExtractor={keyExtractor}
+          renderItem={renderTransaction}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={listEmpty}
+          ListFooterComponent={listFooter}
+        />
+      )}
+    />
   );
 }

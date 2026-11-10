@@ -1,4 +1,4 @@
-export { Screen, type ScreenProps, type ScreenTheme } from './Screen.js';
+export { Screen, type ScreenProps, type ScreenListProps, type ScreenTheme } from './Screen.js';
 export { ScreenHeader, type ScreenHeaderProps } from './ScreenHeader.js';
 export {
   FloatingTabBar,

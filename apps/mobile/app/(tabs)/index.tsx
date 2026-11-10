@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { memo, useCallback, useMemo, useState } from 'react';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { MapPin, Compass, BadgeCheck, User } from 'lucide-react-native';
 import type { ProviderListRowDto } from '@sc/shared';
@@ -91,7 +91,7 @@ const MIN_SEARCH_QUERY = 2;
  * strongest trust signal available, and `ListRow` was built with a
  * `titleBadge` slot for exactly this.
  */
-function ProviderRow({ provider }: { provider: ProviderListRowDto }) {
+const ProviderRow = memo(function ProviderRow({ provider }: { provider: ProviderListRowDto }) {
   const { colors } = useTheme();
   return (
     <ListRow
@@ -118,9 +118,15 @@ function ProviderRow({ provider }: { provider: ProviderListRowDto }) {
       }}
     />
   );
-}
+});
 
-/** Explicit "load more" rather than scroll-triggered: on a metered connection the next page should be the user's decision. */
+const keyExtractor = (provider: ProviderListRowDto) => provider.id;
+
+/**
+ * Explicit "load more" rather than scroll-triggered: on a metered connection
+ * the next page should be the user's decision. Doubles as the "loading more"
+ * indicator.
+ */
 function LoadMore({
   hasNextPage,
   isFetching,
@@ -271,196 +277,218 @@ export default function Find() {
     </View>
   );
 
-  return (
+  const isSearchBlocked = searchTerm.length < MIN_SEARCH_QUERY || searchError;
+  // Rows shown by the list. The empty / hint / error panels below stand in for
+  // rows via ListEmptyComponent, exactly where the inline panels used to sit.
+  const listData = useMemo<ProviderListRowDto[]>(() => {
+    if (isSearching) return isSearchBlocked ? [] : (searchResults ?? []);
+    return providers ?? [];
+  }, [isSearching, isSearchBlocked, searchResults, providers]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: ProviderListRowDto }) => <ProviderRow provider={item} />,
+    [],
+  );
+
+  const activeQuery = isSearching ? search : nearby;
+  const activeHasNextPage = !!activeQuery.hasNextPage;
+  const activeFetchingNext = activeQuery.isFetchingNextPage;
+  const activeFetchNextPage = activeQuery.fetchNextPage;
+  const loadMore = useCallback(() => {
+    if (!activeHasNextPage || activeFetchingNext) return;
+    void activeFetchNextPage();
+  }, [activeHasNextPage, activeFetchingNext, activeFetchNextPage]);
+
+  const listHeader = (
     <>
-      <Screen hasTabBar header={header}>
-        <Text variant="h2" style={styles.hero}>
-          Book the hands{'\n'}you actually want.
-        </Text>
+      <Text variant="h2" style={styles.hero}>
+        Book the hands{'\n'}you actually want.
+      </Text>
 
-        {/* A failed background refresh over data we already have is not the
-            same event as having nothing to show. The list polls every minute,
-            so treating any error as fatal would put a red banner over a
-            perfectly good screen on one dropped request. */}
-        {hasNothingToShow ? (
-          <View style={styles.errorNote}>
-            <Text variant="meta" color={colors.accent700} accessibilityRole="alert">
-              Couldn&apos;t load stylists near you.
-            </Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Try loading stylists again"
-              onPress={() => {
-                void refetchProviders();
-                void refetchCategories();
-              }}
-            >
-              <Text variant="meta" color={colors.accent}>
-                Try again
-              </Text>
-            </Pressable>
-          </View>
-        ) : isStale ? (
-          <Text variant="meta" color="neutral700" style={styles.errorNote}>
-            Showing the last update — couldn&apos;t reach the server just now.
+      {/* A failed background refresh over data we already have is not the
+          same event as having nothing to show. The list polls every minute,
+          so treating any error as fatal would put a red banner over a
+          perfectly good screen on one dropped request. */}
+      {hasNothingToShow ? (
+        <View style={styles.errorNote}>
+          <Text variant="meta" color={colors.accent700} accessibilityRole="alert">
+            Couldn&apos;t load stylists near you.
           </Text>
-        ) : null}
-
-        <View style={styles.searchRow}>
-          <SearchField
-            placeholder="Looking for a good braider…"
-            value={query}
-            onChangeText={setQuery}
-          />
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Search on the map"
-            onPress={goMap}
-            style={[
-              styles.mapButton,
-              { backgroundColor: isDark ? colors.surface : colors.neutral900 },
-            ]}
+            accessibilityLabel="Try loading stylists again"
+            onPress={() => {
+              void refetchProviders();
+              void refetchCategories();
+            }}
           >
-            <Compass size={18} strokeWidth={1.7} color={isDark ? colors.onDark.text : colors.bg} />
+            <Text variant="meta" color={colors.accent}>
+              Try again
+            </Text>
           </Pressable>
         </View>
+      ) : isStale ? (
+        <Text variant="meta" color="neutral700" style={styles.errorNote}>
+          Showing the last update — couldn&apos;t reach the server just now.
+        </Text>
+      ) : null}
 
-        {/* One distance for the whole app — the counts, the list, search and
-            the map all answer for the same area, so no screen can contradict
-            another. A free 1-50 km slider, not the fixed 1/3/8 rungs the
-            smart-match retry ladder uses — browsing has no reason to share
-            that constraint. */}
-        <DistanceFilter />
+      <View style={styles.searchRow}>
+        <SearchField
+          placeholder="Looking for a good braider…"
+          value={query}
+          onChangeText={setQuery}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Search on the map"
+          onPress={goMap}
+          style={[
+            styles.mapButton,
+            { backgroundColor: isDark ? colors.surface : colors.neutral900 },
+          ]}
+        >
+          <Compass size={18} strokeWidth={1.7} color={isDark ? colors.onDark.text : colors.bg} />
+        </Pressable>
+      </View>
 
-        {/* Searching replaces the browse view rather than appending to it —
-            two competing lists of stylists on one screen leaves the user
-            unsure which one answered their question. */}
-        {isSearching ? (
-          <>
-            <SectionLabel label={`Results for “${query.trim()}”`} count={searchResults?.length} />
-            {searchTerm.length < MIN_SEARCH_QUERY ? (
-              <EmptyPanel body="Keep typing — two letters or more." />
-            ) : searchError ? (
-              <EmptyPanel
-                title="Couldn't run that search"
-                body="Check your connection and try again."
-              />
-            ) : searchFetching && !searchResults ? (
-              <EmptyPanel body="Searching…" />
-            ) : searchResults?.length ? (
-              <>
-                {searchResults.map((p) => (
-                  <ProviderRow key={p.id} provider={p} />
-                ))}
-                <LoadMore
-                  hasNextPage={!!search.hasNextPage}
-                  isFetching={search.isFetchingNextPage}
+      {/* One distance for the whole app — the counts, the list, search and
+          the map all answer for the same area, so no screen can contradict
+          another. A free 1-50 km slider, not the fixed 1/3/8 rungs the
+          smart-match retry ladder uses — browsing has no reason to share
+          that constraint. */}
+      <DistanceFilter />
+
+      {/* Searching replaces the browse view rather than appending to it —
+          two competing lists of stylists on one screen leaves the user
+          unsure which one answered their question. */}
+      {isSearching ? (
+        <SectionLabel label={`Results for “${query.trim()}”`} count={searchResults?.length} />
+      ) : (
+        <>
+          {/* The returning-user shortcut. Only shown when there is real
+            history, so a new account never sees an empty shelf. */}
+          {recentStylists.length > 0 ? (
+            <>
+              <SectionLabel label="Book again" />
+              {recentStylists.map((stylist) => (
+                <ListRow
+                  key={stylist.providerId}
+                  avatar={{ initials: stylist.initials, tint: stylist.tint, size: 44 }}
+                  title={stylist.displayName}
+                  meta={`Last time · ${stylist.lastServiceName}`}
                   onPress={() => {
-                    void search.fetchNextPage();
+                    router.push({
+                      pathname: '/provider/[id]',
+                      params: { id: stylist.providerId, back: '/(tabs)' },
+                    });
                   }}
                 />
-              </>
-            ) : (
-              <EmptyPanel
-                title="No stylists matched"
-                body={`Nothing for “${searchTerm}” within ${String(maxDistanceKm)} km. Try a wider distance or a different word.`}
-              />
-            )}
-          </>
-        ) : (
-          <>
-            {/* The returning-user shortcut. Only shown when there is real
-                history, so a new account never sees an empty shelf. */}
-            {recentStylists.length > 0 ? (
-              <>
-                <SectionLabel label="Book again" />
-                {recentStylists.map((stylist) => (
-                  <ListRow
-                    key={stylist.providerId}
-                    avatar={{ initials: stylist.initials, tint: stylist.tint, size: 44 }}
-                    title={stylist.displayName}
-                    meta={`Last time · ${stylist.lastServiceName}`}
-                    onPress={() => {
-                      router.push({
-                        pathname: '/provider/[id]',
-                        params: { id: stylist.providerId, back: '/(tabs)' },
-                      });
-                    }}
-                  />
-                ))}
-                <View style={styles.spacer} />
-              </>
-            ) : null}
-
-            <SectionLabel label="Categories" count={categories?.length} />
-            <View style={styles.categoryGrid}>
-              {categories?.map((c) => (
-                <View key={c.id} style={styles.categoryTile}>
-                  <CategoryTile
-                    name={c.name}
-                    nearbyCount={c.nearbyCount}
-                    onPress={() => {
-                      openCategory(c.id);
-                    }}
-                  />
-                </View>
               ))}
-            </View>
+              <View style={styles.spacer} />
+            </>
+          ) : null}
 
-            <SectionLabel
-              label="Available now"
-              right={
-                <View style={styles.liveRow}>
-                  <LiveDot />
-                  <Text variant="meta" color={colors.accent700}>
-                    live
-                  </Text>
-                </View>
-              }
-            />
-            {providers?.length ? (
-              <>
-                {providers.map((p) => (
-                  <ProviderRow key={p.id} provider={p} />
-                ))}
-                <LoadMore
-                  hasNextPage={!!nearby.hasNextPage}
-                  isFetching={nearby.isFetchingNextPage}
+          <SectionLabel label="Categories" count={categories?.length} />
+          <View style={styles.categoryGrid}>
+            {categories?.map((c) => (
+              <View key={c.id} style={styles.categoryTile}>
+                <CategoryTile
+                  name={c.name}
+                  nearbyCount={c.nearbyCount}
                   onPress={() => {
-                    void nearby.fetchNextPage();
+                    openCategory(c.id);
                   }}
                 />
-              </>
-            ) : (
-              // Distinguishes "nobody within this distance" from "still
-              // loading" — with a real position the empty case is common and
-              // the fix (widen the distance) is one tap away.
-              <EmptyPanel
-                body={
-                  providers
-                    ? `No stylists within ${String(maxDistanceKm)} km right now. Try a wider distance.`
-                    : 'Looking for stylists near you…'
-                }
-              />
-            )}
-          </>
-        )}
+              </View>
+            ))}
+          </View>
 
-        <View style={styles.spacer} />
-        <Card bordered style={styles.promoCard}>
-          <Text variant="sectionLabel" color={colors.accent} style={styles.promoKicker}>
-            Smart match
-          </Text>
-          <Text variant="cardTitle" style={styles.promoTitle}>
-            Don&apos;t browse. Let them come to you.
-          </Text>
-          <Text variant="meta" color="neutral700" style={styles.promoBody}>
-            Tell us the service and your budget. Every available stylist within your radius gets the
-            request — you pick from whoever accepts.
-          </Text>
-          <Button label="Post a request" onPress={openRequest} block arrow />
-        </Card>
-      </Screen>
+          <SectionLabel
+            label="Available now"
+            right={
+              <View style={styles.liveRow}>
+                <LiveDot />
+                <Text variant="meta" color={colors.accent700}>
+                  live
+                </Text>
+              </View>
+            }
+          />
+        </>
+      )}
+    </>
+  );
+
+  const listEmpty = isSearching ? (
+    searchTerm.length < MIN_SEARCH_QUERY ? (
+      <EmptyPanel body="Keep typing — two letters or more." />
+    ) : searchError ? (
+      <EmptyPanel title="Couldn't run that search" body="Check your connection and try again." />
+    ) : searchFetching && !searchResults ? (
+      <EmptyPanel body="Searching…" />
+    ) : (
+      <EmptyPanel
+        title="No stylists matched"
+        body={`Nothing for “${searchTerm}” within ${String(maxDistanceKm)} km. Try a wider distance or a different word.`}
+      />
+    )
+  ) : (
+    // Distinguishes "nobody within this distance" from "still loading" — with
+    // a real position the empty case is common and the fix (widen the
+    // distance) is one tap away.
+    <EmptyPanel
+      body={
+        providers
+          ? `No stylists within ${String(maxDistanceKm)} km right now. Try a wider distance.`
+          : 'Looking for stylists near you…'
+      }
+    />
+  );
+
+  const listFooter = (
+    <>
+      {listData.length > 0 ? (
+        <LoadMore
+          hasNextPage={activeHasNextPage}
+          isFetching={activeFetchingNext}
+          onPress={loadMore}
+        />
+      ) : null}
+      <View style={styles.spacer} />
+      <Card bordered style={styles.promoCard}>
+        <Text variant="sectionLabel" color={colors.accent} style={styles.promoKicker}>
+          Smart match
+        </Text>
+        <Text variant="cardTitle" style={styles.promoTitle}>
+          Don&apos;t browse. Let them come to you.
+        </Text>
+        <Text variant="meta" color="neutral700" style={styles.promoBody}>
+          Tell us the service and your budget. Every available stylist within your radius gets the
+          request — you pick from whoever accepts.
+        </Text>
+        <Button label="Post a request" onPress={openRequest} block arrow />
+      </Card>
+    </>
+  );
+
+  return (
+    <>
+      <Screen
+        hasTabBar
+        header={header}
+        renderList={(listProps) => (
+          <FlatList
+            {...listProps}
+            data={listData}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
+            ListFooterComponent={listFooter}
+          />
+        )}
+      />
 
       <Sheet
         open={roleSheetOpen}

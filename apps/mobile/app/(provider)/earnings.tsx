@@ -1,4 +1,5 @@
-import { StyleSheet, View } from 'react-native';
+import { memo } from 'react';
+import { FlatList, StyleSheet, View } from 'react-native';
 import { formatUsd, formatInHarare, type ProviderEarningsEntryDto } from '@sc/shared';
 import { space } from '@sc/tokens';
 import { Screen, ScreenHeader, Text, StatTile, Card, Badge, EmptyPanel } from '@sc/ui';
@@ -24,6 +25,31 @@ const styles = StyleSheet.create({
   entryMeta: { marginTop: 2 },
 });
 
+const keyExtractor = (entry: ProviderEarningsEntryDto) => entry.id;
+
+const EntryCard = memo(function EntryCard({ entry }: { entry: ProviderEarningsEntryDto }) {
+  return (
+    <Card bordered style={styles.entry}>
+      <View style={styles.entryTop}>
+        <View style={styles.entryMiddle}>
+          <Text variant="cardTitle">{entry.counterpartyName}</Text>
+          <Text variant="meta" color="neutral700" style={styles.entryMeta}>
+            {entry.kind === 'booking' ? 'Booking' : 'Order'} {entry.reference} ·{' '}
+            {formatInHarare(entry.createdAt, 'd MMM, HH:mm')}
+          </Text>
+        </View>
+        <Text variant="bodyStrong">{formatUsd(entry.amountUsdCents - entry.feeUsdCents)}</Text>
+      </View>
+      <Badge
+        label={STATUS_LABEL[entry.status]}
+        tone={entry.status === 'released' ? 'accent100' : 'neutral'}
+      />
+    </Card>
+  );
+});
+
+const renderEntry = ({ item }: { item: ProviderEarningsEntryDto }) => <EntryCard entry={item} />;
+
 /**
  * A provider's actual money — released (settled) and pending (held in
  * escrow) totals from the same Payment ledger every booking/order writes
@@ -48,11 +74,8 @@ export default function Earnings() {
     );
   }
 
-  return (
-    <Screen
-      hasTabBar
-      header={<ScreenHeader title="Earnings" showBack={false} right={<RoleSwitcher />} />}
-    >
+  const listHeader = (
+    <>
       <View style={styles.statRow}>
         <StatTile value={formatUsd(data.releasedUsdCents)} caption="Paid out" />
         <StatTile value={formatUsd(data.pendingUsdCents)} caption="In progress" />
@@ -61,31 +84,25 @@ export default function Earnings() {
       <Text variant="sectionLabel" style={styles.sectionLabel}>
         History
       </Text>
+    </>
+  );
 
-      {data.entries.length === 0 ? (
-        <EmptyPanel body="Completed bookings and orders will show up here." />
-      ) : (
-        data.entries.map((entry) => (
-          <Card key={entry.id} bordered style={styles.entry}>
-            <View style={styles.entryTop}>
-              <View style={styles.entryMiddle}>
-                <Text variant="cardTitle">{entry.counterpartyName}</Text>
-                <Text variant="meta" color="neutral700" style={styles.entryMeta}>
-                  {entry.kind === 'booking' ? 'Booking' : 'Order'} {entry.reference} ·{' '}
-                  {formatInHarare(entry.createdAt, 'd MMM, HH:mm')}
-                </Text>
-              </View>
-              <Text variant="bodyStrong">
-                {formatUsd(entry.amountUsdCents - entry.feeUsdCents)}
-              </Text>
-            </View>
-            <Badge
-              label={STATUS_LABEL[entry.status]}
-              tone={entry.status === 'released' ? 'accent100' : 'neutral'}
-            />
-          </Card>
-        ))
+  return (
+    <Screen
+      hasTabBar
+      header={<ScreenHeader title="Earnings" showBack={false} right={<RoleSwitcher />} />}
+      renderList={(listProps) => (
+        <FlatList
+          {...listProps}
+          data={data.entries}
+          keyExtractor={keyExtractor}
+          renderItem={renderEntry}
+          ListHeaderComponent={listHeader}
+          ListEmptyComponent={
+            <EmptyPanel body="Completed bookings and orders will show up here." />
+          }
+        />
       )}
-    </Screen>
+    />
   );
 }
