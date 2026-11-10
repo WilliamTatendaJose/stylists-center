@@ -1,4 +1,5 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import { StyleSheet, View } from 'react-native';
 import { avatarTint, color } from '@sc/tokens';
 import { Text } from '../primitives/Text.js';
 import { thumbnailUrl } from './thumbnailUrl.js';
@@ -26,6 +27,9 @@ export function Avatar({ initials, size, tint, uri }: AvatarProps) {
       <Image
         source={{ uri: thumbnailUrl(uri) }}
         style={[styles.circle, dimension]}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        transition={150}
         accessibilityIgnoresInvertColors
       />
     );
