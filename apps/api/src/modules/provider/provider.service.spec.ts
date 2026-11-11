@@ -127,6 +127,24 @@ describe('ProviderService management', () => {
     await prisma.onModuleDestroy();
   });
 
+  it('saves the payment number in E.164, keeps it when omitted and clears it on null', async () => {
+    const base = {
+      displayName: 'New Public Name',
+      areaName: 'Avondale',
+      workingHoursLabel: 'Mon-Sat, 8-6',
+      lat: -17.79,
+      lng: 31.04,
+    };
+    const saved = await provider.updateProfile(providerId, { ...base, paymentPhone: '0771234567' });
+    expect(saved.paymentPhone).toBe('+263771234567');
+
+    const kept = await provider.updateProfile(providerId, base);
+    expect(kept.paymentPhone).toBe('+263771234567');
+
+    const cleared = await provider.updateProfile(providerId, { ...base, paymentPhone: null });
+    expect(cleared.paymentPhone).toBeNull();
+  });
+
   it('updates the public identity and location and adds services', async () => {
     const updated = await provider.updateProfile(providerId, {
       displayName: 'New Public Name',

@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Share, StyleSheet, View, type ViewStyle } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { MapPin, ChevronRight, Share2 } from 'lucide-react-native';
+import { MapPin, ChevronRight, Share2, Wallet } from 'lucide-react-native';
 import { space } from '@sc/tokens';
-import { deriveInitials, type ReportReason } from '@sc/shared';
+import { deriveInitials, formatLocalPhone, type ReportReason } from '@sc/shared';
 import {
   Screen,
   ScreenHeader,
@@ -28,6 +28,7 @@ import { FullScreenImageViewer } from '../../src/components/FullScreenImageViewe
 import { providerShareLink } from '../../src/sharing/shareLinks.js';
 
 const styles = StyleSheet.create({
+  paymentRow: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginTop: space.m },
   reportedNote: { marginBottom: space.m },
   identity: { alignItems: 'flex-start', marginBottom: space.l },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: space.m },
@@ -384,6 +385,17 @@ export default function ProviderProfile() {
         <Text variant="meta" color="neutral600">
           {provider.workingHoursLabel}
         </Text>
+
+        {/* Plain text on purpose: shown for clients to pay the stylist
+            directly, not a tap-to-call or tap-to-pay link. */}
+        {provider.paymentPhone ? (
+          <View style={styles.paymentRow}>
+            <Wallet size={16} strokeWidth={1.8} color={colors.neutral600} />
+            <Text variant="meta" color="neutral700">
+              Pay by mobile money: {formatLocalPhone(provider.paymentPhone)}
+            </Text>
+          </View>
+        ) : null}
       </Screen>
 
       <FullScreenImageViewer

@@ -36,3 +36,12 @@ export function isValidMobileMoneyPhone(input: string): boolean {
   const e164 = normalizePhone(input);
   return e164 !== null && /^\+2637\d{8}$/.test(e164);
 }
+
+/**
+ * A Zimbabwean mobile number as people write it: "+263771234567" becomes
+ * "077 123 4567". Any other number is returned unchanged.
+ */
+export function formatLocalPhone(e164: string): string {
+  const match = /^\+263(7\d)(\d{3})(\d{4})$/.exec(e164);
+  return match ? `0${match[1] ?? ''} ${match[2] ?? ''} ${match[3] ?? ''}` : e164;
+}

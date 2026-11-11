@@ -208,6 +208,8 @@ model ProviderProfile {
   priceDisplay              PriceDisplay @default(list)
   fromPriceUsdCents         Int?
   workingHoursLabel         String
+  /// The stylist's own mobile money number (E.164), shown on their public page so clients can pay them directly. Null until they add one.
+  paymentPhone              String?
   /// Null preserves legacy profiles until the stylist configures a weekly calendar.
   weeklyHours               Json?
   /**

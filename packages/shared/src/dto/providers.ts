@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { latLngSchema } from './matching.js';
 import { imageUrlSchema } from './uploads.js';
+import { isValidMobileMoneyPhone } from '../domain/phone.js';
 
 export const categorySchema = z.object({
   id: z.uuid(),
@@ -77,6 +78,8 @@ export const providerProfileSchema = z.object({
   fromPriceUsdCents: z.number().int().optional(),
   reviews: z.array(reviewSchema),
   workingHoursLabel: z.string(),
+  /** The stylist's own mobile money number (E.164) that clients pay directly. Null when not set. */
+  paymentPhone: z.string().nullable(),
 });
 export type ProviderProfileDto = z.infer<typeof providerProfileSchema>;
 
@@ -237,6 +240,7 @@ export const providerManagementProfileSchema = z.object({
   services: z.array(serviceSchema),
   profileImageUrl: imageUrlSchema.nullable(),
   portfolioImageUrls: z.array(imageUrlSchema).max(5),
+  paymentPhone: z.string().nullable(),
 });
 export type ProviderManagementProfileDto = z.infer<typeof providerManagementProfileSchema>;
 
@@ -247,6 +251,16 @@ export const updateProviderProfileSchema = z.object({
   ...latLngSchema.shape,
   profileImageUrl: imageUrlSchema.nullable().optional(),
   portfolioImageUrls: z.array(imageUrlSchema).max(5).optional(),
+  /**
+   * Mobile money number clients pay directly: local ("0771234567") or E.164,
+   * normalised by the API. Null clears it; absent leaves it unchanged.
+   */
+  paymentPhone: z
+    .string()
+    .trim()
+    .refine(isValidMobileMoneyPhone, { message: 'Enter a valid mobile number' })
+    .nullable()
+    .optional(),
 });
 export type UpdateProviderProfileInput = z.infer<typeof updateProviderProfileSchema>;
 
