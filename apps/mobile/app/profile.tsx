@@ -39,6 +39,7 @@ import { PhotoPicker } from '../src/components/PhotoPicker.js';
 import { ServerConnectionPanel } from '../src/components/ServerConnectionPanel.js';
 import { RoleSwitcher } from '../src/components/RoleSwitcher.js';
 import { NotificationPreferences } from '../src/components/NotificationPreferences.js';
+import { PasswordSecurity } from '../src/components/PasswordSecurity.js';
 
 const VERIFICATION_LABEL: Record<'unverified' | 'pending' | 'verified', string> = {
   verified: 'Verified professional',
@@ -218,6 +219,8 @@ export default function Profile() {
             <ChevronRight size={20} color={colors.neutral700} />
           </Card>
         </ProfileSection>
+
+        <PasswordSecurity email={me.email} />
 
         <ProfileSection label="Notifications">
           <NotificationPreferences />
