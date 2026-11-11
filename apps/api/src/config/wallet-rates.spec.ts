@@ -8,6 +8,9 @@ describe('walletRates', () => {
       coinUsdCents: 10,
       referralRewardCoins: 6,
       cashOutMinUsdCents: 500,
+      cashOutIntervalDays: 30,
+      subscriptionPriceUsdCents: 500,
+      subscriptionCycleDays: 30,
     });
   });
 
@@ -21,6 +24,9 @@ describe('walletRates', () => {
       coinUsdCents: 75,
       referralRewardCoins: 10,
       cashOutMinUsdCents: 1000,
+      cashOutIntervalDays: 30,
+      subscriptionPriceUsdCents: 500,
+      subscriptionCycleDays: 30,
     });
   });
 

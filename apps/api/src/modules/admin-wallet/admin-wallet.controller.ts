@@ -20,6 +20,21 @@ export class AdminWalletController {
     return this.adminWallet.listCashOuts({ q: searchTerm(q), page: readPage(limit, offset) });
   }
 
+  @Get('agents')
+  listAgents(
+    @Query('q') q?: string,
+    @Query('subscription') subscription?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.adminWallet.listAgents({
+      q: searchTerm(q),
+      subscription:
+        subscription === 'active' || subscription === 'lapsed' ? subscription : undefined,
+      page: readPage(limit, offset),
+    });
+  }
+
   @Post('cash-outs/:transactionId/settle')
   settleCashOut(
     @Param('transactionId') transactionId: string,

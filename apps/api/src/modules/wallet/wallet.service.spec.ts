@@ -85,6 +85,8 @@ describe('WalletService', () => {
         referralCode: `SC-TEST${String(Date.now()).slice(-4)}`,
         verificationStatus: 'verified',
         status: 'active',
+        // Agent coins can only be cashed out while subscribed.
+        subscriptionPaidUntil: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
       },
     });
     agentId = agent.id;
@@ -99,6 +101,7 @@ describe('WalletService', () => {
       data: {
         userId: agentUserId,
         type: 'referral_coin',
+        pool: 'agent',
         coins: 6,
         usdCents: 300,
         reference: 'Referred Salon',
@@ -140,6 +143,9 @@ describe('WalletService', () => {
     expect(dto.usdCents).toBe(600);
     expect(dto.isVerifiedAgent).toBe(true);
     expect(dto.canCashOut).toBe(true); // 600 > CASH_OUT_MIN_USD_CENTS (500)
+    expect(dto.cashOutableCoins).toBe(12);
+    expect(dto.spendableCoins).toBe(0); // agent earnings are cashed out, not spent
+    expect(dto.agentSubscription?.active).toBe(true);
 
     const referrals = await wallet.listReferrals(agentUserId);
     expect(referrals).toHaveLength(2);

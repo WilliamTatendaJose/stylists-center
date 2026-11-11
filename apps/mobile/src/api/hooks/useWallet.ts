@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AgentSubscriptionDto,
+  AgentSubscriptionStatusDto,
+  PayAgentSubscriptionInput,
+  PayAgentSubscriptionResponse,
   CashOutRequestResponse,
   ClaimReferralInput,
   EnrollAgentInput,
@@ -70,6 +74,59 @@ export function useClaimReferral() {
       queryClient.setQueryData(['wallet'], wallet);
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'referrals'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
+    },
+  });
+}
+
+const AGENT_SUBSCRIPTION_KEY = ['wallet', 'agent-subscription'] as const;
+
+/** `GET /v1/wallet/agent-subscription` — the agent's rewards subscription. Only agents have one. */
+export function useAgentSubscription(enabled = true) {
+  return useQuery({
+    queryKey: AGENT_SUBSCRIPTION_KEY,
+    queryFn: () => apiFetch<AgentSubscriptionDto>('/v1/wallet/agent-subscription'),
+    enabled,
+  });
+}
+
+/** `POST /v1/wallet/agent-subscription/pay`. Starting a payment does not extend cover; the status poll does. */
+export function usePayAgentSubscription() {
+  return useMutation({
+    mutationFn: (input: PayAgentSubscriptionInput) =>
+      apiFetch<PayAgentSubscriptionResponse>('/v1/wallet/agent-subscription/pay', {
+        method: 'POST',
+        body: input,
+      }),
+  });
+}
+
+const SETTLED_STATUSES = new Set<AgentSubscriptionStatusDto['status']>([
+  'held',
+  'paid',
+  'released',
+  'refunded',
+  'failed',
+  'disputed',
+]);
+
+/** Polls while a subscription payment is in flight; stops once it settles either way. */
+export function useAgentSubscriptionPaymentStatus(enabled: boolean) {
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: [...AGENT_SUBSCRIPTION_KEY, 'payment-status'],
+    queryFn: async () => {
+      const result = await apiFetch<AgentSubscriptionStatusDto>(
+        '/v1/wallet/agent-subscription/payment-status',
+      );
+      if (SETTLED_STATUSES.has(result.status)) {
+        void queryClient.invalidateQueries({ queryKey: ['wallet'] });
+      }
+      return result;
+    },
+    enabled,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status && SETTLED_STATUSES.has(status) ? false : 3000;
     },
   });
 }

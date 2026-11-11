@@ -43,6 +43,7 @@ import {
   useUpdateProviderService,
 } from '../../src/api/hooks/useProviders.js';
 import { useMe, useSetActiveRole } from '../../src/api/hooks/useMe.js';
+import { CoinWalletSection } from '../../src/components/CoinWalletSection.js';
 import { PasswordSecurity } from '../../src/components/PasswordSecurity.js';
 import { HelpAndLegal } from '../../src/components/HelpAndLegal.js';
 import { describeError } from '../../src/api/errorMessage.js';
@@ -578,6 +579,8 @@ export default function ProviderProfile() {
             </Card>
           </ProfileSection>
         ) : null}
+
+        <CoinWalletSection hideWhenEmpty />
 
         <ProfileSection label="Notifications">
           <NotificationPreferences />
