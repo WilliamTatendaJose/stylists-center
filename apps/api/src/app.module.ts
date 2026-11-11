@@ -38,6 +38,7 @@ import { AdminVerificationsModule } from './modules/admin-verifications/admin-ve
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminExportsModule } from './modules/admin-exports/admin-exports.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { TermsModule } from './modules/terms/terms.module';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     AdminVerificationsModule,
     AdminUsersModule,
     AdminExportsModule,
+    TermsModule,
   ],
   providers: [
     /**

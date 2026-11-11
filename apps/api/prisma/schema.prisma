@@ -175,6 +175,7 @@ model User {
   ordersAsBuyer       Order[]             @relation("OrderBuyer")
   productReviews      ProductReview[]
   pushTokens          DevicePushToken[]
+  termsAcceptances    TermsAcceptance[]
 
   @@index([cityId])
   @@index([deletedAt])
@@ -865,4 +866,18 @@ model ContentDocument {
   version          Int      @default(1)
   updatedByAdminId String?
   updatedAt        DateTime @updatedAt
+}
+
+/// One row per user per version they agreed to. A new version of a document
+/// (staff save it in the console) means users must accept it again, so the
+/// version is part of the key and old acceptances are kept as history.
+model TermsAcceptance {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  key        String
+  version    Int
+  acceptedAt DateTime @default(now())
+
+  @@unique([userId, key, version])
 }
