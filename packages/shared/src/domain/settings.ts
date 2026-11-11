@@ -65,7 +65,7 @@ export const SETTING_DEFINITIONS = {
   referralRewardCoins: {
     kind: 'coins',
     label: 'Referral reward',
-    help: 'Coins credited to an agent when someone they referred completes their first booking.',
+    help: 'Coins credited to an agent for each agent they recruit, once that agent is verified and has paid their first subscription.',
     group: 'Wallet and rewards',
     env: 'REFERRAL_REWARD_COINS',
     public: true,
