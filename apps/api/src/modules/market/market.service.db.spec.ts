@@ -185,6 +185,13 @@ describe('MarketService against the database', () => {
     await prisma.product.deleteMany({ where: { providerId: { in: providerIds } } });
     await prisma.vendorApplication.deleteMany({ where: { providerId: { in: providerIds } } });
     await prisma.providerProfile.deleteMany({ where: { id: { in: providerIds } } });
+    // Completed orders earn the buyer coins through the real rewards hooks.
+    await prisma.walletCoinSpend.deleteMany({
+      where: {
+        OR: [{ debit: { userId: { in: userIds } } }, { lot: { userId: { in: userIds } } }],
+      },
+    });
+    await prisma.walletTransaction.deleteMany({ where: { userId: { in: userIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
     await prisma.category.delete({ where: { id: categoryId } });
     await prisma.city.delete({ where: { id: cityId } });
