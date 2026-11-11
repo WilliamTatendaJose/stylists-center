@@ -408,12 +408,30 @@ export const adminCashOutRowSchema = z.object({
   phone: z.string().nullable(),
   amountUsdCents: z.number().int(),
   coins: z.number().int(),
+  /** Which coins were cashed out: received from clients ('cash') or agent earnings ('agent'). */
+  coinType: z.enum(['cash', 'agent']),
   requestedAt: z.iso.datetime(),
   settled: z.boolean(),
   settledAt: z.iso.datetime().nullable(),
   settledNote: z.string().nullable(),
 });
 export type AdminCashOutRowDto = z.infer<typeof adminCashOutRowSchema>;
+
+/** One agent as the console sees them: who they are and whether their subscription is live. */
+export const adminAgentRowSchema = z.object({
+  agentId: z.uuid(),
+  userId: z.uuid(),
+  displayName: z.string(),
+  phone: z.string().nullable(),
+  referralCode: z.string(),
+  verificationStatus: z.string(),
+  status: z.string(),
+  subscriptionPaidUntil: z.iso.datetime().nullable(),
+  subscriptionActive: z.boolean(),
+  /** Agent earnings held, whether or not they can be cashed out right now. */
+  agentCoins: z.number().int(),
+});
+export type AdminAgentRowDto = z.infer<typeof adminAgentRowSchema>;
 
 export const recordCashOutSettlementSchema = z.object({
   note: z.string().trim().max(500).optional(),

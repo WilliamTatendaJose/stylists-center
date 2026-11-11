@@ -1,5 +1,10 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import type { AdminCashOutRowDto, RecordCashOutSettlementInput } from '@sc/shared';
+import {
+  isSubscriptionActive,
+  type AdminAgentRowDto,
+  type AdminCashOutRowDto,
+  type RecordCashOutSettlementInput,
+} from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Paged } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
@@ -50,6 +55,67 @@ export class AdminWalletService {
     return toPage(transactions.map(toCashOutRow), total, input.page);
   }
 
+  /** Agents with their subscription status, newest first. `status` narrows to active or lapsed subscriptions. */
+  async listAgents(input: {
+    q?: string | undefined;
+    subscription?: 'active' | 'lapsed' | undefined;
+    page: PageRequest;
+  }): Promise<Paged<AdminAgentRowDto>> {
+    const now = new Date();
+    const where: Prisma.AgentWhereInput = {
+      ...(input.q
+        ? {
+            user: {
+              OR: [
+                { displayName: { contains: input.q, mode: 'insensitive' } },
+                { phone: { contains: input.q } },
+              ],
+            },
+          }
+        : {}),
+      ...(input.subscription === 'active'
+        ? { subscriptionPaidUntil: { gt: now } }
+        : input.subscription === 'lapsed'
+          ? { OR: [{ subscriptionPaidUntil: null }, { subscriptionPaidUntil: { lte: now } }] }
+          : {}),
+    };
+    const [agents, total] = await this.prisma.$transaction([
+      this.prisma.agent.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: { user: { select: { displayName: true, phone: true } } },
+        take: input.page.limit,
+        skip: input.page.offset,
+      }),
+      this.prisma.agent.count({ where }),
+    ]);
+    const sums = await this.prisma.walletTransaction.groupBy({
+      by: ['userId'],
+      where: { pool: 'agent', userId: { in: agents.map((a) => a.userId) } },
+      _sum: { coins: true },
+    });
+    const coinsByUser = new Map(sums.map((s) => [s.userId, s._sum.coins ?? 0]));
+    return toPage(
+      agents.map((agent) => ({
+        agentId: agent.id,
+        userId: agent.userId,
+        displayName: agent.user.displayName,
+        phone: agent.user.phone,
+        referralCode: agent.referralCode,
+        verificationStatus: agent.verificationStatus,
+        status: agent.status,
+        subscriptionPaidUntil: agent.subscriptionPaidUntil?.toISOString() ?? null,
+        subscriptionActive: isSubscriptionActive(
+          agent.subscriptionPaidUntil?.toISOString() ?? null,
+          now.getTime(),
+        ),
+        agentCoins: Math.max(0, coinsByUser.get(agent.userId) ?? 0),
+      })),
+      total,
+      input.page,
+    );
+  }
+
   async settleCashOut(
     transactionId: string,
     input: RecordCashOutSettlementInput,
@@ -81,6 +147,7 @@ function toCashOutRow(transaction: {
   user: { displayName: string; phone: string | null };
   coins: number;
   usdCents: number;
+  pool: 'spend' | 'cash' | 'agent';
   createdAt: Date;
   cashOutSettlement: { note: string | null; createdAt: Date } | null;
 }): AdminCashOutRowDto {
@@ -92,6 +159,7 @@ function toCashOutRow(transaction: {
     // Cash-out rows are stored negative (a debit) — the admin view is the positive amount requested.
     amountUsdCents: -transaction.usdCents,
     coins: -transaction.coins,
+    coinType: transaction.pool === 'agent' ? 'agent' : 'cash',
     requestedAt: transaction.createdAt.toISOString(),
     settled: !!transaction.cashOutSettlement,
     settledAt: transaction.cashOutSettlement?.createdAt.toISOString() ?? null,

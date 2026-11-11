@@ -13,5 +13,8 @@ export async function walletRates(settings?: SettingsService) {
     coinUsdCents: s.coinUsdCents,
     referralRewardCoins: s.referralRewardCoins,
     cashOutMinUsdCents: s.cashOutMinUsdCents,
+    cashOutIntervalDays: s.cashOutIntervalDays,
+    subscriptionPriceUsdCents: s.subscriptionPriceUsdCents,
+    subscriptionCycleDays: s.subscriptionCycleDays,
   };
 }

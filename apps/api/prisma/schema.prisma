@@ -86,9 +86,34 @@ enum ReferralStatus {
 }
 
 enum WalletTxnType {
+  /// An agent's reward for a recruited agent who is verified and has paid.
   referral_coin
   cash_out
   adjustment
+  /// A client's coins for a completed booking (spend-only, expire).
+  booking_reward
+  /// A buyer's coins for a delivered or collected marketplace order (spend-only, expire).
+  purchase_reward
+  /// An agent's coins on a purchase by a customer who used their code.
+  referral_purchase
+  /// Coins a client spent on a booking or order.
+  redeem_debit
+  /// The same coins arriving with the stylist or vendor.
+  redeem_credit
+  /// Client coins that reached their expiry unspent.
+  expiry
+  /// A redemption reversed because the booking or order was cancelled.
+  refund
+}
+
+/// Which pool of coins a ledger row belongs to. Spend-only coins are what
+/// clients earn (they expire and can never be cashed out). Cash coins arrive
+/// with stylists and vendors when a client pays with coins. Agent coins are
+/// agent earnings and need an active subscription to cash out.
+enum CoinPool {
+  spend
+  cash
+  agent
 }
 
 /// Mirrors @sc/shared's ProviderProfileDto priceDisplay field exactly.
@@ -391,6 +416,9 @@ model Payment {
   order                  Order?           @relation(fields: [orderId], references: [id])
   subscriptionProviderId String?
   subscriptionProvider   ProviderProfile? @relation("SubscriptionPayments", fields: [subscriptionProviderId], references: [id])
+  /// Set on an agent's subscription payment (instead of the three above).
+  agentId                String?
+  agent                  Agent?           @relation(fields: [agentId], references: [id])
   provider               String // 'fake-ecocash' | 'paynow' | 'pesepay' — a string, not an enum, so a further gateway is a new value, not a migration
   status                 String // held | released | refunded | failed
   amountUsdCents         Int
@@ -407,6 +435,7 @@ model Payment {
   @@index([bookingId])
   @@index([orderId])
   @@index([subscriptionProviderId])
+  @@index([agentId])
   @@index([reference])
 }
 
@@ -652,15 +681,18 @@ model MessageAttachment {
 /// currently allowed to earn (SRS §7: fraud mitigation can suspend an agent
 /// without deleting their history).
 model Agent {
-  id                 String             @id @default(uuid())
-  userId             String             @unique
-  user               User               @relation(fields: [userId], references: [id])
-  referralCode       String             @unique
-  verificationStatus VerificationStatus @default(unverified)
-  status             String             @default("active") // active | suspended
-  createdAt          DateTime           @default(now())
+  id                    String             @id @default(uuid())
+  userId                String             @unique
+  user                  User               @relation(fields: [userId], references: [id])
+  referralCode          String             @unique
+  verificationStatus    VerificationStatus @default(unverified)
+  status                String             @default("active") // active | suspended
+  /// Agents pay a subscription to use the rewards programme. Null until the first payment.
+  subscriptionPaidUntil DateTime?
+  createdAt             DateTime           @default(now())
 
   referrals Referral[]
+  payments  Payment[]
 }
 
 model Referral {
@@ -680,18 +712,41 @@ model Referral {
 /// Every coin movement, in and out — cash-out unlocks once the sum for a
 /// user exceeds CASH_OUT_MIN_USD_CENTS (@sc/shared/domain/money.ts).
 model WalletTransaction {
-  id        String        @id @default(uuid())
-  userId    String
-  user      User          @relation(fields: [userId], references: [id])
-  type      WalletTxnType
-  coins     Int
-  usdCents  Int
-  reference String?
-  createdAt DateTime      @default(now())
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  type           WalletTxnType
+  coins          Int
+  usdCents       Int
+  reference      String?
+  createdAt      DateTime      @default(now())
+  /// Existing rows are cash/agent coins; see `CoinPool`.
+  pool           CoinPool      @default(cash)
+  /// Set only on spend-only earning rows: when the coins expire.
+  expiresAt      DateTime?
+  /// Set only on spend-only earning rows: coins not yet spent or expired. Spending takes from the soonest-to-expire row first.
+  remainingCoins Int?
+  /// One row per booking/order/event per kind of coin movement, so a repeated hook (retry, race) inserts nothing. Null on legacy rows.
+  dedupeKey      String?       @unique
 
   cashOutSettlement CashOutSettlement?
+  /// The earning rows this debit spent from (spend pool only), so a refund puts the coins back in the same rows.
+  spentFrom         WalletCoinSpend[]  @relation("SpendDebit")
+  spentBy           WalletCoinSpend[]  @relation("SpendLot")
 
   @@index([userId])
+}
+
+model WalletCoinSpend {
+  id         String            @id @default(uuid())
+  debitTxnId String
+  debit      WalletTransaction @relation("SpendDebit", fields: [debitTxnId], references: [id])
+  lotTxnId   String
+  lot        WalletTransaction @relation("SpendLot", fields: [lotTxnId], references: [id])
+  coins      Int
+
+  @@unique([debitTxnId, lotTxnId])
+  @@index([lotTxnId])
 }
 
 /// A cash-out request (WalletTransaction.type = 'cash_out') already debited

@@ -23,7 +23,6 @@ import {
   needsCashReconciliation,
 } from '@sc/shared';
 import { Optional } from '@nestjs/common';
-import { walletRates } from '../../config/wallet-rates';
 import { SettingsService } from '../settings/settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
@@ -419,30 +418,6 @@ export class BookingsService {
               amountUsdCents: current.priceUsdCents,
             },
           });
-        }
-        const referral = await tx.referral.findFirst({
-          where: { referredUserId: current.clientId, status: 'pending' },
-          include: { agent: { select: { userId: true } } },
-        });
-        if (referral) {
-          const claimed = await tx.referral.updateMany({
-            where: { id: referral.id, status: 'pending' },
-            data: { status: 'paid' },
-          });
-          if (claimed.count === 1) {
-            const rates = await walletRates(this.settings);
-            await tx.walletTransaction.create({
-              data: {
-                userId: referral.agent.userId,
-                type: 'referral_coin',
-                // The Commission table is the promise made when the invite
-                // was linked, so credit exactly that row's coin amount.
-                coins: referral.coinsAwarded,
-                usdCents: referral.coinsAwarded * rates.coinUsdCents,
-                reference: `First completed booking ${current.reference}`,
-              },
-            });
-          }
         }
       }
       return result;

@@ -8,6 +8,8 @@ import {
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImageStorageService } from '../provider/image-storage.service';
+import { awardRecruitmentReward } from '../rewards/recruitment';
+import { settingsFor } from '../settings/settings.service';
 import type { Paged } from '@sc/shared';
 import { toPage, type PageRequest } from '../../common/paging';
 
@@ -67,6 +69,7 @@ export class AdminVerificationsService {
     }
     const documentUrls = [user.verificationIdDocumentUrl, user.verificationSelfieImageUrl];
     const decisionMade = input.verificationStatus !== 'pending';
+    const coinUsdCents = await settingsFor(this.prisma).get('coinUsdCents');
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
@@ -91,6 +94,11 @@ export class AdminVerificationsService {
         where: { userId: id },
         data: { verificationStatus: input.verificationStatus },
       });
+      // A recruited agent who has already paid is complete once verified;
+      // whichever of verification and first payment lands last pays the recruiter.
+      if (input.verificationStatus === 'verified') {
+        await awardRecruitmentReward(tx, id, coinUsdCents);
+      }
       if (user.providerProfile) {
         await tx.providerProfile.update({
           where: { id: user.providerProfile.id },

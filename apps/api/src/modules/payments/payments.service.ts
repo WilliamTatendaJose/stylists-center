@@ -24,6 +24,7 @@ import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 import { Inject } from '@nestjs/common';
 import { recordSubscriptionPaymentStatus } from './subscription-payment';
 import { offeredChannels } from './pay-channels';
+import { recordAgentSubscriptionPaymentStatus } from '../wallet/agent-subscription-payment';
 
 @Injectable()
 export class PaymentsService {
@@ -62,12 +63,14 @@ export class PaymentsService {
         booking: { select: { clientId: true } },
         order: { select: { buyerId: true } },
         subscriptionProvider: { select: { userId: true } },
+        agent: { select: { userId: true } },
       },
     });
     const payerId =
       payment?.booking?.clientId ??
       payment?.order?.buyerId ??
-      payment?.subscriptionProvider?.userId;
+      payment?.subscriptionProvider?.userId ??
+      payment?.agent?.userId;
     // One answer for "no such payment" and "not yours", so a reference cannot be probed.
     if (!payment || payerId !== userId) throw new NotFoundException('Payment not found');
     if (!payment.otpUrl || payment.status !== 'pending') {
@@ -142,6 +145,26 @@ export class PaymentsService {
       this.prisma.order.findUnique({ where: { reference } }),
     ]);
     if (booking && order) throw new NotFoundException(`Unknown ${label} reference`);
+
+    // An agent's subscription is identified the same way, by its own reference.
+    const agentPayment =
+      booking || order
+        ? null
+        : await this.prisma.payment.findFirst({
+            where: { reference, agentId: { not: null } },
+            orderBy: { createdAt: 'desc' },
+          });
+    if (agentPayment?.agentId) {
+      if (agentPayment.amountUsdCents !== amountUsdCents)
+        throw new ForbiddenException(`${label} callback amount mismatch`);
+      await recordAgentSubscriptionPaymentStatus(this.prisma, {
+        agentId: agentPayment.agentId,
+        reference,
+        status,
+        ...(confirmation.externalRef ? { externalRef: confirmation.externalRef } : {}),
+      });
+      return;
+    }
 
     // A subscription has no booking/order row to resolve against — it is
     // identified only by the reference its Payment was initiated under.

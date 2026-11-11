@@ -7,6 +7,7 @@ import {
 } from './payment-gateway.port';
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 import { recordSubscriptionPaymentStatus } from './subscription-payment';
+import { recordAgentSubscriptionPaymentStatus } from '../wallet/agent-subscription-payment';
 
 /**
  * Statuses that will never change on their own. Anything else is still in
@@ -18,6 +19,7 @@ export interface PaymentSubject {
   bookingId?: string;
   orderId?: string;
   subscriptionProviderId?: string;
+  agentId?: string;
 }
 
 export interface PaymentStatusResult {
@@ -75,6 +77,15 @@ export class PaymentStatusService {
     }
 
     if (polled === payment.status) return { status: payment.status, changed: false };
+
+    if (subject.agentId && payment.reference) {
+      return recordAgentSubscriptionPaymentStatus(this.prisma, {
+        agentId: subject.agentId,
+        reference: payment.reference,
+        status: polled,
+        ...(payment.externalRef ? { externalRef: payment.externalRef } : {}),
+      });
+    }
 
     if (subject.subscriptionProviderId && payment.reference) {
       const result = await recordSubscriptionPaymentStatus(this.prisma, {

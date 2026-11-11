@@ -2,7 +2,9 @@ import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
 import {
   formatUsd,
+  formatInHarare,
   canCashOut,
+  nextCashOutAt,
   type CashOutRequestResponse,
   type WalletTransactionDto,
   type ReferralRowDto,
@@ -12,6 +14,8 @@ import { walletRates } from '../../config/wallet-rates';
 import { SettingsService } from '../settings/settings.service';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import { coinBalance, lockWallet, sweepExpired } from '../rewards/coin-ledger';
+import { toAgentSubscriptionDto } from './agent-subscription-payment';
 
 @Injectable()
 export class WalletService {
@@ -43,17 +47,36 @@ export class WalletService {
     if (agent) {
       await this.reconcileReferralCredits(userId, agent.id, rates.coinUsdCents);
     }
-    const balance = await this.balance(userId, rates.coinUsdCents);
+    const subscription = agent ? toAgentSubscriptionDto(agent.subscriptionPaidUntil, rates) : null;
+    const [balance, lastCashOut] = await Promise.all([
+      coinBalance(this.prisma, userId, { agentActive: subscription?.active ?? false }),
+      this.prisma.walletTransaction.findFirst({
+        where: { userId, type: 'cash_out' },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      }),
+    ]);
+    const cashOutUsdCents = balance.cashOutable * rates.coinUsdCents;
+    const nextCashOut = nextCashOutAt(lastCashOut?.createdAt ?? null, rates.cashOutIntervalDays);
 
     return {
-      coins: balance.coins,
-      usdCents: balance.usdCents,
+      coins: balance.total,
+      usdCents: balance.total * rates.coinUsdCents,
+      spendableCoins: balance.spendable,
+      cashOutableCoins: balance.cashOutable,
+      cashOutableUsdCents: cashOutUsdCents,
+      lockedAgentCoins: balance.lockedAgent,
+      nextExpiryAt: balance.nextExpiry?.at.toISOString() ?? null,
+      nextExpiryCoins: balance.nextExpiry?.coins ?? 0,
+      agentSubscription: subscription,
+      nextCashOutAt: nextCashOut?.toISOString() ?? null,
+      cashOutIntervalDays: rates.cashOutIntervalDays,
       coinUsdCents: rates.coinUsdCents,
       referralRewardCoins: rates.referralRewardCoins,
       referralCode: agent?.referralCode ?? '',
       referredByName: user.referralRecord?.agent.user.displayName ?? null,
       referralStatus: user.referralRecord?.status ?? 'none',
-      canCashOut: canCashOut(balance.usdCents, rates.cashOutMinUsdCents),
+      canCashOut: canCashOut(cashOutUsdCents, rates.cashOutMinUsdCents) && !nextCashOut,
       cashOutMinUsdCents: rates.cashOutMinUsdCents,
       isVerifiedAgent: agent
         ? agent.verificationStatus === 'verified' && agent.status === 'active'
@@ -199,65 +222,90 @@ export class WalletService {
       usdCents: transaction.usdCents,
       reference: transaction.reference,
       createdAt: transaction.createdAt.toISOString(),
+      pool: transaction.pool,
       settled: transaction.type === 'cash_out' ? !!transaction.cashOutSettlement : null,
     }));
   }
 
-  /** Server recomputes the balance rather than trusting a client-supplied amount — the same rule matching's retry ladder follows. */
   /**
-   * Cashing out drains the whole balance to a single negative ledger row.
+   * Cashing out drains everything that can be cashed out to negative ledger
+   * rows: one per kind of coin, so staff can see whether they are paying
+   * coins a stylist received from clients or agent earnings.
    *
-   * Reading the balance and then writing that row were two separate
-   * statements with nothing between them, so two requests arriving together —
-   * a double tap, or a client retry after a response was lost — could both
-   * read the same positive balance, both pass the minimum check, and both
-   * write a withdrawal. That pays the same money out twice.
+   * The balance is read and then written, so two requests arriving together
+   * (a double tap, a retry after a lost response) could both read the same
+   * positive balance and both pay out. The row lock makes the read-check-write
+   * one atomic step per user: the second request waits, then sees a zero
+   * balance (and a cash-out made moments ago) and is rejected. The User row
+   * is locked rather than the ledger because what is being serialised is
+   * "this user's balance", and the rows being counted don't all exist yet.
    *
-   * The row lock makes the read-check-write one atomic step per user: the
-   * second request waits, then re-reads a zero balance and is correctly
-   * rejected. Locking the User row rather than the ledger because the thing
-   * being serialised is "this user's balance", and the rows being counted do
-   * not all exist yet at lock time.
+   * Only coins that can be cashed out count: coins a client earned are
+   * spend-only, and agent earnings count only while the subscription is active.
+   * The amount is converted at the current coin value, not a historic one.
    */
   async cashOut(userId: string): Promise<CashOutRequestResponse> {
-    const { coinUsdCents, cashOutMinUsdCents } = await walletRates(this.settings);
+    const rates = await walletRates(this.settings);
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+      await lockWallet(tx, userId);
+      const now = new Date();
+      await sweepExpired(tx, userId, now, rates.coinUsdCents);
 
-      const agg = await tx.walletTransaction.aggregate({
+      const agent = await tx.agent.findUnique({
         where: { userId },
-        _sum: { coins: true },
+        select: { subscriptionPaidUntil: true },
       });
-      const coins = agg._sum.coins ?? 0;
-      // Coins are the durable balance. Their cash value is converted at the
-      // current server-configured rate rather than a historic reward rate.
-      const usdCents = coins * coinUsdCents;
+      const agentActive = (agent?.subscriptionPaidUntil?.getTime() ?? 0) > now.getTime();
+      const balance = await coinBalance(tx, userId, { agentActive, now });
+      const usdCents = balance.cashOutable * rates.coinUsdCents;
 
-      if (!canCashOut(usdCents, cashOutMinUsdCents)) {
+      if (!canCashOut(usdCents, rates.cashOutMinUsdCents)) {
         throw new BadRequestException(
-          `Balance must exceed ${formatUsd(cashOutMinUsdCents)} to cash out`,
+          balance.lockedAgent > 0 && balance.cashOutable === 0
+            ? 'Pay your agent subscription to cash out your agent coins'
+            : `Balance must exceed ${formatUsd(rates.cashOutMinUsdCents)} to cash out`,
+        );
+      }
+      const last = await tx.walletTransaction.findFirst({
+        where: { userId, type: 'cash_out' },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      });
+      const next = nextCashOutAt(last?.createdAt ?? null, rates.cashOutIntervalDays, now);
+      if (next) {
+        throw new BadRequestException(
+          `You can cash out again on ${formatInHarare(next.toISOString(), 'd MMM yyyy')}`,
         );
       }
 
-      const txn = await tx.walletTransaction.create({
-        data: { userId, type: 'cash_out', coins: -coins, usdCents: -usdCents },
+      const pools = await tx.walletTransaction.groupBy({
+        by: ['pool'],
+        where: { userId, pool: { in: ['cash', 'agent'] } },
+        _sum: { coins: true },
       });
+      const held = (pool: 'cash' | 'agent') =>
+        Math.max(0, pools.find((p) => p.pool === pool)?._sum.coins ?? 0);
+      const candidates: { pool: 'cash' | 'agent'; coins: number }[] = [
+        { pool: 'cash', coins: held('cash') },
+        { pool: 'agent', coins: agentActive ? held('agent') : 0 },
+      ];
+      const rows = candidates.filter((row) => row.coins > 0);
 
-      return { id: txn.id, amountUsdCents: usdCents, status: 'pending' as const };
+      let firstId = '';
+      for (const row of rows) {
+        const txn = await tx.walletTransaction.create({
+          data: {
+            userId,
+            type: 'cash_out',
+            pool: row.pool,
+            coins: -row.coins,
+            usdCents: -row.coins * rates.coinUsdCents,
+          },
+        });
+        firstId ||= txn.id;
+      }
+      return { id: firstId, amountUsdCents: usdCents, status: 'pending' as const };
     });
-  }
-
-  /** The ledger is append-only (plan §6) — balance is always a live sum, never a stored counter. */
-  private async balance(
-    userId: string,
-    coinUsdCents: number,
-  ): Promise<{ coins: number; usdCents: number }> {
-    const agg = await this.prisma.walletTransaction.aggregate({
-      where: { userId },
-      _sum: { coins: true },
-    });
-    const coins = agg._sum.coins ?? 0;
-    return { coins, usdCents: coins * coinUsdCents };
   }
 
   /**
@@ -289,6 +337,7 @@ export class WalletService {
         data: {
           userId,
           type: 'referral_coin',
+          pool: 'agent',
           coins: missingCoins,
           usdCents: missingCoins * coinUsdCents,
           reference: 'Referral reward reconciliation',
