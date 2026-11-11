@@ -372,27 +372,42 @@ model MatchOffer {
 /// confirmation is the only signal the platform has that a cash booking
 /// happened at all.
 model Booking {
-  id                  String          @id @default(uuid())
-  reference           String          @unique
-  clientId            String
-  client              User            @relation("BookingClient", fields: [clientId], references: [id])
-  providerId          String
-  provider            ProviderProfile @relation(fields: [providerId], references: [id])
-  serviceId           String
-  service             Service         @relation(fields: [serviceId], references: [id])
-  matchRequestId      String?
-  matchRequest        MatchRequest?   @relation(fields: [matchRequestId], references: [id])
-  startsAt            DateTime
+  id                    String          @id @default(uuid())
+  reference             String          @unique
+  clientId              String
+  client                User            @relation("BookingClient", fields: [clientId], references: [id])
+  providerId            String
+  provider              ProviderProfile @relation(fields: [providerId], references: [id])
+  serviceId             String
+  service               Service         @relation(fields: [serviceId], references: [id])
+  matchRequestId        String?
+  matchRequest          MatchRequest?   @relation(fields: [matchRequestId], references: [id])
+  startsAt              DateTime
   /// Fixed at booking time from the selected service duration. This makes the
   /// appointment range auditable even if the service menu changes later.
-  endsAt              DateTime
-  paymentMethod       PaymentMethod
-  status              BookingStatus   @default(awaiting_provider)
-  priceUsdCents       Int
-  confirmedByClient   Boolean         @default(false)
-  confirmedByProvider Boolean         @default(false)
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  endsAt                DateTime
+  paymentMethod         PaymentMethod
+  status                BookingStatus   @default(awaiting_provider)
+  priceUsdCents         Int
+  confirmedByClient     Boolean         @default(false)
+  confirmedByProvider   Boolean         @default(false)
+  /// When each side confirmed. The auto-complete sweep counts its window from the first of these, so it needs the time and not just the flag.
+  confirmedByClientAt   DateTime?
+  confirmedByProviderAt DateTime?
+  completedAt           DateTime?
+  /// True when the booking completed because the window ran out with only one side confirmed.
+  autoCompleted         Boolean         @default(false)
+  /// Service fee added to `priceUsdCents` for the client, frozen at booking time so a later settings change never rewrites what this client was shown or what the stylist owes. Both 0 on bookings made before the pay-the-stylist model (those were paid in the app, fee-free).
+  serviceFeeUsdCents    Int             @default(0)
+  serviceFeeBps         Int             @default(0)
+  /// Coins the client spent on this booking and their cash value when spent. The client pays the stylist price + fee - coinsUsdCents directly.
+  coinsUsed             Int             @default(0)
+  coinsUsdCents         Int             @default(0)
+  /// The stylist reported the client did not pay. No fee is ever charged for such a booking; staff review clients with repeat reports.
+  nonPaymentReportedAt  DateTime?
+  nonPaymentNote        String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
   payments Payment[]
   reviews  Review[]
@@ -402,6 +417,7 @@ model Booking {
   @@index([clientId])
   @@index([providerId])
   @@index([status])
+  @@index([clientId, nonPaymentReportedAt])
 }
 
 /// Append-only escrow ledger (plan §6). Never mutate a row in place — a

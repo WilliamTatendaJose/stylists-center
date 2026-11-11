@@ -147,6 +147,8 @@ export const adminUserRowSchema = z.object({
   displayName: z.string(),
   activeRole: activeRoleSchema,
   hasProviderProfile: z.boolean(),
+  /** Times stylists have reported this user as not paying for a booking, so staff can spot repeat cases. */
+  nonPaymentReports: z.number().int(),
   appStatus: adminAppUserStatusSchema,
   firebaseStatus: adminFirebaseStatusSchema,
   createdAt: z.iso.datetime(),
@@ -591,6 +593,14 @@ export type AdminLookupResultDto = z.infer<typeof adminLookupResultSchema>;
 export const adminBookingDetailSchema = adminBookingSummarySchema.extend({
   confirmedByClient: z.boolean(),
   confirmedByProvider: z.boolean(),
+  serviceFeeUsdCents: z.number().int(),
+  coinsUsed: z.number().int(),
+  coinsUsdCents: z.number().int(),
+  /** When the stylist reported the client did not pay, and their note. */
+  nonPaymentReportedAt: z.iso.datetime().nullable(),
+  nonPaymentNote: z.string().nullable(),
+  /** Non-payment reports against this booking's client across all their bookings (this one included). */
+  clientNonPaymentReports: z.number().int(),
   payments: z.array(adminPaymentLedgerRowSchema),
   /** Up to two rows — a booking can have a client-mode and a provider-mode trip tracking the same job. */
   trips: z.array(

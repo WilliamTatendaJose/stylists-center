@@ -1,6 +1,11 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ProviderAvailabilityDto, ProviderEarningsDto, ProviderJobsDto } from '@sc/shared';
+import type {
+  ProviderAvailabilityDto,
+  ProviderEarningsDto,
+  ProviderJobsDto,
+  ReportNonPaymentInput,
+} from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { getSocket } from '../../realtime/socket.js';
 
@@ -90,6 +95,7 @@ export function useDeclineBooking() {
   return useJobsMutation<string>((id) => `/v1/provider/bookings/${id}/decline`);
 }
 
+/** The stylist's "payment received". */
 export function useProviderConfirmCompletion() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -101,6 +107,22 @@ export function useProviderConfirmCompletion() {
       void queryClient.invalidateQueries({ queryKey: ['wallet'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'referrals'] });
       void queryClient.invalidateQueries({ queryKey: ['wallet', 'transactions'] });
+    },
+  });
+}
+
+/** `POST /v1/provider/bookings/:id/report-non-payment` — "the client didn't pay"; no fee is charged for that job. */
+export function useReportNonPayment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: ReportNonPaymentInput }) =>
+      apiFetch<void>(`/v1/provider/bookings/${id}/report-non-payment`, {
+        method: 'POST',
+        body: input,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_JOBS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ['provider', 'earnings'] });
     },
   });
 }

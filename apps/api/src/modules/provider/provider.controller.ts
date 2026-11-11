@@ -27,6 +27,7 @@ import {
   MarkOrderReadyDto,
   UpdateWeeklyHoursDto,
   CreateProviderTimeOffDto,
+  ReportNonPaymentDto,
 } from './dto';
 import {
   ImageStorageService,
@@ -188,6 +189,15 @@ export class ProviderController {
   @Post('bookings/:id/confirm-completion')
   confirmCompletion(@Param('id') id: string, @CurrentProvider() providerId: string) {
     return this.provider.confirmCompletion(id, providerId);
+  }
+
+  @Post('bookings/:id/report-non-payment')
+  reportNonPayment(
+    @Param('id') id: string,
+    @CurrentProvider() providerId: string,
+    @Body() dto: ReportNonPaymentDto,
+  ) {
+    return this.provider.reportNonPayment(id, providerId, dto.note);
   }
 
   @Post('offers/:id/accept')

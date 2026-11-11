@@ -17,6 +17,8 @@ import {
   Card,
   Toggle,
   Countdown,
+  Sheet,
+  TextField,
   SectionLabel,
   EmptyPanel,
   useTheme,
@@ -29,8 +31,10 @@ import {
   useProviderConfirmCompletion,
   useProviderJobs,
   useProviderJobsRealtime,
+  useReportNonPayment,
   useSetAvailability,
 } from '../../src/api/hooks/useProviderJobs.js';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { ServerConnectionPanel } from '../../src/components/ServerConnectionPanel.js';
@@ -60,6 +64,9 @@ const styles = StyleSheet.create({
   },
   reconcileNote: { marginTop: space.s },
   sectionGap: { marginTop: space.xl },
+  sheetTitle: { marginBottom: space.m },
+  sheetBody: { marginBottom: space.l },
+  sheetActions: { gap: space.s, marginTop: space.m },
 });
 
 const COMPLETED_HISTORY_PREVIEW_COUNT = 2;
@@ -121,6 +128,7 @@ interface JobActions {
   confirmBooking: (id: string) => void;
   declineBooking: (id: string) => void;
   completeBooking: (id: string) => void;
+  reportNonPayment: (booking: ProviderBookingRowDto) => void;
 }
 
 type JobSection = 'offers' | 'requests' | 'upcoming' | 'completed';
@@ -158,6 +166,12 @@ const JobCard = memo(function JobCard({
   const onComplete = () => {
     if (section !== 'completed') actions.completeBooking(booking.id);
   };
+  const onReportNonPayment = () => {
+    actions.reportNonPayment(booking);
+  };
+  const { completionAutoConfirmHours } = useAppConfig();
+  const paidInApp = booking.paymentMethod === 'ecocash';
+  const firstName = booking.clientName.split(' ')[0];
   return (
     <Card bordered style={styles.card}>
       <View style={styles.headerRow}>
@@ -173,9 +187,27 @@ const JobCard = memo(function JobCard({
             {booking.serviceName} · {booking.whenLabel}
           </Text>
           <Text variant="metaSmall" color="neutral600">
-            {booking.paymentMethod === 'ecocash' ? 'Paynow' : 'Cash'} ·{' '}
+            {paidInApp ? 'Paid in the app · ' : ''}
             {formatUsd(booking.priceUsdCents)} · {booking.reference}
           </Text>
+          {!paidInApp ? (
+            <Text variant="metaSmall" color="neutral600">
+              {booking.amountToCollectUsdCents > 0
+                ? `${firstName} pays you ${formatUsd(booking.amountToCollectUsdCents)}`
+                : `${firstName} has nothing to pay you`}
+              {booking.coinsUsed > 0
+                ? ` after ${String(booking.coinsUsed)} coins (${formatUsd(booking.coinsUsdCents)}), which are added to your balance`
+                : ''}
+              {booking.serviceFeeUsdCents > 0
+                ? `. Service fee ${formatUsd(booking.serviceFeeUsdCents)}, billed to you monthly.`
+                : ''}
+            </Text>
+          ) : null}
+          {booking.nonPaymentReportedAt ? (
+            <Text variant="metaSmall" color="neutral600">
+              You reported that {firstName} didn&apos;t pay. No fee for this job.
+            </Text>
+          ) : null}
         </View>
         <Badge
           label={BOOKING_STATUS_LABELS[booking.status]}
@@ -207,19 +239,19 @@ const JobCard = memo(function JobCard({
 
       {booking.canConfirmCompletion ? (
         <>
-          <Button label="Mark as done" block disabled={pending} onPress={onComplete} />
+          <Button label="Payment received" block disabled={pending} onPress={onComplete} />
           <Text variant="metaSmall" color="neutral600" style={styles.reconcileNote}>
-            Cash job — it closes once {booking.clientName.split(' ')[0]} confirms too.
+            Tap once {firstName} has paid you. The job closes when they confirm it was done too, or
+            by itself {completionAutoConfirmHours} hours after one of you confirms.
           </Text>
         </>
       ) : null}
 
       {booking.status === 'confirmed' && booking.paymentMethod === 'ecocash' ? (
         <View style={[styles.reconcilePanel, { backgroundColor: colors.surface }]}>
-          <Text variant="bodyStrong">EcoCash payment is secured.</Text>
+          <Text variant="bodyStrong">Paid in the app.</Text>
           <Text variant="meta" color="neutral700" style={styles.reconcileNote}>
-            After the appointment, {booking.clientName.split(' ')[0]} confirms it is done and your
-            payout is released.
+            After the appointment, {firstName} confirms it is done and your payout is released.
           </Text>
         </View>
       ) : null}
@@ -228,11 +260,23 @@ const JobCard = memo(function JobCard({
       booking.paymentMethod === 'cash' &&
       booking.confirmedByProvider ? (
         <View style={[styles.reconcilePanel, { backgroundColor: colors.surface }]}>
-          <Text variant="bodyStrong">You marked this job as done.</Text>
+          <Text variant="bodyStrong">You confirmed you were paid.</Text>
           <Text variant="meta" color="neutral700" style={styles.reconcileNote}>
-            Waiting for {booking.clientName.split(' ')[0]} to confirm and close the cash booking.
+            Waiting for {firstName} to confirm the job was done. It closes by itself{' '}
+            {completionAutoConfirmHours} hours after your confirmation if they don&apos;t.
           </Text>
         </View>
+      ) : null}
+
+      {/* Server-decided: only from the appointment start, for a limited time. */}
+      {booking.canReportNonPayment ? (
+        <Button
+          label={`${firstName} didn't pay`}
+          variant="ghost"
+          block
+          disabled={pending}
+          onPress={onReportNonPayment}
+        />
       ) : null}
     </Card>
   );
@@ -261,17 +305,22 @@ export default function Jobs() {
   const confirmBooking = useConfirmBooking();
   const declineBooking = useDeclineBooking();
   const completeBooking = useProviderConfirmCompletion();
+  const reportNonPayment = useReportNonPayment();
   const acceptOffer = useAcceptOffer();
   const declineOffer = useDeclineOffer();
   const setAvailability = useSetAvailability();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [showAllCompletedHistory, setShowAllCompletedHistory] = useState(false);
+  const [reportTarget, setReportTarget] = useState<ProviderBookingRowDto | null>(null);
+  const [reportNote, setReportNote] = useState('');
+  const { nonPaymentReportHours } = useAppConfig();
 
   const busy =
     confirmBooking.isPending ||
     declineBooking.isPending ||
     completeBooking.isPending ||
+    reportNonPayment.isPending ||
     acceptOffer.isPending ||
     declineOffer.isPending;
 
@@ -310,7 +359,12 @@ export default function Jobs() {
       },
       completeBooking: (id) => {
         setActionError(null);
-        completeBookingMutate(id, { onError: onError("Couldn't mark that as done.") });
+        completeBookingMutate(id, { onError: onError("Couldn't confirm that payment.") });
+      },
+      reportNonPayment: (booking) => {
+        setActionError(null);
+        setReportNote('');
+        setReportTarget(booking);
       },
     }),
     [
@@ -473,33 +527,95 @@ export default function Jobs() {
       />
     ) : null;
 
+  const submitReport = () => {
+    if (!reportTarget) return;
+    setActionError(null);
+    reportNonPayment.mutate(
+      {
+        id: reportTarget.id,
+        input: reportNote.trim() ? { note: reportNote.trim() } : {},
+      },
+      {
+        onSuccess: () => {
+          setReportTarget(null);
+        },
+        onError: (error) => {
+          setReportTarget(null);
+          setActionError(describeError(error, "Couldn't send that report. Try again."));
+        },
+      },
+    );
+  };
+
   return (
-    <Screen
-      hasTabBar
-      header={<ScreenHeader title="Jobs" showBack={false} right={<RoleSwitcher />} />}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => {
-            void refetch();
-          }}
-          tintColor={colors.accent}
-          colors={[colors.accent]}
+    <>
+      <Screen
+        hasTabBar
+        header={<ScreenHeader title="Jobs" showBack={false} right={<RoleSwitcher />} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={() => {
+              void refetch();
+            }}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
+          />
+        }
+        renderList={(listProps) => (
+          <SectionList
+            {...listProps}
+            sections={sections}
+            keyExtractor={(item) => item.key}
+            renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
+            stickySectionHeadersEnabled={false}
+            ListHeaderComponent={listHeader}
+            ListEmptyComponent={listEmpty}
+            ListFooterComponent={listFooter}
+          />
+        )}
+      />
+
+      <Sheet
+        open={!!reportTarget}
+        onClose={() => {
+          setReportTarget(null);
+        }}
+      >
+        <Text variant="cardTitle" style={styles.sheetTitle}>
+          {reportTarget?.clientName.split(' ')[0]} didn&apos;t pay?
+        </Text>
+        <Text variant="body" color="neutral700" style={styles.sheetBody}>
+          You won&apos;t be charged the service fee for this job. You can report up to{' '}
+          {nonPaymentReportHours} hours after the appointment starts. Staff look at clients who are
+          reported more than once.
+        </Text>
+        <TextField
+          label="Add a note (optional)"
+          value={reportNote}
+          onChangeText={setReportNote}
+          maxLength={500}
+          multiline
+          numberOfLines={3}
         />
-      }
-      renderList={(listProps) => (
-        <SectionList
-          {...listProps}
-          sections={sections}
-          keyExtractor={(item) => item.key}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          stickySectionHeadersEnabled={false}
-          ListHeaderComponent={listHeader}
-          ListEmptyComponent={listEmpty}
-          ListFooterComponent={listFooter}
-        />
-      )}
-    />
+        <View style={styles.sheetActions}>
+          <Button
+            label={reportNonPayment.isPending ? 'Sending…' : 'Report non-payment'}
+            block
+            disabled={reportNonPayment.isPending}
+            onPress={submitReport}
+          />
+          <Button
+            label="Cancel"
+            variant="ghost"
+            block
+            onPress={() => {
+              setReportTarget(null);
+            }}
+          />
+        </View>
+      </Sheet>
+    </>
   );
 }

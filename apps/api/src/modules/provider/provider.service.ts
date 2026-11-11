@@ -7,12 +7,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  bookingAmounts,
   canProviderRespond,
+  canReportNonPayment,
   deriveInitials,
   deriveTint,
   formatBookingWhen,
   isSubscriptionActive,
-  needsCashReconciliation,
   normalizePhone,
   type BookingStatus,
   type CreateProviderProductInput,
@@ -41,7 +42,7 @@ import {
   type CreateProviderTimeOffInput,
 } from '@sc/shared';
 import { Optional } from '@nestjs/common';
-import { SettingsService } from '../settings/settings.service';
+import { SettingsService, settingsFor } from '../settings/settings.service';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
@@ -52,7 +53,7 @@ import { payerPhoneFor } from '../payments/pay-channels';
 import { PaymentStatusService } from '../payments/payment-status.service';
 import { applySubscriptionPayment } from '../payments/payments.service';
 import { toBookingRowDto } from '../bookings/mappers';
-import { expireStaleBookingRequests } from '../bookings/booking-expiry';
+import { BookingLifecycleService } from '../bookings/booking-lifecycle.service';
 import { isWithinWeeklyHours, readWeeklyHours } from '../providers/calendar-policy';
 import { ReminderService } from '../notifications/reminder.service';
 
@@ -83,6 +84,7 @@ export class ProviderService {
     private readonly push: PushService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
     private readonly paymentStatus: PaymentStatusService,
+    private readonly lifecycle: BookingLifecycleService,
     @Optional() private readonly settings?: SettingsService,
     @Optional() private readonly reminders?: ReminderService,
   ) {}
@@ -477,7 +479,10 @@ export class ProviderService {
   }
 
   private async listBookings(providerProfileId: string): Promise<ProviderBookingRowDto[]> {
-    await expireStaleBookingRequests(this.prisma, { providerId: providerProfileId });
+    await this.lifecycle.expireStale({ providerId: providerProfileId });
+    const reportHours = await (this.settings ?? settingsFor(this.prisma)).get(
+      'nonPaymentReportHours',
+    );
     const bookings = await this.prisma.booking.findMany({
       where: { providerId: providerProfileId, status: { in: [...VISIBLE_STATUSES] } },
       include: { client: { include: { providerProfile: true } }, service: true },
@@ -497,9 +502,14 @@ export class ProviderService {
         startsAt: b.startsAt.toISOString(),
         paymentMethod: b.paymentMethod,
         priceUsdCents: b.priceUsdCents,
+        serviceFeeUsdCents: b.serviceFeeUsdCents,
+        coinsUsed: b.coinsUsed,
+        coinsUsdCents: b.coinsUsdCents,
+        amountToCollectUsdCents: bookingAmounts(b).amountDueUsdCents,
         status: b.status,
         confirmedByClient: b.confirmedByClient,
         confirmedByProvider: b.confirmedByProvider,
+        nonPaymentReportedAt: b.nonPaymentReportedAt?.toISOString() ?? null,
         canConfirm: canProviderRespond(b.status),
         canDecline: canProviderRespond(b.status),
         canConfirmCompletion: providerOwesCompletion({
@@ -507,6 +517,15 @@ export class ProviderService {
           status: b.status,
           confirmedByProvider: b.confirmedByProvider,
         }),
+        canReportNonPayment: canReportNonPayment(
+          {
+            paymentMethod: b.paymentMethod,
+            status: b.status,
+            startsAtIso: b.startsAt.toISOString(),
+            alreadyReported: b.nonPaymentReportedAt !== null,
+          },
+          reportHours,
+        ),
       };
     });
   }
@@ -551,92 +570,36 @@ export class ProviderService {
    * every booking a client made stayed "Awaiting stylist" forever.
    */
   async confirmBooking(bookingId: string, providerProfileId: string): Promise<void> {
-    const booking = await this.requireOwnBooking(bookingId, providerProfileId);
-    if (!canProviderRespond(booking.status)) {
-      throw new BadRequestException(`Cannot confirm a booking that is ${booking.status}`);
-    }
-
-    await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: 'confirmed' },
-    });
+    const booking = await this.lifecycle.accept(bookingId, providerProfileId);
     void this.reminders?.scheduleBooking(bookingId, booking.startsAt);
     await this.notifyClient(bookingId, booking.clientId);
   }
 
   async declineBooking(bookingId: string, providerProfileId: string): Promise<void> {
-    const booking = await this.requireOwnBooking(bookingId, providerProfileId);
-    if (!canProviderRespond(booking.status)) {
-      throw new BadRequestException(`Cannot decline a booking that is ${booking.status}`);
-    }
-
-    await this.prisma.booking.update({ where: { id: bookingId }, data: { status: 'declined' } });
-    // Declining frees the slot, so any escrow held for it must go back —
-    // the client is not paying for something that will not happen.
+    const booking = await this.lifecycle.decline(bookingId, providerProfileId);
+    // Bookings paid in the app before clients paid directly: declining frees
+    // the slot, so any escrow held for it must go back.
     await this.refundIfHeld(bookingId);
     await this.notifyClient(bookingId, booking.clientId);
   }
 
-  /**
-   * The stylist's half of a cash job's double confirmation.
-   *
-   * The client's Bookings screen has been saying "Waiting on <stylist> —
-   * closes when you both confirm" with no way for the stylist to do so, which
-   * left every cash booking permanently half-closed.
-   */
+  /** The stylist's "payment received". The booking completes once the client confirms too. */
   async confirmCompletion(bookingId: string, providerProfileId: string): Promise<void> {
-    const booking = await this.requireOwnBooking(bookingId, providerProfileId);
-    if (booking.status === 'completed') return;
-    if (booking.status !== 'confirmed') {
-      throw new BadRequestException(`Cannot complete a booking that is ${booking.status}`);
-    }
-    if (booking.confirmedByProvider) return;
+    const before = await this.requireOwnBooking(bookingId, providerProfileId);
+    const after = await this.lifecycle.confirm(bookingId, 'provider');
+    if (before.confirmedByProvider && before.status === after.status) return;
+    await this.notifyClient(bookingId, before.clientId);
+  }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
-      const current = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
-      if (current.status === 'completed' || current.confirmedByProvider) return;
-
-      const stillNeedsReconciliation = needsCashReconciliation({
-        paymentMethod: current.paymentMethod,
-        status: current.status,
-        confirmedByClient: current.confirmedByClient,
-        confirmedByProvider: true,
-      });
-      // EcoCash escrow releases on the client's word alone (their own
-      // confirmCompletion in bookings.service.ts) — the stylist is never the
-      // blocker for it, per providerOwesCompletion. Without the `=== 'cash'`
-      // guard, needsCashReconciliation is unconditionally false for EcoCash,
-      // so this alone would complete an EcoCash booking on the stylist's
-      // confirmation and leave its payment held/paid forever, never released.
-      const completes = current.paymentMethod === 'cash' && !stillNeedsReconciliation;
-
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          confirmedByProvider: true,
-          // Completes only once BOTH sides have confirmed a cash job — the
-          // stylist saying so alone is exactly the one-sided claim the double
-          // confirmation exists to prevent.
-          status: completes ? 'completed' : current.status,
-        },
-      });
-      if (completes) {
-        await tx.providerProfile.update({
-          where: { id: providerProfileId },
-          data: { completedCount: { increment: 1 } },
-        });
-        await tx.payment.create({
-          data: {
-            bookingId,
-            provider: 'cash',
-            status: 'released',
-            amountUsdCents: current.priceUsdCents,
-          },
-        });
-      }
-    });
-    await this.notifyClient(bookingId, booking.clientId);
+  /** The stylist says the client did not pay: no fee for this job, and staff can see the report. */
+  async reportNonPayment(
+    bookingId: string,
+    providerProfileId: string,
+    note?: string,
+  ): Promise<void> {
+    const before = await this.requireOwnBooking(bookingId, providerProfileId);
+    await this.lifecycle.reportNonPayment(bookingId, providerProfileId, note);
+    if (!before.nonPaymentReportedAt) await this.notifyClient(bookingId, before.clientId);
   }
 
   async setAvailability(

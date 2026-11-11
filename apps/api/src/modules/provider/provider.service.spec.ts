@@ -2,6 +2,11 @@ import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../config/env';
+import { BookingLifecycleService } from '../bookings/booking-lifecycle.service';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
+import { FeeStandingService } from '../fees/fee-standing.service';
+import { RewardsHooksService } from '../rewards/rewards-hooks.service';
+import { SettingsService } from '../settings/settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
@@ -109,6 +114,8 @@ describe('ProviderService management', () => {
       new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
       gateway,
       new PaymentStatusService(prisma, gateway),
+      // No booking actions are exercised here.
+      null as unknown as BookingLifecycleService,
     );
   });
 
@@ -339,6 +346,101 @@ describe('ProviderService management', () => {
     expect(paid.paidOutUsdCents).toBe(paid.releasedUsdCents);
   });
 
+  describe('booking job actions', () => {
+    const HOUR = 60 * 60_000;
+    let serviceId: string;
+    const bookingIds: string[] = [];
+
+    function jobs(): ProviderService {
+      const gateway = new FakeEcoCashAdapter();
+      const settings = new SettingsService(undefined, {});
+      const lifecycle = new BookingLifecycleService(
+        prisma,
+        new FeeLedgerService(prisma, settings),
+        new RewardsHooksService(prisma),
+        new FeeStandingService(),
+        new SocketEmitterService(),
+        new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+        settings,
+      );
+      return new ProviderService(
+        prisma,
+        new SocketEmitterService(),
+        null as unknown as MatchingService,
+        new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+        gateway,
+        new PaymentStatusService(prisma, gateway),
+        lifecycle,
+        settings,
+      );
+    }
+
+    beforeAll(async () => {
+      serviceId = (
+        await prisma.service.create({
+          data: { providerId, name: 'Job service', durationMinutes: 60, priceUsdCents: 2000 },
+        })
+      ).id;
+    });
+
+    afterAll(async () => {
+      await prisma.feeLedgerEntry.deleteMany({ where: { providerId } });
+      await prisma.payment.deleteMany({ where: { bookingId: { in: bookingIds } } });
+      await prisma.booking.deleteMany({ where: { id: { in: bookingIds } } });
+    });
+
+    it('shows what to collect and the fee, then closes on both confirmations and reports non-payment', async () => {
+      const startsAt = new Date(Date.now() - 3 * HOUR);
+      const booking = await prisma.booking.create({
+        data: {
+          reference: `SC-J${String(Date.now())}`,
+          clientId: buyerId,
+          providerId,
+          serviceId,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 60_000),
+          paymentMethod: 'cash',
+          status: 'confirmed',
+          priceUsdCents: 2000,
+          serviceFeeUsdCents: 60,
+          serviceFeeBps: 300,
+          coinsUsed: 5,
+          coinsUsdCents: 50,
+        },
+      });
+      bookingIds.push(booking.id);
+      const service = jobs();
+
+      const row = (await service.getJobs(providerId)).bookings.find((b) => b.id === booking.id);
+      expect(row).toMatchObject({
+        priceUsdCents: 2000,
+        serviceFeeUsdCents: 60,
+        coinsUsed: 5,
+        amountToCollectUsdCents: 2010,
+        canConfirmCompletion: true,
+        canReportNonPayment: true,
+        nonPaymentReportedAt: null,
+      });
+
+      await service.confirmCompletion(booking.id, providerId);
+      await service.confirmCompletion(booking.id, providerId); // a retry
+      expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).status).toBe(
+        'confirmed',
+      );
+
+      await service.reportNonPayment(booking.id, providerId, 'Said they would pay tomorrow');
+      const reported = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
+      expect(reported).toMatchObject({
+        status: 'completed',
+        nonPaymentNote: 'Said they would pay tomorrow',
+      });
+      expect(await prisma.feeLedgerEntry.count({ where: { bookingId: booking.id } })).toBe(0);
+      const after = (await service.getJobs(providerId)).bookings.find((b) => b.id === booking.id);
+      expect(after).toMatchObject({ canReportNonPayment: false });
+      expect(after?.nonPaymentReportedAt).not.toBeNull();
+    });
+  });
+
   describe('subscription', () => {
     it('is inactive with no paidUntil for a provider who has never paid', async () => {
       const subscription = await provider.getSubscription(providerId);
@@ -382,6 +484,7 @@ describe('ProviderService management', () => {
         new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
         pendingGateway,
         new PaymentStatusService(prisma, pendingGateway),
+        null as unknown as BookingLifecycleService,
       );
 
       const before = await pendingProvider.getSubscription(providerId);
@@ -417,6 +520,7 @@ describe('ProviderService management', () => {
         new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
         settlingGateway,
         new PaymentStatusService(prisma, settlingGateway),
+        null as unknown as BookingLifecycleService,
       );
 
       const before = await settlingProvider.getSubscription(providerId);

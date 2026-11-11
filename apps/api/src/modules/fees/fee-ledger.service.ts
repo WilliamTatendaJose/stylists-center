@@ -28,9 +28,15 @@ export class FeeLedgerService {
    */
   async chargeBooking(
     db: Db,
-    input: { providerId: string; bookingId: string; priceUsdCents: number },
+    input: {
+      providerId: string;
+      bookingId: string;
+      priceUsdCents: number;
+      rateBps?: number | null;
+    },
   ): Promise<number | null> {
-    const rateBps = await this.rate('serviceFeeBps');
+    // Bookings pass the rate frozen at booking time; otherwise the current setting.
+    const rateBps = input.rateBps ?? (await this.rate('serviceFeeBps'));
     return this.charge(db, {
       kind: 'booking_fee',
       providerId: input.providerId,

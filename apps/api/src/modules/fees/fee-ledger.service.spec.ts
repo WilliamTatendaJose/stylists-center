@@ -93,6 +93,21 @@ describe('FeeLedgerService', () => {
     expect(row).toMatchObject({ kind: 'booking_fee', baseUsdCents: 2000, rateBps: 300 });
   });
 
+  it('uses the rate frozen on the booking when one is given, not the current setting', async () => {
+    const bookingId = randomUUID();
+    // Setting is 3%; the booking was made when it was 2%.
+    expect(
+      await fees.chargeBooking(prisma, {
+        providerId,
+        bookingId,
+        priceUsdCents: 2000,
+        rateBps: 200,
+      }),
+    ).toBe(40);
+    const row = await prisma.feeLedgerEntry.findFirstOrThrow({ where: { bookingId } });
+    expect(row.rateBps).toBe(200);
+  });
+
   it('charges marketplace commission at its own rate, and a waiver reverses it once', async () => {
     const orderId = randomUUID();
     expect(

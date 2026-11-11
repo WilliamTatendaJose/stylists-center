@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { isValidMobileMoneyPhone } from '../domain/phone.js';
 import { imageUrlSchema } from './uploads.js';
-import { payChannelSchema, paymentActionSchema } from './payments.js';
 
 export const paymentMethodSchema = z.enum(['ecocash', 'cash']);
 
@@ -23,17 +22,19 @@ export const bookingStatusSchema = z.enum([
   'cancelled',
 ]);
 
+/**
+ * A booking is paid to the stylist directly (cash or their own mobile money),
+ * so there is no payment method or payer number to send. Older app builds
+ * still send them; the schema ignores unknown keys.
+ */
 export const createBookingSchema = z.object({
   providerId: z.uuid(),
   serviceId: z.uuid(),
   /** ISO-8601 UTC. Client-side display goes through formatInHarare(), never a raw Date. */
   startsAt: z.iso.datetime(),
-  paymentMethod: paymentMethodSchema,
   matchId: z.uuid().optional(),
-  /** Required in practice for a mobile-money channel — the number to bill. Falls back to the account phone when absent. */
-  payerPhone: payerPhoneSchema.optional(),
-  /** Which wallet or card pays an online booking. Absent from older app builds, which only knew EcoCash. */
-  payChannel: payChannelSchema.optional(),
+  /** Coins to spend on this booking. The API checks the balance and caps the value at the amount owed. */
+  coins: z.number().int().min(0).optional(),
 });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 
@@ -44,12 +45,6 @@ export const createBookingResponseSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   status: bookingStatusSchema,
-  /** Present when the gateway returned a hosted checkout page instead of a phone prompt; the client must open it to complete checkout. */
-  checkoutUrl: z.url().optional(),
-  /** Present when the gateway pushed an EcoCash prompt to the client's phone — show this text while polling payment-status. */
-  instructions: z.string().optional(),
-  /** Present when the customer must enter an InnBucks code or an O'mari OTP before the payment can settle. */
-  action: paymentActionSchema.optional(),
 });
 export type CreateBookingResponse = z.infer<typeof createBookingResponseSchema>;
 
@@ -82,7 +77,19 @@ export const bookingRowSchema = z.object({
    */
   startsAt: z.iso.datetime(),
   paymentMethod: paymentMethodSchema,
+  /** The stylist's price, without the service fee. */
   priceUsdCents: z.number().int(),
+  /** Service fee added for the client (0 on bookings made before fees were added to the price). */
+  serviceFeeUsdCents: z.number().int(),
+  /** What the client sees: price plus service fee. */
+  clientTotalUsdCents: z.number().int(),
+  /** Coins spent on this booking and their cash value. */
+  coinsUsed: z.number().int(),
+  coinsUsdCents: z.number().int(),
+  /** What the client pays the stylist directly: total minus coins. 0 for older bookings paid online in the app. */
+  amountDueUsdCents: z.number().int(),
+  /** The stylist's mobile money number, shown once the booking is confirmed. */
+  providerPaymentPhone: z.string().nullable(),
   status: bookingStatusSchema,
   confirmedByClient: z.boolean(),
   confirmedByProvider: z.boolean(),
