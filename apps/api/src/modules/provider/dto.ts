@@ -3,7 +3,6 @@ import {
   createProviderProductSchema,
   createProviderServiceSchema,
   providerAvailabilitySchema,
-  paySubscriptionSchema,
   updateProviderServiceSchema,
   updateProviderProfileSchema,
   updateProviderProductSchema,
@@ -21,6 +20,5 @@ export class CreateProviderProductDto extends createZodDto(createProviderProduct
 export class UpdateProviderProductDto extends createZodDto(updateProviderProductSchema) {}
 export class RestockProviderProductDto extends createZodDto(restockProviderProductSchema) {}
 export class MarkOrderReadyDto extends createZodDto(markOrderReadySchema) {}
-export class PaySubscriptionDto extends createZodDto(paySubscriptionSchema) {}
 export class UpdateWeeklyHoursDto extends createZodDto(updateWeeklyHoursSchema) {}
 export class CreateProviderTimeOffDto extends createZodDto(createProviderTimeOffSchema) {}

@@ -16,6 +16,7 @@ import { AdminUsersController } from '../admin-users/admin-users.controller';
 import { AdminVerificationsController } from '../admin-verifications/admin-verifications.controller';
 import { AdminWalletController } from '../admin-wallet/admin-wallet.controller';
 import { AdminExportsController } from '../admin-exports/admin-exports.controller';
+import { AdminFeesController } from '../fees/admin-fees.controller';
 
 const CONTROLLERS = [
   AdminAuditController,
@@ -32,6 +33,7 @@ const CONTROLLERS = [
   AdminVerificationsController,
   AdminWalletController,
   AdminExportsController,
+  AdminFeesController,
 ];
 
 /** Every admin route that deliberately has no role restriction. Adding one is a decision: say so here. */
@@ -57,7 +59,6 @@ const OPEN_TO_EVERY_ROLE = new Set([
   'GET admin/catalog/cities',
   'GET admin/providers',
   'GET admin/providers/:id',
-  'GET admin/providers/subscription-summary',
 ]);
 
 interface Route {
@@ -124,7 +125,10 @@ describe('admin role matrix', () => {
     for (const key of [
       'POST admin/payments/providers/:providerId/payouts',
       'POST admin/wallet/cash-outs/:transactionId/settle',
-      'POST admin/providers/:id/subscription/extend',
+      'POST admin/fees/:providerId/payments',
+      'POST admin/fees/:providerId/adjustments',
+      'GET admin/fees',
+      'GET admin/fees/export.csv',
       'GET admin/exports/payments.csv',
       'GET admin/exports/payouts.csv',
       'GET admin/exports/cash-outs.csv',

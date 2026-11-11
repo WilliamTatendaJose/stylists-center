@@ -136,10 +136,6 @@ describe('MatchingService', () => {
           longitude: seed.lng,
           cityId,
           workingHoursLabel: 'Always',
-          // Fan-out only offers to a provider with an active subscription
-          // (geo.repository.ts's onlyAcceptingBookings filter) — without
-          // this every provider here would be silently ineligible.
-          subscriptionPaidUntil: new Date(Date.now() + 30 * 24 * 60 * 60_000),
           services: {
             create: [
               { name: 'Test service', durationMinutes: 30, priceUsdCents: seed.priceUsdCents },

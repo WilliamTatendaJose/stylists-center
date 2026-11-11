@@ -67,7 +67,6 @@ export async function voidUnpaidSubject(
     return;
   }
 
-  // Subscriptions need nothing undone: `subscriptionPaidUntil` is only ever
-  // extended from a payment that already reached 'paid', so a refused one
-  // never bought anything to take back.
+  // A fee payment needs nothing undone: the balance is only credited from a
+  // payment that already reached 'paid', so a refused one took nothing off it.
 }

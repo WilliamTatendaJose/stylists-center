@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,15 +10,12 @@ import {
   deriveInitials,
   deriveTint,
   formatBookingWhen,
-  isSubscriptionActive,
   needsCashReconciliation,
   normalizePhone,
   type BookingStatus,
   type CreateProviderProductInput,
   type UpdateProviderProductInput,
   type CreateProviderServiceInput,
-  type PaySubscriptionInput,
-  type PaySubscriptionResponse,
   providerOwesCompletion,
   type ProviderAvailabilityDto,
   type ProviderBookingRowDto,
@@ -32,7 +28,6 @@ import {
   type MarkOrderReadyInput,
   type ProductCategory,
   type ProviderProductDto,
-  type ProviderSubscriptionDto,
   type ServiceDto,
   type UpdateProviderProfileInput,
   type UpdateProviderServiceInput,
@@ -48,10 +43,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
-import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
-import { payerPhoneFor } from '../payments/pay-channels';
-import { PaymentStatusService } from '../payments/payment-status.service';
-import { applySubscriptionPayment } from '../payments/payments.service';
 import { toBookingRowDto } from '../bookings/mappers';
 import { expireStaleBookingRequests } from '../bookings/booking-expiry';
 import { isWithinWeeklyHours, readWeeklyHours } from '../providers/calendar-policy';
@@ -82,8 +73,6 @@ export class ProviderService {
     private readonly socketEmitter: SocketEmitterService,
     private readonly matching: MatchingService,
     private readonly push: PushService,
-    @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
-    private readonly paymentStatus: PaymentStatusService,
     @Optional() private readonly settings?: SettingsService,
     @Optional() private readonly reminders?: ReminderService,
   ) {}
@@ -674,95 +663,6 @@ export class ProviderService {
       select: { acceptingBookings: true },
     });
     return updated;
-  }
-
-  async getSubscription(providerProfileId: string): Promise<ProviderSubscriptionDto> {
-    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
-      where: { id: providerProfileId },
-      select: { subscriptionPriceUsdCents: true, subscriptionPaidUntil: true },
-    });
-    const paidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
-    return {
-      priceUsdCents: profile.subscriptionPriceUsdCents,
-      paidUntil,
-      active: isSubscriptionActive(paidUntil),
-    };
-  }
-
-  /**
-   * Creating a checkout only proves that a prompt was sent. The month is
-   * credited atomically once Paynow reports `paid`, through either its
-   * callback or the provider screen's `subscription/payment-status` poll.
-   */
-  async paySubscription(
-    providerProfileId: string,
-    input: PaySubscriptionInput,
-  ): Promise<PaySubscriptionResponse> {
-    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
-      where: { id: providerProfileId },
-      select: { subscriptionPriceUsdCents: true, subscriptionPaidUntil: true },
-    });
-    const amountUsdCents = profile.subscriptionPriceUsdCents;
-    const currentPaidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
-
-    const user = await this.prisma.user.findFirstOrThrow({
-      where: { providerProfile: { id: providerProfileId } },
-      select: { phone: true },
-    });
-    const payChannel = input.payChannel ?? 'ecocash';
-    const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, user.phone);
-    const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
-    const intent = await this.paymentGateway.createCheckout({
-      reference,
-      amountUsdCents,
-      description: 'Style Center monthly subscription',
-      channel: payChannel,
-      ...(paymentPhone ? { phone: paymentPhone } : {}),
-    });
-    await this.prisma.payment.create({
-      data: {
-        subscriptionProviderId: providerProfileId,
-        provider: intent.provider,
-        status: intent.status,
-        amountUsdCents,
-        externalRef: intent.externalRef,
-        reference,
-        channel: payChannel,
-        otpUrl: intent.otpUrl ?? null,
-      },
-    });
-    // The fake dev adapter settles instantly ('held'); Paynow returns
-    // 'pending' and is only credited once a poll or callback confirms it.
-    const paidNow = intent.status === 'held';
-    return {
-      paidUntil: paidNow
-        ? await applySubscriptionPayment(this.prisma, providerProfileId)
-        : currentPaidUntil,
-      pending: !paidNow,
-      ...(intent.checkoutUrl ? { checkoutUrl: intent.checkoutUrl } : {}),
-      ...(intent.instructions ? { instructions: intent.instructions } : {}),
-      ...(intent.action ? { action: intent.action } : {}),
-      reference,
-    };
-  }
-
-  /**
-   * Polls Paynow for an in-flight subscription payment and credits the month
-   * the moment it clears — the provider's screen calls this while waiting on
-   * the EcoCash prompt they were just sent.
-   */
-  async subscriptionPaymentStatus(
-    providerProfileId: string,
-  ): Promise<{ status: string; paidUntil: string | null; active: boolean }> {
-    const result = await this.paymentStatus.resolve({
-      subscriptionProviderId: providerProfileId,
-    });
-    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
-      where: { id: providerProfileId },
-      select: { subscriptionPaidUntil: true },
-    });
-    const paidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
-    return { status: result.status, paidUntil, active: isSubscriptionActive(paidUntil) };
   }
 
   /**

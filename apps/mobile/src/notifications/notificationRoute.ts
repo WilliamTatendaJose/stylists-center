@@ -28,6 +28,8 @@ export function notificationRoute(data: unknown): string | null {
       return typeof orderId === 'string' ? '/(provider)/shop' : null;
     case 'market.order.ready':
       return typeof orderId === 'string' ? '/market/orders' : null;
+    case 'fees.reminder':
+      return '/fees';
     default:
       return null;
   }

@@ -5,6 +5,7 @@ import type { Env } from '../../config/env';
 
 export const MATCHING_QUEUE = 'matching';
 export const REMINDERS_QUEUE = 'reminders';
+export const FEES_QUEUE = 'fees';
 
 /**
  * BullMQ delayed jobs are the authority for match/offer expiry (plan §6) —
@@ -34,6 +35,7 @@ export const REMINDERS_QUEUE = 'reminders';
     }),
     BullModule.registerQueue({ name: MATCHING_QUEUE }),
     BullModule.registerQueue({ name: REMINDERS_QUEUE }),
+    BullModule.registerQueue({ name: FEES_QUEUE }),
   ],
   exports: [BullModule],
 })

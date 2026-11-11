@@ -220,13 +220,12 @@ model ProviderProfile {
   ratingAvg                 Float        @default(0)
   completedCount            Int          @default(0)
   salonCreatedAt            DateTime?
-  /// Per-provider so a future admin webapp can change one provider's price
-  /// without a deploy — see DEFAULT_SUBSCRIPTION_PRICE_USD_CENTS in @sc/shared.
+  /// UNUSED since stylists stopped paying a subscription (they owe monthly
+  /// fees instead: FeeLedgerEntry/FeeStatement). Kept, with its data, so
+  /// history stays readable and no destructive migration is needed; do not
+  /// read it for any rule. Agents' subscriptions are stored elsewhere.
   subscriptionPriceUsdCents Int          @default(500)
-  /// Null for a provider who has never paid — never active, not an error.
-  /// Whether that reads as "active" is computed from this at request time
-  /// (isSubscriptionActive in @sc/shared), never stored as a separate flag,
-  /// so it can never drift out of sync with the date it's derived from.
+  /// UNUSED, see subscriptionPriceUsdCents.
   subscriptionPaidUntil     DateTime?
   createdAt                 DateTime     @default(now())
   updatedAt                 DateTime     @updatedAt
@@ -239,6 +238,8 @@ model ProviderProfile {
   products             Product[]
   orders               Order[]
   subscriptionPayments Payment[]         @relation("SubscriptionPayments")
+  feePayments          Payment[]         @relation("FeePayments")
+  feeStatements        FeeStatement[]
   payouts              Payout[]
   // The trigram (GIN) and partial availability indexes are declared in the
   // hand-written migration — Prisma's schema language cannot express either.
@@ -390,6 +391,9 @@ model Payment {
   order                  Order?           @relation(fields: [orderId], references: [id])
   subscriptionProviderId String?
   subscriptionProvider   ProviderProfile? @relation("SubscriptionPayments", fields: [subscriptionProviderId], references: [id])
+  /// Set when a stylist or vendor paid their fee balance through the app. The gateway rows follow the same append-only pattern as bookings and orders; the balance itself lives in FeeLedgerEntry, credited once when a row reaches 'paid'.
+  feeProviderId          String?
+  feeProvider            ProviderProfile? @relation("FeePayments", fields: [feeProviderId], references: [id])
   provider               String // 'fake-ecocash' | 'paynow' | 'pesepay' — a string, not an enum, so a further gateway is a new value, not a migration
   status                 String // held | released | refunded | failed
   amountUsdCents         Int
@@ -406,6 +410,7 @@ model Payment {
   @@index([bookingId])
   @@index([orderId])
   @@index([subscriptionProviderId])
+  @@index([feeProviderId])
   @@index([reference])
 }
 
@@ -911,4 +916,55 @@ model FeeLedgerEntry {
   @@unique([kind, bookingId])
   @@unique([kind, orderId])
   @@index([providerId, createdAt])
+}
+
+/// Which reminder a statement has had. One row per statement and kind makes each reminder send exactly once.
+enum FeeReminderKind {
+  /// `feeReminderDaysBefore` days before the due date.
+  before_due
+  on_due
+  /// `feeReminderDaysAfter` days after the due date.
+  overdue
+}
+
+/// A stylist's or vendor's fee statement for one calendar month (Africa/Harare),
+/// generated once after the month ends and never recalculated, so it does not
+/// shift when a setting changes later. Figures are copied from the ledger at
+/// generation time; the due date is stored for the same reason.
+model FeeStatement {
+  id                  String          @id @default(uuid())
+  providerId          String
+  provider            ProviderProfile @relation(fields: [providerId], references: [id])
+  /// 'YYYY-MM' in Harare time: the unique key for idempotent generation.
+  month               String
+  periodStart         DateTime
+  /// Exclusive: the first instant of the next month.
+  periodEnd           DateTime
+  openingUsdCents     Int
+  bookingFeesUsdCents Int
+  orderFeesUsdCents   Int
+  /// Fees taken back this month, as a positive amount.
+  waiversUsdCents     Int
+  /// Payments received this month, as a positive amount.
+  paymentsUsdCents    Int
+  /// Staff corrections this month, signed (positive = owed more).
+  adjustmentsUsdCents Int
+  /// opening + fees - waivers - payments + adjustments. Can be negative (credit).
+  closingUsdCents     Int
+  dueAt               DateTime
+  generatedAt         DateTime        @default(now())
+  reminders           FeeReminder[]
+
+  @@unique([providerId, month])
+  @@index([dueAt])
+}
+
+model FeeReminder {
+  id          String          @id @default(uuid())
+  statementId String
+  statement   FeeStatement    @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  kind        FeeReminderKind
+  sentAt      DateTime        @default(now())
+
+  @@unique([statementId, kind])
 }

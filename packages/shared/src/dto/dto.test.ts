@@ -4,7 +4,6 @@ import { createBookingSchema } from './bookings.js';
 import { firebaseExchangeSchema, meSchema, selectAccountTypeSchema } from './auth.js';
 import { conversationSchema } from './chat.js';
 import { imageUrlSchema } from './uploads.js';
-import { paySubscriptionSchema } from './subscription.js';
 import { createOrderSchema } from './market.js';
 import { paymentActionSchema, submitPaymentOtpSchema } from './payments.js';
 import {
@@ -119,18 +118,6 @@ describe('createBookingSchema', () => {
   });
 });
 
-describe('paySubscriptionSchema', () => {
-  it('accepts EcoCash and rejects unverified self-reported cash renewals', () => {
-    expect(
-      paySubscriptionSchema.safeParse({
-        paymentMethod: 'ecocash',
-        payerPhone: '077 000 0000',
-      }).success,
-    ).toBe(true);
-    expect(paySubscriptionSchema.safeParse({ paymentMethod: 'cash' }).success).toBe(false);
-  });
-});
-
 describe('auth schemas', () => {
   it('requires a Firebase ID token for session exchange', () => {
     expect(firebaseExchangeSchema.safeParse({ idToken: 'firebase-token' }).success).toBe(true);
@@ -238,7 +225,7 @@ describe('admin schemas', () => {
   it('rejects a provider update with neither field set', () => {
     expect(updateProviderAdminSchema.safeParse({}).success).toBe(false);
     expect(updateProviderAdminSchema.safeParse({ verified: true }).success).toBe(true);
-    expect(updateProviderAdminSchema.safeParse({ subscriptionPriceUsdCents: 500 }).success).toBe(
+    expect(updateProviderAdminSchema.safeParse({ verificationNote: 'Checked ID' }).success).toBe(
       true,
     );
   });

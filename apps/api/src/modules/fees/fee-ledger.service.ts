@@ -113,6 +113,25 @@ export class FeeLedgerService {
     });
   }
 
+  /**
+   * A manual correction by staff. Signed: positive adds to what is owed,
+   * negative reduces it. The note is required so the ledger says why.
+   */
+  async recordAdjustment(
+    db: Db,
+    input: { providerId: string; amountUsdCents: number; note: string; createdByAdminId?: string },
+  ): Promise<FeeLedgerEntry> {
+    return db.feeLedgerEntry.create({
+      data: {
+        providerId: input.providerId,
+        kind: 'adjustment',
+        amountUsdCents: input.amountUsdCents,
+        note: input.note,
+        createdByAdminId: input.createdByAdminId ?? null,
+      },
+    });
+  }
+
   /** Owed now: positive means the provider owes StylistsCenter. */
   async balance(providerId: string, db: Db = this.prisma): Promise<number> {
     const agg = await db.feeLedgerEntry.aggregate({

@@ -67,7 +67,7 @@ export type PaymentAction = z.infer<typeof paymentActionSchema>;
 
 /** `POST /v1/payments/otp` — forwards the code O'mari texted the payer. */
 export const submitPaymentOtpSchema = z.object({
-  /** The booking/order/subscription reference the payment was started under. */
+  /** The booking/order/fee payment reference the payment was started under. */
   reference: z.string().min(1).max(120),
   otp: z
     .string()

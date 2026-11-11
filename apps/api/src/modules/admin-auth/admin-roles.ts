@@ -10,7 +10,7 @@ export const ADMIN_ROLES = 'admin:roles';
  * lookup, your own account). admin-roles.spec.ts checks every admin route is
  * either decorated or on its explicit list of shared routes.
  *
- *   finance: payments, payouts, cash-outs, subscription extensions
+ *   finance: payments, payouts, cash-outs, fee balances
  *   support: reports, bans, reviews, users, verifications, provider edits, catalog
  *   owner:   all of the above, plus staff and the audit log
  */

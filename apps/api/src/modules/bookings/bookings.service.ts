@@ -18,7 +18,6 @@ import {
   canCancelBooking,
   formatBookingReference,
   isLateCancellation,
-  isSubscriptionActive,
   FREE_CANCELLATION_WINDOW_HOURS,
   needsCashReconciliation,
 } from '@sc/shared';
@@ -69,14 +68,6 @@ export class BookingsService {
     if (service.provider.userId === clientId) {
       throw new BadRequestException("You can't book your own services");
     }
-    // Discovery (search, "Available now", smart-match fan-out) already
-    // excludes a provider whose subscription has lapsed — this closes the
-    // remaining gap where a client still has their profile/service open
-    // from before it lapsed, or reached it via a chat/booking-history link.
-    if (!isSubscriptionActive(service.provider.subscriptionPaidUntil?.toISOString() ?? null)) {
-      throw new BadRequestException("This stylist isn't currently accepting bookings");
-    }
-
     const startsAt = new Date(input.startsAt);
     const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
     if (

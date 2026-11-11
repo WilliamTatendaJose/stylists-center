@@ -80,6 +80,8 @@ export const providerProfileSchema = z.object({
   workingHoursLabel: z.string(),
   /** The stylist's own mobile money number (E.164) that clients pay directly. Null when not set. */
   paymentPhone: z.string().nullable(),
+  /** True while the stylist's account is paused for unpaid StylistsCenter fees: the page shows them as unavailable and bookings are refused. */
+  unavailable: z.boolean().optional(),
 });
 export type ProviderProfileDto = z.infer<typeof providerProfileSchema>;
 

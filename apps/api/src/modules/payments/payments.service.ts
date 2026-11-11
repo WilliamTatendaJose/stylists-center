@@ -5,14 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
-  nextSubscriptionPaidUntil,
-  type PayChannelsResponse,
-  type SubmitPaymentOtpInput,
-} from '@sc/shared';
+import { type PayChannelsResponse, type SubmitPaymentOtpInput } from '@sc/shared';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
-import { settingsFor } from '../settings/settings.service';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
 import { ledgerStatus } from './ledger-status';
 import {
   PAYMENT_GATEWAY,
@@ -21,8 +17,8 @@ import {
   type PaymentProvider,
 } from './payment-gateway.port';
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
-import { Inject } from '@nestjs/common';
-import { recordSubscriptionPaymentStatus } from './subscription-payment';
+import { Inject, Optional } from '@nestjs/common';
+import { recordFeePaymentStatus } from './fee-payment';
 import { offeredChannels } from './pay-channels';
 
 @Injectable()
@@ -31,6 +27,7 @@ export class PaymentsService {
     private readonly prisma: PrismaService,
     private readonly config: ConfigService<Env, true>,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGatewayPort,
+    @Optional() private readonly feeLedger?: FeeLedgerService,
   ) {}
 
   /** What the payment screens should offer: the live gateway's channels, narrowed by PAYMENT_CHANNELS. */
@@ -45,7 +42,7 @@ export class PaymentsService {
    *
    * The OTP URL is looked up server-side from the newest Payment row started
    * under this reference, and the caller must be that payment's payer (the
-   * booking's client, the order's buyer, or the subscribing stylist). The
+   * booking's client, the order's buyer, or the stylist or vendor paying fees). The
    * client never sees or chooses the URL, so this cannot be pointed anywhere
    * else. The outcome still arrives through the usual poll or callback.
    */
@@ -61,13 +58,11 @@ export class PaymentsService {
         otpUrl: true,
         booking: { select: { clientId: true } },
         order: { select: { buyerId: true } },
-        subscriptionProvider: { select: { userId: true } },
+        feeProvider: { select: { userId: true } },
       },
     });
     const payerId =
-      payment?.booking?.clientId ??
-      payment?.order?.buyerId ??
-      payment?.subscriptionProvider?.userId;
+      payment?.booking?.clientId ?? payment?.order?.buyerId ?? payment?.feeProvider?.userId;
     // One answer for "no such payment" and "not yours", so a reference cannot be probed.
     if (!payment || payerId !== userId) throw new NotFoundException('Payment not found');
     if (!payment.otpUrl || payment.status !== 'pending') {
@@ -125,7 +120,7 @@ export class PaymentsService {
    * Writes a confirmed gateway outcome into the ledger, whichever gateway and
    * whichever route (signed callback or authenticated re-check) it arrived by.
    *
-   * The amount is checked against what the booking/order/subscription actually
+   * The amount is checked against what the booking/order/fee payment actually
    * costs before anything is written, so a callback can only ever confirm the
    * payment this app asked for.
    */
@@ -143,39 +138,36 @@ export class PaymentsService {
     ]);
     if (booking && order) throw new NotFoundException(`Unknown ${label} reference`);
 
-    // A subscription has no booking/order row to resolve against — it is
+    // A fee payment has no booking/order row to resolve against: it is
     // identified only by the reference its Payment was initiated under.
-    const subscriptionPayment =
+    const feePayment =
       booking || order
         ? null
         : await this.prisma.payment.findFirst({
-            where: { reference, subscriptionProviderId: { not: null } },
+            where: { reference, feeProviderId: { not: null } },
             orderBy: { createdAt: 'desc' },
           });
 
-    const expected =
-      booking?.priceUsdCents ?? order?.totalUsdCents ?? subscriptionPayment?.amountUsdCents;
+    const expected = booking?.priceUsdCents ?? order?.totalUsdCents ?? feePayment?.amountUsdCents;
     if (expected === undefined) throw new NotFoundException(`Unknown ${label} reference`);
     if (expected !== amountUsdCents)
       throw new ForbiddenException(`${label} callback amount mismatch`);
 
-    if (subscriptionPayment?.subscriptionProviderId) {
-      await recordSubscriptionPaymentStatus(this.prisma, {
-        providerProfileId: subscriptionPayment.subscriptionProviderId,
-        reference,
-        status,
-        ...(confirmation.externalRef ? { externalRef: confirmation.externalRef } : {}),
-      });
+    if (feePayment?.feeProviderId) {
+      await recordFeePaymentStatus(
+        this.prisma,
+        this.feeLedger ?? new FeeLedgerService(this.prisma),
+        {
+          providerId: feePayment.feeProviderId,
+          reference,
+          status,
+          ...(confirmation.externalRef ? { externalRef: confirmation.externalRef } : {}),
+        },
+      );
       return;
     }
 
-    const subjectWhere = booking
-      ? { bookingId: booking.id }
-      : order
-        ? { orderId: order.id }
-        : subscriptionPayment?.subscriptionProviderId
-          ? { subscriptionProviderId: subscriptionPayment.subscriptionProviderId }
-          : {};
+    const subjectWhere = booking ? { bookingId: booking.id } : order ? { orderId: order.id } : {};
 
     const prior = await this.prisma.payment.findFirst({
       where: {
@@ -214,35 +206,6 @@ export class PaymentsService {
       await voidUnpaidSubject(this.prisma, subjectWhere);
     }
   }
-}
-
-/**
- * Credits a provider's subscription once its payment is genuinely confirmed.
- *
- * This deliberately does NOT run when the checkout is merely created: doing
- * so handed out a free month to anyone who started a Paynow checkout and
- * walked away. Shared with the poll path so both routes to "it's paid" credit
- * exactly once — `subscriptionPaidUntil` is only ever extended from a payment
- * row that has already reached 'paid'.
- */
-export async function applySubscriptionPayment(
-  prisma: PrismaService,
-  providerProfileId: string,
-): Promise<string> {
-  const profile = await prisma.providerProfile.findUniqueOrThrow({
-    where: { id: providerProfileId },
-    select: { subscriptionPaidUntil: true },
-  });
-  const paidUntil = nextSubscriptionPaidUntil(
-    profile.subscriptionPaidUntil?.toISOString() ?? null,
-    Date.now(),
-    await settingsFor(prisma).get('subscriptionCycleDays'),
-  );
-  await prisma.providerProfile.update({
-    where: { id: providerProfileId },
-    data: { subscriptionPaidUntil: paidUntil },
-  });
-  return paidUntil;
 }
 
 function toStringFields(body: Record<string, unknown>): Record<string, string> {

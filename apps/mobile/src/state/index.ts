@@ -2,7 +2,7 @@ export * from './useAuthStore.js';
 export * from './useRequestStore.js';
 export * from './useBookingDraftStore.js';
 export * from './usePendingPaymentStore.js';
-export * from './usePendingSubscriptionStore.js';
+export * from './usePendingFeePaymentStore.js';
 export * from './useLocationPickerStore.js';
 export * from './useSessionStore.js';
 export * from './useTripStore.js';
