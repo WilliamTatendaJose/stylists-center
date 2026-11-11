@@ -1,34 +1,66 @@
 /**
  * Marketplace orders (handoff screens 15-18).
  *
- * A stylist sells physical goods — hair, wigs, nail supplies — and the buyer
- * collects from her. Sellers are the same ProviderProfiles the booking side
- * uses, so verification, ratings, location and payout all carry over.
+ * Only verified vendors sell. The buyer chooses delivery or collection and
+ * pays the vendor directly when they receive the goods; the app records the
+ * order and the vendor's commission, not the money.
  *
- * Stock is reserved atomically at checkout. The seller then marks the packed
- * order ready for collection, and only the buyer can confirm the physical
- * handoff and release payment.
+ * Stock is reserved atomically at checkout. The vendor then packs the order
+ * (ready for collection, or out for delivery) and marks it handed over. The
+ * buyer can confirm the handover too; whichever comes first completes it.
  */
-export type OrderStatus = 'reserved' | 'ready_for_collection' | 'collected' | 'cancelled';
+export type OrderStatus =
+  | 'reserved'
+  | 'ready_for_collection'
+  | 'out_for_delivery'
+  | 'collected'
+  | 'delivered'
+  | 'cancelled';
+
+export type FulfilmentMethod = 'collection' | 'delivery';
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
   reserved: 'Being prepared',
   ready_for_collection: 'Ready to collect',
+  out_for_delivery: 'Out for delivery',
   collected: 'Collected',
+  delivered: 'Delivered',
   cancelled: 'Cancelled',
 };
+
+/** Handed over to the buyer: the vendor owes commission and the buyer earns coins. */
+export function isOrderCompleted(status: OrderStatus): boolean {
+  return status === 'collected' || status === 'delivered';
+}
+
+/** The status a handed-over order ends in, which depends on how it travelled. */
+export function completedStatusFor(fulfilment: FulfilmentMethod): 'collected' | 'delivered' {
+  return fulfilment === 'delivery' ? 'delivered' : 'collected';
+}
+
+/** What "packed" means: ready at the shop, or on its way. */
+export function dispatchedStatusFor(
+  fulfilment: FulfilmentMethod,
+): 'ready_for_collection' | 'out_for_delivery' {
+  return fulfilment === 'delivery' ? 'out_for_delivery' : 'ready_for_collection';
+}
 
 /** Most a buyer can take of one item in a single order — a stock guard, not a business rule. */
 export const MAX_ORDER_ITEM_QUANTITY = 10;
 
-/** A buyer can cancel until the physical handoff has happened. */
+/** A buyer can cancel until the order is on its way or handed over. */
 export function canCancelOrder(status: OrderStatus): boolean {
   return status === 'reserved' || status === 'ready_for_collection';
 }
 
-/** Collection is the buyer confirming they physically have the goods — the moment escrow is released. */
+/** A vendor can still cancel an order that is out for delivery (nobody home, goods refused). */
+export function canVendorCancelOrder(status: OrderStatus): boolean {
+  return canCancelOrder(status) || status === 'out_for_delivery';
+}
+
+/** The buyer confirming they have the goods, once the vendor has packed or sent them. */
 export function canCollectOrder(status: OrderStatus): boolean {
-  return status === 'ready_for_collection';
+  return status === 'ready_for_collection' || status === 'out_for_delivery';
 }
 
 export interface OrderLineInput {
@@ -50,4 +82,33 @@ export function orderTotalUsdCents(lines: readonly OrderLineInput[]): number {
 /** Whether a requested quantity can be met right now. */
 export function hasEnoughStock(stockQty: number, requestedQty: number): boolean {
   return requestedQty > 0 && requestedQty <= stockQty;
+}
+
+export interface OrderAmounts {
+  /** Products only; the commission is charged on this. */
+  productTotalUsdCents: number;
+  deliveryChargeUsdCents: number;
+  coinsValueUsdCents: number;
+}
+
+/**
+ * What the buyer still pays the vendor in cash: products plus delivery, less
+ * the value of any coins spent. Coins are a payment to the vendor, so they
+ * reduce what is due but not the product total the commission is based on.
+ */
+export function orderAmountDueUsdCents(amounts: OrderAmounts): number {
+  return Math.max(
+    0,
+    amounts.productTotalUsdCents + amounts.deliveryChargeUsdCents - amounts.coinsValueUsdCents,
+  );
+}
+
+/** The most coins that can be spent on an order: never more than is owed. */
+export function maxCoinsForOrder(
+  productTotalUsdCents: number,
+  deliveryChargeUsdCents: number,
+  coinUsdCents: number,
+): number {
+  if (coinUsdCents <= 0) return 0;
+  return Math.floor((productTotalUsdCents + deliveryChargeUsdCents) / coinUsdCents);
 }

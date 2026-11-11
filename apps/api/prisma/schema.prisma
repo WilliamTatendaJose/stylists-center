@@ -217,6 +217,9 @@ model ProviderProfile {
    */
   acceptingBookings         Boolean      @default(true)
   verified                  Boolean      @default(false)
+  /// False for a vendor-only profile (a shop that is not a stylist): searches
+  /// and smart match skip it, but it still owns products and orders.
+  offersServices            Boolean      @default(true)
   ratingAvg                 Float        @default(0)
   completedCount            Int          @default(0)
   salonCreatedAt            DateTime?
@@ -238,11 +241,12 @@ model ProviderProfile {
   trips                Trip[]
   products             Product[]
   orders               Order[]
-  subscriptionPayments Payment[]         @relation("SubscriptionPayments")
+  subscriptionPayments Payment[]          @relation("SubscriptionPayments")
   payouts              Payout[]
   // The trigram (GIN) and partial availability indexes are declared in the
   // hand-written migration — Prisma's schema language cannot express either.
   feeLedgerEntries     FeeLedgerEntry[]
+  vendor               VendorApplication?
 
   @@index([categoryId])
   @@index([cityId])
@@ -430,13 +434,28 @@ model Payout {
 
 /// Mirrors @sc/shared's OrderStatus exactly.
 enum OrderStatus {
-  /// Paid or pledged, stock held for the buyer, waiting to be collected.
+  /// Stock held for the buyer; the buyer pays the vendor on delivery or collection.
   reserved
-  /// Seller says the goods are packed; buyer may now confirm collection.
+  /// Seller says the goods are packed, for a collection order.
   ready_for_collection
-  /// Buyer confirmed they have it; escrow released.
+  /// Seller has sent a delivery order on its way.
+  out_for_delivery
+  /// Handed over at the shop. Completed: the vendor owes commission.
   collected
+  /// Handed over at the buyer's address. Completed: the vendor owes commission.
+  delivered
   cancelled
+}
+
+enum FulfilmentMethod {
+  collection
+  delivery
+}
+
+enum VendorStatus {
+  pending
+  approved
+  rejected
 }
 
 /// A physical item a stylist sells — hair, wigs, nail supplies, cosmetics.
@@ -466,28 +485,37 @@ model Product {
 
 /// One order is always with ONE stylist — the buyer collects from a single place.
 model Order {
-  id                   String          @id @default(uuid())
-  reference            String          @unique
-  buyerId              String
-  buyer                User            @relation("OrderBuyer", fields: [buyerId], references: [id])
-  providerId           String
-  provider             ProviderProfile @relation(fields: [providerId], references: [id])
-  status               OrderStatus     @default(reserved)
-  paymentMethod        PaymentMethod
+  id                     String           @id @default(uuid())
+  reference              String           @unique
+  buyerId                String
+  buyer                  User             @relation("OrderBuyer", fields: [buyerId], references: [id])
+  providerId             String
+  provider               ProviderProfile  @relation(fields: [providerId], references: [id])
+  status                 OrderStatus      @default(reserved)
+  paymentMethod          PaymentMethod
   /// Buyer-scoped request key: retrying a timed-out checkout returns the same order.
-  checkoutKey          String?
-  checkoutFingerprint  String?
-  checkoutUrl          String?
-  checkoutInstructions String?
-  pickupAddress        String?
-  pickupHours          String?
-  pickupLat            Float?
-  pickupLng            Float?
-  pickupNote           String?
-  /// Sum of the item snapshots, stored so a later price change cannot rewrite history.
-  totalUsdCents        Int
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  checkoutKey            String?
+  checkoutFingerprint    String?
+  checkoutUrl            String?
+  checkoutInstructions   String?
+  pickupAddress          String?
+  pickupHours            String?
+  pickupLat              Float?
+  pickupLng              Float?
+  pickupNote             String?
+  fulfilment             FulfilmentMethod @default(collection)
+  deliveryAddress        String?
+  /// Kept apart from totalUsdCents: the commission is on the product total only.
+  deliveryChargeUsdCents Int              @default(0)
+  /// Coins the buyer spent on this order and what they were worth at the time.
+  coinsUsed              Int              @default(0)
+  coinsValueUsdCents     Int              @default(0)
+  /// When the order was delivered or collected.
+  completedAt            DateTime?
+  /// Sum of the item snapshots (products only, no delivery), stored so a later price change cannot rewrite history.
+  totalUsdCents          Int
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   items          OrderItem[]
   payments       Payment[]
@@ -496,6 +524,39 @@ model Order {
   @@unique([buyerId, checkoutKey])
   @@index([buyerId])
   @@index([providerId])
+}
+
+/// A shop's application to sell, one per ProviderProfile. Only an approved
+/// one may list products or take orders; the vendor's delivery and collection
+/// defaults live here too.
+model VendorApplication {
+  id                     String          @id @default(uuid())
+  providerId             String          @unique
+  provider               ProviderProfile @relation(fields: [providerId], references: [id])
+  businessName           String
+  registrationNumber     String?
+  shopAddress            String
+  shopLat                Float?
+  shopLng                Float?
+  premisesPhotoUrls      String[]        @default([])
+  contactName            String
+  contactPhone           String
+  status                 VendorStatus    @default(pending)
+  /// Plain id, no foreign key: staff accounts are never hard-deleted, and this keeps AdminUser untouched.
+  reviewedByAdminId      String?
+  reviewNote             String?
+  reviewedAt             DateTime?
+  submittedAt            DateTime        @default(now())
+  /// Delivery and collection defaults, set by the vendor once approved.
+  delivers               Boolean         @default(false)
+  deliveryChargeUsdCents Int             @default(0)
+  deliveryAreas          String[]        @default([])
+  collectionAddress      String?
+  collectionHours        String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  @@index([status, submittedAt])
 }
 
 /// Name and price are snapshotted: what the buyer agreed to pay must not move when the seller edits the product.

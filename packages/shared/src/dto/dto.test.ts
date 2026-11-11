@@ -263,15 +263,31 @@ describe('payment channel schemas', () => {
     expect(createBookingSchema.safeParse({ ...booking, payChannel: 'paypal' }).success).toBe(false);
   });
 
-  it('refuses card on a market order', () => {
+  // Market orders are paid to the vendor on delivery or collection, so the
+  // order carries no payment choice; it needs an address only for delivery.
+  it('takes a market order with no payment choice and defaults to collection', () => {
+    const parsed = createOrderSchema.parse({
+      providerId: booking.providerId,
+      checkoutKey: 'checkout-key-123',
+      items: [{ productId: booking.serviceId, quantity: 1 }],
+    });
+    expect(parsed.fulfilment).toBe('collection');
+  });
+
+  it('asks for an address on a delivery order only', () => {
     const order = {
       providerId: booking.providerId,
       checkoutKey: 'checkout-key-123',
-      paymentMethod: 'ecocash',
       items: [{ productId: booking.serviceId, quantity: 1 }],
     };
-    expect(createOrderSchema.safeParse({ ...order, payChannel: 'innbucks' }).success).toBe(true);
-    expect(createOrderSchema.safeParse({ ...order, payChannel: 'card' }).success).toBe(false);
+    expect(createOrderSchema.safeParse({ ...order, fulfilment: 'delivery' }).success).toBe(false);
+    expect(
+      createOrderSchema.safeParse({
+        ...order,
+        fulfilment: 'delivery',
+        deliveryAddress: '12 Samora Machel Ave',
+      }).success,
+    ).toBe(true);
   });
 
   it('accepts only a 4-8 digit OTP', () => {

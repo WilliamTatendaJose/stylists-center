@@ -1,10 +1,13 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { ProviderGuard } from '../provider/provider.guard';
+import { CurrentProvider } from '../provider/current-provider.decorator';
 import { MarketService } from './market.service';
 import {
   CreateOrderDto,
   CreateProductReviewDto,
+  MarkOrderReadyDto,
   ProductDetailQueryDto,
   ProductsQueryDto,
 } from './dto';
@@ -77,5 +80,40 @@ export class MarketController {
   @Post('orders/:id/cancel')
   cancelOrder(@Param('id') id: string, @CurrentUser() user: { id: string }) {
     return this.market.cancelOrder(id, user.id);
+  }
+}
+
+/**
+ * The vendor's side of orders. ProviderGuard resolves the caller's profile,
+ * which a vendor-only shop has too, so no handler can act on another shop's
+ * orders.
+ */
+@Controller('vendors/orders')
+@UseGuards(JwtAuthGuard, ProviderGuard)
+export class VendorOrdersController {
+  constructor(private readonly market: MarketService) {}
+
+  @Get()
+  list(@CurrentProvider() providerId: string) {
+    return this.market.listVendorOrders(providerId);
+  }
+
+  @Post(':id/ready')
+  ready(
+    @Param('id') id: string,
+    @CurrentProvider() providerId: string,
+    @Body() dto: MarkOrderReadyDto,
+  ) {
+    return this.market.markOrderReady(id, providerId, dto);
+  }
+
+  @Post(':id/complete')
+  complete(@Param('id') id: string, @CurrentProvider() providerId: string) {
+    return this.market.completeVendorOrder(id, providerId);
+  }
+
+  @Post(':id/cancel')
+  cancel(@Param('id') id: string, @CurrentProvider() providerId: string) {
+    return this.market.cancelVendorOrder(id, providerId);
   }
 }

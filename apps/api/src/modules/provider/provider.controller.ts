@@ -24,7 +24,6 @@ import {
   UpdateProviderServiceDto,
   UpdateProviderProductDto,
   RestockProviderProductDto,
-  MarkOrderReadyDto,
   UpdateWeeklyHoursDto,
   CreateProviderTimeOffDto,
 } from './dto';
@@ -139,20 +138,6 @@ export class ProviderController {
   @Delete('products/:id')
   deleteProduct(@Param('id') id: string, @CurrentProvider() providerId: string) {
     return this.provider.deleteProduct(id, providerId);
-  }
-
-  @Get('orders')
-  orders(@CurrentProvider() providerId: string) {
-    return this.provider.getOrders(providerId);
-  }
-
-  @Post('orders/:id/ready')
-  markOrderReady(
-    @Param('id') id: string,
-    @CurrentProvider() providerId: string,
-    @Body() dto: MarkOrderReadyDto,
-  ) {
-    return this.provider.markOrderReady(id, providerId, dto);
   }
 
   @Post('availability')

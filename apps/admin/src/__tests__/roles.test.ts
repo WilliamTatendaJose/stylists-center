@@ -18,6 +18,7 @@ describe('canOpen', () => {
       '/bans',
       '/reports',
       '/verifications',
+      '/vendors',
       '/staff',
       '/audit-log',
       '/catalog',
@@ -32,6 +33,7 @@ describe('canOpen', () => {
       '/reports/abc',
       '/bans',
       '/verifications',
+      '/vendors',
       '/users',
       '/catalog',
     ]) {

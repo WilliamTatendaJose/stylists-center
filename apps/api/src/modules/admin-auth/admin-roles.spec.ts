@@ -14,6 +14,7 @@ import { AdminStaffController } from '../admin-staff/admin-staff.controller';
 import { AdminTrustController } from '../admin-trust/admin-trust.controller';
 import { AdminUsersController } from '../admin-users/admin-users.controller';
 import { AdminVerificationsController } from '../admin-verifications/admin-verifications.controller';
+import { AdminVendorsController } from '../admin-vendors/admin-vendors.controller';
 import { AdminWalletController } from '../admin-wallet/admin-wallet.controller';
 import { AdminExportsController } from '../admin-exports/admin-exports.controller';
 
@@ -30,6 +31,7 @@ const CONTROLLERS = [
   AdminTrustController,
   AdminUsersController,
   AdminVerificationsController,
+  AdminVendorsController,
   AdminWalletController,
   AdminExportsController,
 ];
@@ -137,6 +139,9 @@ describe('admin role matrix', () => {
     for (const key of [
       'POST admin/bans',
       'PATCH admin/verifications/:id',
+      'GET admin/vendors',
+      'GET admin/vendors/:id',
+      'PATCH admin/vendors/:id',
       'DELETE admin/reviews/:id',
       'PATCH admin/providers/:id',
       'DELETE admin/users/:id',

@@ -9,6 +9,7 @@ import {
   productCategorySchema,
   productSortSchema,
   createProductReviewSchema,
+  markOrderReadySchema,
 } from '@sc/shared';
 
 const latLng = {
@@ -45,3 +46,4 @@ export class ProductDetailQueryDto extends createZodDto(productDetailQuerySchema
 
 export class CreateOrderDto extends createZodDto(createOrderSchema) {}
 export class CreateProductReviewDto extends createZodDto(createProductReviewSchema) {}
+export class MarkOrderReadyDto extends createZodDto(markOrderReadySchema) {}

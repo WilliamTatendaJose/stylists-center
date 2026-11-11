@@ -157,6 +157,47 @@ describe('GeoRepository', () => {
     expect(counts.has(barberId)).toBe(false);
   });
 
+  it('leaves vendor-only shops out of search, counts and lookup', async () => {
+    // A shop that sells products but offers no services, right next to the client.
+    const user = await prisma.user.create({
+      data: {
+        phone: `+2637701${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`,
+        displayName: 'TestVendorOnly',
+        cityId,
+      },
+    });
+    userIds.push(user.id);
+    const shop = await prisma.providerProfile.create({
+      data: {
+        userId: user.id,
+        displayName: 'TestVendorOnly',
+        tint: '#000000',
+        initials: 'VO',
+        categoryId: nailsId,
+        areaName: 'Test area',
+        latitude: CLIENT_LOCATION.lat,
+        longitude: CLIENT_LOCATION.lng,
+        cityId,
+        workingHoursLabel: 'Always',
+        offersServices: false,
+      },
+    });
+    providerIds.push(shop.id);
+
+    const rows = await geo.findProvidersWithinRadius({
+      lat: CLIENT_LOCATION.lat,
+      lng: CLIENT_LOCATION.lng,
+      radiusKm: 3,
+      categoryId: nailsId,
+    });
+    expect(rows.map((r) => r.displayName)).toEqual(['TestKudzai']);
+    const counts = await geo.countProvidersByCategory(CLIENT_LOCATION.lat, CLIENT_LOCATION.lng, 3);
+    expect(counts.get(nailsId)).toBe(1);
+    expect(
+      await geo.findProviderById(shop.id, CLIENT_LOCATION.lat, CLIENT_LOCATION.lng),
+    ).toBeNull();
+  });
+
   it('findProviderById returns the correct distance', async () => {
     const tariroId = providerIds[0];
     if (!tariroId) throw new Error('missing seeded provider id');

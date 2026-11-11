@@ -72,6 +72,8 @@ export default function ProductDetail() {
         name: product.name,
         priceUsdCents: product.priceUsdCents,
         stockQty: product.stockQty,
+        delivers: product.delivers,
+        deliveryChargeUsdCents: product.deliveryChargeUsdCents,
       },
     );
     setAdded(true);
@@ -143,7 +145,7 @@ export default function ProductDetail() {
           </Text>
           {product.sellerCompletedCount > 0 ? (
             <Text variant="metaSmall" color="neutral600">
-              Stylist rating {product.sellerRatingAvg.toFixed(1)} ★ · {product.sellerCompletedCount}{' '}
+              Rating {product.sellerRatingAvg.toFixed(1)} ★ · {product.sellerCompletedCount}{' '}
               completed services
             </Text>
           ) : null}
@@ -154,8 +156,23 @@ export default function ProductDetail() {
         {product.description}
       </Text>
       <Text variant="meta" color="neutral700" style={styles.description}>
-        Category: {product.category} · Collection hours: {product.pickupHours}
+        Category: {product.category}
       </Text>
+      <View style={styles.description}>
+        <Text variant="meta" color="neutral700">
+          Collect from: {product.pickupAddress}
+        </Text>
+        <Text variant="meta" color="neutral700">
+          Collection hours: {product.pickupHours}
+        </Text>
+        <Text variant="meta" color="neutral700">
+          {product.delivers
+            ? `Delivery: ${formatUsd(product.deliveryChargeUsdCents)}${
+                product.deliveryAreas.length ? ` · ${product.deliveryAreas.join(', ')}` : ''
+              }`
+            : 'Collection only. This shop does not deliver.'}
+        </Text>
+      </View>
 
       <View style={styles.stockRow}>
         <Badge
@@ -171,8 +188,8 @@ export default function ProductDetail() {
       </View>
 
       <Text variant="metaSmall" color="neutral600">
-        You collect this from {product.providerName} in {product.areaName}. Stock is held for you
-        once you order — up to {String(MAX_ORDER_ITEM_QUANTITY)} of any one item.
+        You pay {product.providerName} directly when you collect or receive your order. Stock is
+        held for you once you order — up to {String(MAX_ORDER_ITEM_QUANTITY)} of any one item.
       </Text>
       <View style={styles.reviews}>
         <Text variant="sectionLabel">Buyer reviews</Text>

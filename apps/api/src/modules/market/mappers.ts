@@ -1,9 +1,13 @@
 import {
   canCancelOrder,
   canCollectOrder,
+  canVendorCancelOrder,
+  dispatchedStatusFor,
+  orderAmountDueUsdCents,
   type OrderRowDto,
   type ProductDetailDto,
   type ProductRowDto,
+  type ProviderOrderDto,
 } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 
@@ -26,6 +30,10 @@ export interface ProductGeoRow {
   sellerCompletedCount: number;
   areaName: string;
   pickupHours: string;
+  pickupAddress: string;
+  delivers: boolean;
+  deliveryChargeUsdCents: number;
+  deliveryAreas: string[];
   distanceKm: number;
 }
 
@@ -47,11 +55,19 @@ export function toProductRow(row: ProductGeoRow): ProductRowDto {
     sellerCompletedCount: row.sellerCompletedCount,
     areaName: row.areaName,
     distanceKm: row.distanceKm,
+    delivers: row.delivers,
   };
 }
 
 export function toProductDetail(row: ProductGeoRow): ProductDetailDto {
-  return { ...toProductRow(row), description: row.description, pickupHours: row.pickupHours };
+  return {
+    ...toProductRow(row),
+    description: row.description,
+    pickupHours: row.pickupHours,
+    pickupAddress: row.pickupAddress,
+    deliveryChargeUsdCents: row.deliveryChargeUsdCents,
+    deliveryAreas: row.deliveryAreas,
+  };
 }
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{
@@ -66,6 +82,12 @@ export function toOrderRow(order: OrderWithRelations): OrderRowDto {
     status: order.status,
     paymentMethod: order.paymentMethod,
     totalUsdCents: order.totalUsdCents,
+    fulfilment: order.fulfilment,
+    deliveryAddress: order.deliveryAddress,
+    deliveryChargeUsdCents: order.deliveryChargeUsdCents,
+    coinsUsed: order.coinsUsed,
+    coinsValueUsdCents: order.coinsValueUsdCents,
+    amountDueUsdCents: amountDue(order),
     createdAt: order.createdAt.toISOString(),
     providerId: order.providerId,
     providerName: order.provider.displayName,
@@ -88,5 +110,52 @@ export function toOrderRow(order: OrderWithRelations): OrderRowDto {
     })),
     canCancel: canCancelOrder(order.status),
     canCollect: canCollectOrder(order.status),
+  };
+}
+
+/** What the buyer still pays the vendor: products plus delivery, less coins. */
+export function amountDue(order: {
+  totalUsdCents: number;
+  deliveryChargeUsdCents: number;
+  coinsValueUsdCents: number;
+}): number {
+  return orderAmountDueUsdCents({
+    productTotalUsdCents: order.totalUsdCents,
+    deliveryChargeUsdCents: order.deliveryChargeUsdCents,
+    coinsValueUsdCents: order.coinsValueUsdCents,
+  });
+}
+
+export type VendorOrderWithRelations = Prisma.OrderGetPayload<{
+  include: { items: true; buyer: { select: { displayName: true; phone: true } } };
+}>;
+
+export function toProviderOrder(order: VendorOrderWithRelations): ProviderOrderDto {
+  return {
+    id: order.id,
+    reference: order.reference,
+    buyerName: order.buyer.displayName,
+    buyerPhone: order.buyer.phone,
+    status: order.status,
+    paymentMethod: order.paymentMethod,
+    totalUsdCents: order.totalUsdCents,
+    fulfilment: order.fulfilment,
+    deliveryAddress: order.deliveryAddress,
+    deliveryChargeUsdCents: order.deliveryChargeUsdCents,
+    coinsUsed: order.coinsUsed,
+    coinsValueUsdCents: order.coinsValueUsdCents,
+    amountDueUsdCents: amountDue(order),
+    createdAt: order.createdAt.toISOString(),
+    pickupNote: order.pickupNote,
+    items: order.items.map((item) => ({
+      productId: item.productId,
+      name: item.nameSnapshot,
+      priceUsdCents: item.priceUsdCents,
+      quantity: item.quantity,
+    })),
+    canMarkReady: order.status === 'reserved',
+    canComplete:
+      order.status === dispatchedStatusFor(order.fulfilment) || order.status === 'reserved',
+    canCancel: canVendorCancelOrder(order.status),
   };
 }

@@ -269,7 +269,10 @@ export class ProvidersService {
     input: CreateProviderProfileInput,
   ): Promise<{ id: string }> {
     const existing = await this.prisma.providerProfile.findUnique({ where: { userId } });
-    if (existing) {
+    // A vendor-only shop (offersServices = false) is not a stylist page yet:
+    // setting one up upgrades that profile in place, so its products, orders
+    // and fee history stay attached.
+    if (existing?.offersServices) {
       throw new BadRequestException('You already have a stylist page');
     }
 
@@ -282,23 +285,26 @@ export class ProvidersService {
     );
 
     const profile = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.providerProfile.create({
-        data: {
-          userId,
-          displayName: input.displayName,
-          tint: deriveTint(input.displayName),
-          initials: deriveInitials(input.displayName),
-          categoryId: input.categoryId,
-          areaName: input.areaName,
-          latitude: input.lat,
-          longitude: input.lng,
-          cityId: city.id,
-          yearsExperience: input.yearsExperience,
-          workingHoursLabel: input.workingHoursLabel,
-          subscriptionPriceUsdCents,
-          services: { create: input.services },
-        },
-      });
+      const stylistFields = {
+        displayName: input.displayName,
+        tint: deriveTint(input.displayName),
+        initials: deriveInitials(input.displayName),
+        categoryId: input.categoryId,
+        areaName: input.areaName,
+        latitude: input.lat,
+        longitude: input.lng,
+        yearsExperience: input.yearsExperience,
+        workingHoursLabel: input.workingHoursLabel,
+        services: { create: input.services },
+      };
+      const created = existing
+        ? await tx.providerProfile.update({
+            where: { id: existing.id },
+            data: { ...stylistFields, offersServices: true },
+          })
+        : await tx.providerProfile.create({
+            data: { userId, cityId: city.id, subscriptionPriceUsdCents, ...stylistFields },
+          });
       await tx.user.update({
         where: { id: userId },
         data: {

@@ -19,6 +19,14 @@ export interface CartLine {
    */
   providerId: string;
   providerName: string;
+  /**
+   * Whether this vendor delivers and what they charge, as shown when the item
+   * was added. Only used to offer the choice and preview the total: the server
+   * re-checks both at checkout. Missing on lines saved by an older app, which
+   * simply offer collection only.
+   */
+  delivers?: boolean;
+  deliveryChargeUsdCents?: number;
 }
 
 export interface CartState {
@@ -115,13 +123,13 @@ export const useCartStore = create<CartState>()(
       // lost sale, and this market's users restart often.
       name: 'sc-cart',
       storage: createJSONStorage(() => AsyncStorage),
-      version: 3,
+      version: 4,
       // v1 carried one cart-level providerId/providerName and would crash
       // reading its lines as the new per-line shape; a mixed cart is not
       // recoverable from that old shape, so it starts empty instead of
       // throwing on the first launch after the update.
       migrate: (stored, version) =>
-        version === 2
+        version === 2 || version === 3
           ? { lines: (stored as Partial<CartState>).lines ?? [], checkoutKeys: {} }
           : { lines: [], checkoutKeys: {} },
     },
@@ -131,6 +139,8 @@ export const useCartStore = create<CartState>()(
 export interface CartGroup {
   providerId: string;
   providerName: string;
+  delivers: boolean;
+  deliveryChargeUsdCents: number;
   lines: CartLine[];
 }
 
@@ -142,7 +152,13 @@ export function groupCartBySeller(lines: readonly CartLine[]): CartGroup[] {
   for (const line of lines) {
     let group = groups.get(line.providerId);
     if (!group) {
-      group = { providerId: line.providerId, providerName: line.providerName, lines: [] };
+      group = {
+        providerId: line.providerId,
+        providerName: line.providerName,
+        delivers: line.delivers ?? false,
+        deliveryChargeUsdCents: line.deliveryChargeUsdCents ?? 0,
+        lines: [],
+      };
       groups.set(line.providerId, group);
       order.push(line.providerId);
     }

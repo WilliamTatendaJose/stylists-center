@@ -3,14 +3,21 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   canCancelOrder,
   canCollectOrder,
+  canVendorCancelOrder,
+  completedStatusFor,
+  dispatchedStatusFor,
   formatOrderReference,
+  isOrderCompleted,
+  maxCoinsForOrder,
   orderTotalUsdCents,
   type CreateOrderInput,
   type CreateOrderResponse,
+  type MarkOrderReadyInput,
   type OrderRowDto,
   type ProductDetailDto,
   type ProductPageDto,
@@ -18,33 +25,70 @@ import {
   type ProductSort,
   type CreateProductReviewInput,
   type ProductReviewsDto,
-  type PaymentAction,
+  type ProviderOrderDto,
 } from '@sc/shared';
-import { Prisma } from '../../generated/prisma';
+import { Prisma, type OrderStatus } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
-import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
-import { payerPhoneFor } from '../payments/pay-channels';
 import { PaymentStatusService } from '../payments/payment-status.service';
 import { PushService } from '../notifications/push.service';
-import { Inject } from '@nestjs/common';
-import { toOrderRow, toProductDetail, toProductRow, type ProductGeoRow } from './mappers';
+import { ReminderService } from '../notifications/reminder.service';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
+import { FeeStandingService } from '../fees/fee-standing.service';
+import { RewardsHooksService } from '../rewards/rewards-hooks.service';
+import { SettingsService, settingsFor } from '../settings/settings.service';
+import {
+  amountDue,
+  toOrderRow,
+  toProductDetail,
+  toProductRow,
+  toProviderOrder,
+  type ProductGeoRow,
+} from './mappers';
+
+/**
+ * Only approved vendors' products are sold, and a restricted vendor's stock
+ * is hidden. `shopPoint` prefers the pin the vendor put on the map for the
+ * shop, then the profile's own location, because a shop's distance is where
+ * the goods are collected from.
+ */
+const SHOP_POINT = Prisma.sql`COALESCE(
+  CASE WHEN va."shopLat" IS NOT NULL AND va."shopLng" IS NOT NULL
+    THEN ST_SetSRID(ST_MakePoint(va."shopLng", va."shopLat"), 4326)::geography END,
+  pr.location
+)`;
+
+const PRODUCT_COLUMNS = Prisma.sql`
+  p.id, p.name, p.description, p.category, p."priceUsdCents", p."stockQty", p."imageUrls",
+  pr.id AS "providerId", pr."displayName" AS "providerName",
+  pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName",
+  COALESCE(va."collectionHours", pr."workingHoursLabel") AS "pickupHours",
+  COALESCE(va."collectionAddress", va."shopAddress") AS "pickupAddress",
+  va.delivers, va."deliveryChargeUsdCents", va."deliveryAreas",
+  pr."ratingAvg" AS "sellerRatingAvg", pr."completedCount" AS "sellerCompletedCount"`;
 
 @Injectable()
 export class MarketService {
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
     private readonly paymentStatus: PaymentStatusService,
     private readonly push: PushService,
+    private readonly fees: FeeLedgerService,
+    private readonly standing: FeeStandingService,
+    private readonly rewards: RewardsHooksService,
+    @Optional() private readonly settings?: SettingsService,
+    @Optional() private readonly reminders?: ReminderService,
   ) {}
 
   /**
    * The catalogue, nearest seller first.
    *
-   * Distance comes from the seller's PostGIS location — a buyer collects in
-   * person, so "how far is this" is as much a property of a product as its
+   * Distance comes from the seller's PostGIS location — a buyer may collect
+   * in person, so "how far is this" is as much a property of a product as its
    * price, and sorting by anything else would bury the only ones they can
    * realistically fetch.
+   *
+   * Only approved vendors appear, and a vendor restricted for unpaid fees is
+   * hidden until they settle.
    */
   async listProducts(params: {
     lat: number;
@@ -81,11 +125,16 @@ export class MarketService {
       throw new BadRequestException('Minimum price cannot exceed maximum price');
     }
     const point = Prisma.sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`;
+    const restricted = await this.standing.restrictedProviderIds();
+    const restrictedFilter =
+      restricted.length > 0
+        ? Prisma.sql`AND p."providerId" NOT IN (${Prisma.join(restricted)})`
+        : Prisma.empty;
 
     const radiusFilter =
       radiusKm === null
         ? Prisma.empty
-        : Prisma.sql`AND ST_DWithin(pr.location, ${point}, ${radiusKm * 1000})`;
+        : Prisma.sql`AND ST_DWithin(${SHOP_POINT}, ${point}, ${radiusKm * 1000})`;
 
     const term = searchTerm?.trim();
     const searchFilter =
@@ -104,24 +153,23 @@ export class MarketService {
         : Prisma.sql`AND p."priceUsdCents" <= ${maxPriceUsdCents}`;
     const sortClause =
       sort === 'price_asc'
-        ? Prisma.sql`p."priceUsdCents" ASC, pr.location <-> ${point}`
+        ? Prisma.sql`p."priceUsdCents" ASC, ${SHOP_POINT} <-> ${point}`
         : sort === 'price_desc'
-          ? Prisma.sql`p."priceUsdCents" DESC, pr.location <-> ${point}`
+          ? Prisma.sql`p."priceUsdCents" DESC, ${SHOP_POINT} <-> ${point}`
           : sort === 'newest'
             ? Prisma.sql`p."createdAt" DESC`
-            : Prisma.sql`pr.location <-> ${point}, p.name`;
+            : Prisma.sql`${SHOP_POINT} <-> ${point}, p.name`;
 
     // limit + 1 to detect another page without a second COUNT query that
     // could disagree with the page it describes.
     const rows = await this.prisma.$queryRaw<ProductGeoRow[]>`
       SELECT
-        p.id, p.name, p.description, p.category, p."priceUsdCents", p."stockQty", p."imageUrls",
-        pr.id AS "providerId", pr."displayName" AS "providerName",
-        pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName", pr."workingHoursLabel" AS "pickupHours", pr."ratingAvg" AS "sellerRatingAvg", pr."completedCount" AS "sellerCompletedCount",
-        ST_Distance(pr.location, ${point}) / 1000 AS "distanceKm"
+        ${PRODUCT_COLUMNS},
+        ST_Distance(${SHOP_POINT}, ${point}) / 1000 AS "distanceKm"
       FROM "Product" p
       JOIN "ProviderProfile" pr ON pr.id = p."providerId"
-      WHERE p.active = true AND p."stockQty" > 0 ${radiusFilter} ${searchFilter} ${categoryFilter} ${selfFilter} ${minPriceFilter} ${maxPriceFilter}
+      JOIN "VendorApplication" va ON va."providerId" = pr.id AND va.status = 'approved'
+      WHERE p.active = true AND p."stockQty" > 0 ${restrictedFilter} ${radiusFilter} ${searchFilter} ${categoryFilter} ${selfFilter} ${minPriceFilter} ${maxPriceFilter}
       ORDER BY ${sortClause}, p.id
       LIMIT ${limit + 1} OFFSET ${offset}
     `;
@@ -135,15 +183,19 @@ export class MarketService {
 
   async getProduct(id: string, lat: number, lng: number): Promise<ProductDetailDto> {
     const point = Prisma.sql`ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography`;
+    const restricted = await this.standing.restrictedProviderIds();
+    const restrictedFilter =
+      restricted.length > 0
+        ? Prisma.sql`AND p."providerId" NOT IN (${Prisma.join(restricted)})`
+        : Prisma.empty;
     const rows = await this.prisma.$queryRaw<ProductGeoRow[]>`
       SELECT
-        p.id, p.name, p.description, p.category, p."priceUsdCents", p."stockQty", p."imageUrls",
-        pr.id AS "providerId", pr."displayName" AS "providerName",
-        pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName", pr."workingHoursLabel" AS "pickupHours", pr."ratingAvg" AS "sellerRatingAvg", pr."completedCount" AS "sellerCompletedCount",
-        ST_Distance(pr.location, ${point}) / 1000 AS "distanceKm"
+        ${PRODUCT_COLUMNS},
+        ST_Distance(${SHOP_POINT}, ${point}) / 1000 AS "distanceKm"
       FROM "Product" p
       JOIN "ProviderProfile" pr ON pr.id = p."providerId"
-      WHERE p.id = ${id} AND p.active = true
+      JOIN "VendorApplication" va ON va."providerId" = pr.id AND va.status = 'approved'
+      WHERE p.id = ${id} AND p.active = true ${restrictedFilter}
     `;
     const row = rows[0];
     if (!row) throw new NotFoundException('Product not found');
@@ -155,18 +207,30 @@ export class MarketService {
    *
    * Everything here happens inside a single transaction with the product rows
    * locked, because the failure this prevents is overselling: two buyers
-   * taking the last wig, both being charged, and one of them arriving to
-   * collect something that is gone. Reading stock and then decrementing it as
-   * separate statements is exactly the race that produces that.
+   * taking the last wig, and one of them arriving to collect (or waiting for
+   * a delivery of) something that is gone. Reading stock and then
+   * decrementing it as separate statements is exactly the race that produces
+   * that.
    *
    * Prices are snapshotted onto the order items from the locked rows, so the
-   * total the buyer is charged is the total they were shown, even if the
-   * seller edits the price a second later.
+   * total the buyer owes is the total they were shown, even if the seller
+   * edits the price a second later. Nothing is charged here: the buyer pays
+   * the vendor on delivery or collection. The delivery charge is stored
+   * beside the product total, never inside it, because the commission is on
+   * products only.
    */
   async createOrder(buyerId: string, input: CreateOrderInput): Promise<CreateOrderResponse> {
+    const fulfilment = input.fulfilment ?? 'collection';
+    const coins = input.coins ?? 0;
+    const deliveryAddress = fulfilment === 'delivery' ? (input.deliveryAddress ?? null) : null;
+    if (fulfilment === 'delivery' && !deliveryAddress) {
+      throw new BadRequestException('Enter where to deliver');
+    }
+    const coinUsdCents = coins > 0 ? await this.setting('coinUsdCents') : 0;
+
     const result = await this.prisma.$transaction(async (tx) => {
-      // Serialize retries for this buyer/request before touching stock or the
-      // payment gateway. A second request waits for the first to commit.
+      // Serialize retries for this buyer/request before touching stock. A
+      // second request waits for the first to commit.
       // $executeRaw, not $queryRaw: pg_advisory_xact_lock returns `void`,
       // which Prisma's pg adapter cannot deserialize as a result row, so
       // $queryRaw threw on every checkout before any order was written.
@@ -175,13 +239,9 @@ export class MarketService {
       `;
       const fingerprint = JSON.stringify({
         providerId: input.providerId,
-        paymentMethod: input.paymentMethod,
-        payerPhone: input.payerPhone ?? null,
-        // Only when not EcoCash, so checkouts fingerprinted before channels
-        // existed still match their own retries.
-        ...(input.payChannel && input.payChannel !== 'ecocash'
-          ? { payChannel: input.payChannel }
-          : {}),
+        fulfilment,
+        deliveryAddress,
+        coins,
         items: [...input.items].sort((a, b) => a.productId.localeCompare(b.productId)),
       });
       const previous = await tx.order.findUnique({
@@ -191,27 +251,27 @@ export class MarketService {
         if (previous.checkoutFingerprint !== fingerprint) {
           throw new BadRequestException('This checkout was changed; please start a new checkout');
         }
-        return {
-          created: false as const,
-          response: {
-            id: previous.id,
-            reference: previous.reference,
-            totalUsdCents: previous.totalUsdCents,
-            ...(previous.checkoutUrl ? { checkoutUrl: previous.checkoutUrl } : {}),
-            ...(previous.checkoutInstructions
-              ? { instructions: previous.checkoutInstructions }
-              : {}),
-          },
-        };
+        return { created: false as const, response: toCreateResponse(previous) };
       }
-      // A seller buying their own stock would pay into their own escrow and
-      // collect it back as earnings — a way to fake sales and reviews.
+
+      // Inside the transaction but after the replay check: a retried checkout
+      // that already succeeded must not start failing because the vendor was
+      // restricted a moment later.
+      await this.standing.assertCanTrade(input.providerId);
+
       const seller = await tx.providerProfile.findUnique({
         where: { id: input.providerId },
-        select: { userId: true },
+        include: { vendor: true },
       });
-      if (seller?.userId === buyerId) {
+      if (seller?.vendor?.status !== 'approved') {
+        throw new BadRequestException("This shop isn't approved to sell yet");
+      }
+      // A seller buying their own stock would fake sales, reviews and coins.
+      if (seller.userId === buyerId) {
         throw new BadRequestException("You can't buy your own products");
+      }
+      if (fulfilment === 'delivery' && !seller.vendor.delivers) {
+        throw new BadRequestException("This shop doesn't deliver. Choose collection instead");
       }
 
       const productIds = input.items.map((i) => i.productId);
@@ -248,9 +308,9 @@ export class MarketService {
         if (!product.active) {
           throw new BadRequestException(`"${product.name}" is no longer for sale`);
         }
-        // A single order is collected from one place, so it cannot span sellers.
+        // A single order is delivered or collected from one place, so it cannot span sellers.
         if (product.providerId !== input.providerId) {
-          throw new BadRequestException('An order can only contain items from one stylist');
+          throw new BadRequestException('An order can only contain items from one shop');
         }
         if (item.quantity > product.stockQty) {
           throw new BadRequestException(
@@ -262,6 +322,22 @@ export class MarketService {
         return { product, quantity: item.quantity };
       });
 
+      const totalUsdCents = orderTotalUsdCents(
+        lines.map((l) => ({ priceUsdCents: l.product.priceUsdCents, quantity: l.quantity })),
+      );
+      const deliveryChargeUsdCents =
+        fulfilment === 'delivery' ? seller.vendor.deliveryChargeUsdCents : 0;
+      if (coins > 0) {
+        const maxCoins = maxCoinsForOrder(totalUsdCents, deliveryChargeUsdCents, coinUsdCents);
+        if (coins > maxCoins) {
+          throw new BadRequestException(
+            maxCoins === 0
+              ? "Coins can't be used on this order"
+              : `You can use at most ${String(maxCoins)} coins on this order`,
+          );
+        }
+      }
+
       for (const line of lines) {
         await tx.product.update({
           where: { id: line.product.id },
@@ -269,39 +345,33 @@ export class MarketService {
         });
       }
 
-      const totalUsdCents = orderTotalUsdCents(
-        lines.map((l) => ({ priceUsdCents: l.product.priceUsdCents, quantity: l.quantity })),
-      );
-
       // A database sequence, not a count of existing rows: references must be
       // unique under concurrent checkouts, which a SELECT COUNT cannot promise.
       const sequenceRows = await tx.$queryRaw<{ nextval: bigint }[]>`
         SELECT nextval('order_reference_seq')
       `;
       const sequence = sequenceRows[0]?.nextval ?? 1n;
-      const pickup = await tx.providerProfile.findUniqueOrThrow({
-        where: { id: input.providerId },
-        select: {
-          userId: true,
-          areaName: true,
-          workingHoursLabel: true,
-          latitude: true,
-          longitude: true,
-        },
-      });
 
+      const vendor = seller.vendor;
       const order = await tx.order.create({
         data: {
           reference: formatOrderReference(Number(sequence)),
           buyerId,
           providerId: input.providerId,
-          paymentMethod: input.paymentMethod,
+          // The buyer pays the vendor directly. The column predates that and
+          // still distinguishes old in-app orders, so new ones are 'cash'.
+          paymentMethod: 'cash',
+          fulfilment,
+          deliveryAddress,
+          deliveryChargeUsdCents,
           checkoutKey: input.checkoutKey,
           checkoutFingerprint: fingerprint,
-          pickupAddress: pickup.areaName,
-          pickupHours: pickup.workingHoursLabel,
-          pickupLat: pickup.latitude,
-          pickupLng: pickup.longitude,
+          // Collection details are snapshotted so a later edit by the vendor
+          // can't send the buyer to the wrong place.
+          pickupAddress: vendor.collectionAddress ?? vendor.shopAddress,
+          pickupHours: vendor.collectionHours ?? seller.workingHoursLabel,
+          pickupLat: vendor.shopLat ?? seller.latitude,
+          pickupLng: vendor.shopLng ?? seller.longitude,
           totalUsdCents,
           items: {
             create: lines.map((l) => ({
@@ -314,58 +384,30 @@ export class MarketService {
         },
       });
 
-      let checkoutUrl: string | undefined;
-      let instructions: string | undefined;
-      // Not stored on the order: a replayed checkout key gets the instructions
-      // text (which carries any InnBucks code) but no structured action.
-      let action: PaymentAction | undefined;
-      if (input.paymentMethod === 'ecocash') {
-        const buyer = await tx.user.findUniqueOrThrow({
-          where: { id: buyerId },
-          select: { phone: true },
+      let coinsValueUsdCents = 0;
+      if (coins > 0) {
+        // In this transaction, so the coins move if and only if the order
+        // is placed. Throws (rolling the order back) if the buyer can't cover it.
+        const { usdCents } = await this.rewards.redeemForOrder(tx, {
+          orderId: order.id,
+          buyerId,
+          vendorUserId: seller.userId,
+          coins,
         });
-        const payChannel = input.payChannel ?? 'ecocash';
-        const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, buyer.phone);
-        const intent = await this.paymentGateway.createCheckout({
-          reference: order.reference,
-          amountUsdCents: totalUsdCents,
-          description: `Market order ${order.reference}`,
-          channel: payChannel,
-          ...(paymentPhone ? { phone: paymentPhone } : {}),
-          allowHostedCheckout: false,
-        });
-        await tx.payment.create({
-          data: {
-            orderId: order.id,
-            provider: intent.provider,
-            status: intent.status,
-            amountUsdCents: totalUsdCents,
-            externalRef: intent.externalRef,
-            reference: order.reference,
-            channel: payChannel,
-            otpUrl: intent.otpUrl ?? null,
-          },
-        });
-        action = intent.action;
-        checkoutUrl = intent.checkoutUrl;
-        instructions = intent.instructions;
+        if (usdCents > totalUsdCents + deliveryChargeUsdCents) {
+          throw new BadRequestException("Coins can't be worth more than the order");
+        }
+        coinsValueUsdCents = usdCents;
         await tx.order.update({
           where: { id: order.id },
-          data: { checkoutUrl: checkoutUrl ?? null, checkoutInstructions: instructions ?? null },
+          data: { coinsUsed: coins, coinsValueUsdCents },
         });
       }
 
       return {
         created: true as const,
-        sellerUserId: pickup.userId,
-        response: {
-          id: order.id,
-          reference: order.reference,
-          totalUsdCents,
-          ...(checkoutUrl ? { checkoutUrl } : {}),
-          ...(instructions ? { instructions } : {}),
-          ...(action ? { action } : {}),
-        },
+        sellerUserId: seller.userId,
+        response: toCreateResponse({ ...order, coinsValueUsdCents }),
       };
     });
     if (result.created) {
@@ -378,7 +420,7 @@ export class MarketService {
     return result.response;
   }
 
-  /** Polls Paynow for an in-flight order payment — the cart's waiting screen calls this. */
+  /** Polls Paynow for an order paid in the app before payment moved to the vendor; new orders have no payment to poll. */
   async orderPaymentStatus(orderId: string, buyerId: string): Promise<{ status: string }> {
     await this.requireOwnOrder(orderId, buyerId);
     const { status } = await this.paymentStatus.resolve({ orderId });
@@ -431,8 +473,8 @@ export class MarketService {
     input: CreateProductReviewInput,
   ) {
     const order = await this.requireOwnOrder(orderId, buyerId);
-    if (order.status !== 'collected') {
-      throw new BadRequestException('Collect the order before reviewing its products');
+    if (!isOrderCompleted(order.status)) {
+      throw new BadRequestException('Wait until the order arrives before reviewing its products');
     }
     const item = await this.prisma.orderItem.findFirst({ where: { orderId, productId } });
     if (!item) throw new NotFoundException('Product was not in this order');
@@ -458,33 +500,22 @@ export class MarketService {
     };
   }
 
-  /** Buyer confirms they physically have the goods — the moment escrow is released. */
+  /**
+   * The buyer confirms they have the goods (picked up, or the delivery
+   * arrived). The vendor can do the same from their side; whichever comes
+   * first completes the order, and the second is a no-op.
+   */
   async collectOrder(orderId: string, buyerId: string): Promise<OrderRowDto> {
     const order = await this.requireOwnOrder(orderId, buyerId);
-    if (order.status === 'collected') return this.rowById(orderId);
+    if (isOrderCompleted(order.status)) return this.rowById(orderId);
     if (!canCollectOrder(order.status)) {
-      throw new BadRequestException(`Cannot collect an order that is ${order.status}`);
+      throw new BadRequestException(`Cannot confirm an order that is ${order.status}`);
     }
-
-    const changed = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.order.updateMany({
-        where: { id: orderId, buyerId, status: 'ready_for_collection' },
-        data: { status: 'collected' },
-      });
-      if (result.count === 0) return false;
-      if (order.paymentMethod === 'ecocash') {
-        const funded = await tx.payment.findFirst({
-          where: { orderId, status: { in: ['paid', 'held'] } },
-        });
-        if (!funded) throw new BadRequestException('Payment has not cleared yet');
-        await this.settleEscrow(tx, orderId, 'released', true);
-      }
-      return true;
-    });
-    if (!changed) {
+    const completed = await this.completeOrder(orderId, [dispatchedStatusFor(order.fulfilment)]);
+    if (!completed) {
       const latest = await this.requireOwnOrder(orderId, buyerId);
-      if (latest.status !== 'collected') {
-        throw new BadRequestException(`Cannot collect an order that is ${latest.status}`);
+      if (!isOrderCompleted(latest.status)) {
+        throw new BadRequestException(`Cannot confirm an order that is ${latest.status}`);
       }
     }
     return this.rowById(orderId);
@@ -497,13 +528,167 @@ export class MarketService {
     if (!canCancelOrder(order.status)) {
       throw new BadRequestException(`Cannot cancel an order that is ${order.status}`);
     }
+    const changed = await this.cancelInTransaction(orderId, ['reserved', 'ready_for_collection']);
+    if (!changed) {
+      const latest = await this.requireOwnOrder(orderId, buyerId);
+      if (latest.status !== 'cancelled') {
+        throw new BadRequestException(`Cannot cancel an order that is ${latest.status}`);
+      }
+    }
+    return this.rowById(orderId);
+  }
 
-    const changed = await this.prisma.$transaction(async (tx) => {
+  // ----- The vendor's side of an order -----
+
+  async listVendorOrders(providerId: string): Promise<ProviderOrderDto[]> {
+    const orders = await this.prisma.order.findMany({
+      where: { providerId },
+      include: { items: true, buyer: { select: { displayName: true, phone: true } } },
+      orderBy: { createdAt: 'desc' },
+      // The seller screen never needs a shop's full order history.
+      take: 100,
+    });
+    return orders.map(toProviderOrder);
+  }
+
+  /** Packed: ready at the shop for a collection order, on its way for a delivery. */
+  async markOrderReady(
+    orderId: string,
+    providerId: string,
+    input: MarkOrderReadyInput = {},
+  ): Promise<ProviderOrderDto> {
+    const order = await this.requireVendorOrder(orderId, providerId);
+    const target = dispatchedStatusFor(order.fulfilment);
+    if (order.status === target || isOrderCompleted(order.status)) {
+      return this.vendorRowById(orderId);
+    }
+    if (order.status !== 'reserved') {
+      throw new BadRequestException(`Cannot prepare an order that is ${order.status}`);
+    }
+    await this.requireLegacyPaymentCleared(order);
+
+    const pickupNote = input.pickupNote?.trim();
+    const updated = await this.prisma.order.updateMany({
+      where: { id: orderId, providerId, status: 'reserved' },
+      data: { status: target, pickupNote: pickupNote?.length ? pickupNote : null },
+    });
+    if (updated.count > 0) {
+      if (order.fulfilment === 'collection')
+        void this.reminders?.schedulePickup(orderId, new Date());
+      void this.push.sendToUser(order.buyerId, {
+        title: order.fulfilment === 'delivery' ? 'Your order is on its way' : 'Your order is ready',
+        body:
+          order.fulfilment === 'delivery'
+            ? `Order ${order.reference} is out for delivery.`
+            : `Order ${order.reference} is ready for collection.`,
+        data: { type: 'market.order.ready', orderId },
+      });
+    }
+    return this.vendorRowById(orderId);
+  }
+
+  /**
+   * The vendor marks the order handed over (collected or delivered). A vendor
+   * may complete an order straight from "being prepared", for the buyer who
+   * walks in before it was marked ready.
+   */
+  async completeVendorOrder(orderId: string, providerId: string): Promise<ProviderOrderDto> {
+    const order = await this.requireVendorOrder(orderId, providerId);
+    if (isOrderCompleted(order.status)) return this.vendorRowById(orderId);
+    if (order.status !== 'reserved' && order.status !== dispatchedStatusFor(order.fulfilment)) {
+      throw new BadRequestException(`Cannot complete an order that is ${order.status}`);
+    }
+    const completed = await this.completeOrder(orderId, [
+      'reserved',
+      dispatchedStatusFor(order.fulfilment),
+    ]);
+    if (!completed) {
+      const latest = await this.requireVendorOrder(orderId, providerId);
+      if (!isOrderCompleted(latest.status)) {
+        throw new BadRequestException(`Cannot complete an order that is ${latest.status}`);
+      }
+    }
+    return this.vendorRowById(orderId);
+  }
+
+  /** A vendor cancels, for example when stock turns out to be damaged or the buyer can't be reached. */
+  async cancelVendorOrder(orderId: string, providerId: string): Promise<ProviderOrderDto> {
+    const order = await this.requireVendorOrder(orderId, providerId);
+    if (order.status === 'cancelled') return this.vendorRowById(orderId);
+    if (!canVendorCancelOrder(order.status)) {
+      throw new BadRequestException(`Cannot cancel an order that is ${order.status}`);
+    }
+    const changed = await this.cancelInTransaction(orderId, [
+      'reserved',
+      'ready_for_collection',
+      'out_for_delivery',
+    ]);
+    if (changed) {
+      void this.push.sendToUser(order.buyerId, {
+        title: 'Order cancelled',
+        body: `The shop cancelled order ${order.reference}.`,
+        data: { type: 'market.order.cancelled', orderId },
+      });
+    } else {
+      const latest = await this.requireVendorOrder(orderId, providerId);
+      if (latest.status !== 'cancelled') {
+        throw new BadRequestException(`Cannot cancel an order that is ${latest.status}`);
+      }
+    }
+    return this.vendorRowById(orderId);
+  }
+
+  /**
+   * Moves an order from one of `fromStatuses` to collected/delivered and does
+   * everything that depends on that, in one transaction: the commission and
+   * the buyer's reward coins. The status change is the claim, so two
+   * simultaneous confirmations (buyer and vendor) complete it exactly once;
+   * the loser gets `false` and nothing is charged twice.
+   */
+  private async completeOrder(orderId: string, fromStatuses: OrderStatus[]): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+      const claimed = await tx.order.updateMany({
+        where: { id: orderId, status: { in: fromStatuses } },
+        data: { status: completedStatusFor(order.fulfilment), completedAt: new Date() },
+      });
+      if (claimed.count === 0) return false;
+      if (order.paymentMethod === 'ecocash') {
+        // Orders paid in the app before payment moved to the vendor still
+        // hold money that is released now.
+        const funded = await tx.payment.findFirst({
+          where: { orderId, status: { in: ['paid', 'held'] } },
+        });
+        if (!funded) throw new BadRequestException('Payment has not cleared yet');
+        await this.settleEscrow(tx, orderId, 'released', true);
+      }
+      // Product total only: the delivery charge is the vendor's own, not commissionable.
+      await this.fees.chargeOrder(tx, {
+        providerId: order.providerId,
+        orderId,
+        productTotalUsdCents: order.totalUsdCents,
+      });
+      await this.rewards.onOrderCompleted(tx, {
+        orderId,
+        buyerId: order.buyerId,
+        productTotalUsdCents: order.totalUsdCents,
+      });
+      return true;
+    });
+  }
+
+  /** Cancelled orders restore their stock and coins and never owe commission. */
+  private async cancelInTransaction(
+    orderId: string,
+    fromStatuses: ('reserved' | 'ready_for_collection' | 'out_for_delivery')[],
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
       const result = await tx.order.updateMany({
-        where: { id: orderId, buyerId, status: { in: ['reserved', 'ready_for_collection'] } },
+        where: { id: orderId, status: { in: fromStatuses } },
         data: { status: 'cancelled' },
       });
       if (result.count === 0) return false;
+      const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
       const items = await tx.orderItem.findMany({ where: { orderId } });
       for (const item of items) {
         await tx.product.update({
@@ -514,15 +699,19 @@ export class MarketService {
       if (order.paymentMethod === 'ecocash') {
         await this.settleEscrow(tx, orderId, 'refunded', false);
       }
+      if (order.coinsUsed > 0) {
+        await this.rewards.refundRedemption(tx, { orderId });
+      }
       return true;
     });
-    if (!changed) {
-      const latest = await this.requireOwnOrder(orderId, buyerId);
-      if (latest.status !== 'cancelled') {
-        throw new BadRequestException(`Cannot cancel an order that is ${latest.status}`);
-      }
-    }
-    return this.rowById(orderId);
+  }
+
+  private async requireLegacyPaymentCleared(order: { id: string; paymentMethod: string }) {
+    if (order.paymentMethod !== 'ecocash') return;
+    const funded = await this.prisma.payment.findFirst({
+      where: { orderId: order.id, status: { in: ['paid', 'held'] } },
+    });
+    if (!funded) throw new BadRequestException('Payment has not cleared yet');
   }
 
   private async requireOwnOrder(orderId: string, buyerId: string) {
@@ -532,10 +721,22 @@ export class MarketService {
     return order;
   }
 
+  private async requireVendorOrder(orderId: string, providerId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.providerId !== providerId) throw new ForbiddenException();
+    return order;
+  }
+
+  private async setting(key: 'coinUsdCents'): Promise<number> {
+    return (this.settings ?? settingsFor(this.prisma)).get(key);
+  }
+
   /**
    * Append-only, matching the booking ledger: a release or refund is a NEW
    * row, never an edit of the held one. `keepsFee` is false on a refund —
-   * nothing was delivered, so the platform keeps nothing.
+   * nothing was delivered, so the platform keeps nothing. Only orders paid in
+   * the app before payment moved to the vendor have anything to settle.
    */
   private async settleEscrow(
     tx: Prisma.TransactionClient,
@@ -568,4 +769,30 @@ export class MarketService {
     });
     return toOrderRow(order);
   }
+
+  private async vendorRowById(orderId: string): Promise<ProviderOrderDto> {
+    const order = await this.prisma.order.findUniqueOrThrow({
+      where: { id: orderId },
+      include: { items: true, buyer: { select: { displayName: true, phone: true } } },
+    });
+    return toProviderOrder(order);
+  }
+}
+
+/** The checkout response, rebuilt from a stored order so a replayed request gets the same answer. */
+function toCreateResponse(order: {
+  id: string;
+  reference: string;
+  totalUsdCents: number;
+  deliveryChargeUsdCents: number;
+  coinsValueUsdCents: number;
+}): CreateOrderResponse {
+  return {
+    id: order.id,
+    reference: order.reference,
+    totalUsdCents: order.totalUsdCents,
+    deliveryChargeUsdCents: order.deliveryChargeUsdCents,
+    coinsValueUsdCents: order.coinsValueUsdCents,
+    amountDueUsdCents: amountDue(order),
+  };
 }
