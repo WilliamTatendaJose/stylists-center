@@ -12,3 +12,4 @@ export * from './profile.js';
 export * from './subscription.js';
 export * from './settings.js';
 export * from './content.js';
+export * from './fees.js';

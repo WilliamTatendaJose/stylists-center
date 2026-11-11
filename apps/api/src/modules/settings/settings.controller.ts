@@ -1,5 +1,10 @@
 import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common';
-import type { AppConfigDto, ContentDocumentDto } from '@sc/shared';
+import {
+  SETTING_DEFINITIONS,
+  SETTING_KEYS,
+  type AppConfigDto,
+  type ContentDocumentDto,
+} from '@sc/shared';
 import { AdminJwtAuthGuard } from '../admin-auth/admin-jwt-auth.guard';
 import { AdminRoles, OwnerOnly } from '../admin-auth/admin-roles';
 import { CurrentAdmin } from '../admin-auth/current-admin.decorator';
@@ -17,21 +22,12 @@ export class PublicConfigController {
 
   @Get('config')
   async config(): Promise<AppConfigDto> {
-    const s = await this.settings.all();
-    return {
-      coinUsdCents: s.coinUsdCents,
-      referralRewardCoins: s.referralRewardCoins,
-      cashOutMinUsdCents: s.cashOutMinUsdCents,
-      subscriptionPriceUsdCents: s.subscriptionPriceUsdCents,
-      subscriptionCycleDays: s.subscriptionCycleDays,
-      budgetMinUsd: s.budgetMinUsd,
-      budgetMaxUsd: s.budgetMaxUsd,
-      budgetStepUsd: s.budgetStepUsd,
-      supportPhone: s.supportPhone,
-      supportWhatsapp: s.supportWhatsapp,
-      supportEmail: s.supportEmail,
-      supportHours: s.supportHours,
-    };
+    const all = await this.settings.all();
+    const out: Record<string, number | string> = {};
+    for (const key of SETTING_KEYS) {
+      if (SETTING_DEFINITIONS[key].public) out[key] = all[key];
+    }
+    return out as AppConfigDto;
   }
 
   @Get('content/:key')

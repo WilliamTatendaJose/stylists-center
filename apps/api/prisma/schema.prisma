@@ -242,6 +242,7 @@ model ProviderProfile {
   payouts              Payout[]
   // The trigram (GIN) and partial availability indexes are declared in the
   // hand-written migration — Prisma's schema language cannot express either.
+  feeLedgerEntries     FeeLedgerEntry[]
 
   @@index([categoryId])
   @@index([cityId])
@@ -865,4 +866,49 @@ model ContentDocument {
   version          Int      @default(1)
   updatedByAdminId String?
   updatedAt        DateTime @updatedAt
+}
+
+/// What a fee ledger row records.
+enum FeeEntryKind {
+  /// Service fee on a completed booking (owed by the stylist).
+  booking_fee
+  /// Commission on a delivered or collected marketplace order (owed by the vendor).
+  order_fee
+  /// A fee taken back: a reported non-payment, or a cancelled charge.
+  waiver
+  /// Money paid towards the balance (through the app or recorded by staff).
+  payment
+  /// A manual correction by staff, either direction.
+  adjustment
+}
+
+/// What each stylist or vendor owes StylistsCenter. Clients pay stylists and
+/// vendors directly, so the app keeps this running balance instead of
+/// splitting payments. Append-only: a reversal is a new `waiver` row, never
+/// an edit. Positive amounts are owed; negative amounts are paid or credited.
+/// The balance is the sum of `amountUsdCents` for a provider.
+model FeeLedgerEntry {
+  id               String          @id @default(uuid())
+  providerId       String
+  provider         ProviderProfile @relation(fields: [providerId], references: [id])
+  kind             FeeEntryKind
+  amountUsdCents   Int
+  /// What the fee was charged on (job price or product total), for statements.
+  baseUsdCents     Int?
+  /// The rate used, in basis points, so a statement shows it even after the setting changes.
+  rateBps          Int?
+  bookingId        String?
+  orderId          String?
+  /// For `payment` rows made through the app: the gateway Payment row.
+  paymentId        String?
+  note             String?
+  createdByAdminId String?
+  createdAt        DateTime        @default(now())
+
+  // One charge and at most one waiver per booking or order, so retries and
+  // races can never double-charge. Postgres treats NULLs as distinct, so
+  // rows without a booking/order are unaffected.
+  @@unique([kind, bookingId])
+  @@unique([kind, orderId])
+  @@index([providerId, createdAt])
 }

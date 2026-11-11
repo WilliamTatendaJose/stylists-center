@@ -38,6 +38,8 @@ import { AdminVerificationsModule } from './modules/admin-verifications/admin-ve
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminExportsModule } from './modules/admin-exports/admin-exports.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { FeesModule } from './modules/fees/fees.module';
+import { RewardsModule } from './modules/rewards/rewards.module';
 
 @Module({
   imports: [
@@ -54,6 +56,8 @@ import { SettingsModule } from './modules/settings/settings.module';
     }),
     PrismaModule,
     SettingsModule,
+    FeesModule,
+    RewardsModule,
     RedisModule,
     StorageModule,
     HealthModule,

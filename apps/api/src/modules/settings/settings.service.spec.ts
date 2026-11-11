@@ -71,7 +71,7 @@ describe('SettingsService and ContentService', () => {
     const settings = new SettingsService(prisma, {});
     const row = (await settings.list()).find((item) => item.key === 'supportHours');
     expect(row).toMatchObject({ value: '', source: 'default' });
-    expect((await settings.list()).find((item) => item.key === 'coinUsdCents')?.value).toBe(20);
+    expect((await settings.list()).find((item) => item.key === 'coinUsdCents')?.value).toBe(10);
   });
 
   it('rejects unknown keys, out-of-range values and inconsistent combinations without saving', async () => {
