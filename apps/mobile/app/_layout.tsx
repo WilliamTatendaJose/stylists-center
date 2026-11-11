@@ -22,6 +22,7 @@ import { useNotificationRouting } from '../src/notifications/useNotificationRout
 import { ThemeProvider } from '@sc/ui';
 import { useClaimReferral } from '../src/api/hooks/useWallet.js';
 import { ApiError } from '../src/api/errors.js';
+import { TermsGate } from '../src/components/TermsGate.js';
 
 // expo-router renders a route's exported `ErrorBoundary` when that segment
 // throws. Exported from the root layout so it covers every screen.
@@ -96,6 +97,7 @@ export default function RootLayout() {
         <PersistQueryClientProvider client={queryClient} persistOptions={PERSIST_OPTIONS}>
           <ThemeProvider mode={themeMode} onModeChange={setThemeMode}>
             <AuthGatedNavigator fontsReady={fontsReady} />
+            <TermsGate />
           </ThemeProvider>
         </PersistQueryClientProvider>
       </SafeAreaProvider>

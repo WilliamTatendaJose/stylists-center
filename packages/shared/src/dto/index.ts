@@ -13,3 +13,4 @@ export * from './uploads.js';
 export * from './verification.js';
 export * from './admin.js';
 export * from './config.js';
+export * from './terms.js';

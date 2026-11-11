@@ -40,6 +40,7 @@ import { AdminExportsModule } from './modules/admin-exports/admin-exports.module
 import { SettingsModule } from './modules/settings/settings.module';
 import { FeesModule } from './modules/fees/fees.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
+import { TermsModule } from './modules/terms/terms.module';
 
 @Module({
   imports: [
@@ -91,6 +92,7 @@ import { RewardsModule } from './modules/rewards/rewards.module';
     AdminVerificationsModule,
     AdminUsersModule,
     AdminExportsModule,
+    TermsModule,
   ],
   providers: [
     /**
