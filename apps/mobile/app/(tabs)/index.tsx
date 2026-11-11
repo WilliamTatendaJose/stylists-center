@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { MapPin, Compass, BadgeCheck, User } from 'lucide-react-native';
+import { MapPin, Compass, BadgeCheck } from 'lucide-react-native';
 import type { ProviderListRowDto } from '@sc/shared';
 import { layout, space } from '@sc/tokens';
 import {
@@ -31,19 +31,12 @@ import { useRequestStore, useSessionStore } from '../../src/state/index.js';
 import { useDeviceLocation } from '../../src/location/useDeviceLocation.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { BrandLogo } from '../../src/components/BrandLogo.js';
+import { ProfileButton } from '../../src/components/ProfileButton.js';
 
 const styles = StyleSheet.create({
   header: { gap: 8 },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: space.s },
   wordmark: { marginRight: 'auto' },
-  profileButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   hero: { marginBottom: space.l },
   searchRow: {
@@ -240,16 +233,7 @@ export default function Find() {
             setRoleSheetOpen(true);
           }}
         />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Profile"
-          onPress={() => {
-            router.push('/profile');
-          }}
-          style={[styles.profileButton, { borderColor: colors.divider }]}
-        >
-          <User size={16} strokeWidth={1.8} color={colors.text} />
-        </Pressable>
+        <ProfileButton />
       </View>
       {/* The label states what is actually true of the coordinates driving
           every count and distance below. Only a real device fix earns

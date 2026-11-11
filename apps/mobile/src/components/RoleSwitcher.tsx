@@ -6,15 +6,21 @@ import { Button, Pill, Sheet, Text } from '@sc/ui';
 import { useMe, useSetActiveRole } from '../api/hooks/useMe.js';
 import { useSessionStore } from '../state/index.js';
 import { describeError } from '../api/errorMessage.js';
+import { ProfileButton } from './ProfileButton.js';
 
 const styles = StyleSheet.create({
   title: { marginBottom: space.s },
   body: { marginBottom: space.xl },
   error: { marginBottom: space.m },
   actions: { gap: space.s },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: space.s },
 });
 
-/** The same role control is used in both tab shells so switching never feels like a mode change. */
+/**
+ * The same role control is used in both tab shells so switching never feels
+ * like a mode change. It sits at the top right of every main screen, so the
+ * profile button rides with it: one place to put it, and it shows everywhere.
+ */
 export function RoleSwitcher() {
   const { data: me } = useMe();
   const setActiveRole = useSetActiveRole();
@@ -43,14 +49,17 @@ export function RoleSwitcher() {
 
   return (
     <>
-      <Pill
-        label={isProvider ? 'Stylist' : 'Client'}
-        showChevron
-        onPress={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      />
+      <View style={styles.headerRow}>
+        <Pill
+          label={isProvider ? 'Stylist' : 'Client'}
+          showChevron
+          onPress={() => {
+            setError(null);
+            setOpen(true);
+          }}
+        />
+        <ProfileButton />
+      </View>
       <Sheet open={open} onClose={close}>
         <Text variant="cardTitle" style={styles.title}>
           {isProvider ? 'Switch to client' : 'Switch to stylist'}
