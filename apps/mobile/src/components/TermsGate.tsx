@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useSegments } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
@@ -27,7 +27,8 @@ const styles = StyleSheet.create({
  * Full-screen sheet that asks a signed-in user to agree to any terms or privacy
  * document whose current version they have not accepted yet. Mounted once in
  * the root layout. It renders nothing when signed out, on the sign-in and legal
- * screens, when everything is accepted, and when the status request fails (offline).
+ * screens, when everything is accepted, when the status request fails (offline),
+ * and after the user taps "Later" (until the app is next opened).
  */
 export function TermsGate() {
   const { colors } = useTheme();
@@ -36,9 +37,19 @@ export function TermsGate() {
   const { data } = useTermsStatus(signedIn);
   const accept = useAcceptTerms();
   const [failed, setFailed] = useState(false);
+  // "Later" hides the sheet until the app is next opened. Kept in component
+  // state on purpose: the gate is mounted once at the root, so this lasts
+  // exactly one app session, and the user is asked again on the next launch.
+  const [postponed, setPostponed] = useState(false);
+  // A different account signing in on this phone is asked afresh.
+  useEffect(() => {
+    if (!signedIn) setPostponed(false);
+  }, [signedIn]);
 
   const pending = pendingTermsDocuments(data);
-  if (!signedIn || pending.length === 0 || isTermsGateExempt(segments[0])) return null;
+  if (!signedIn || postponed || pending.length === 0 || isTermsGateExempt(segments[0])) {
+    return null;
+  }
 
   async function agreeToAll() {
     setFailed(false);
@@ -56,7 +67,9 @@ export function TermsGate() {
       visible
       animationType="slide"
       presentationStyle="fullScreen"
-      onRequestClose={() => undefined}
+      onRequestClose={() => {
+        setPostponed(true);
+      }}
     >
       <Screen>
         <ScrollView contentContainerStyle={styles.content}>
@@ -93,6 +106,18 @@ export function TermsGate() {
             loading={accept.isPending}
             onPress={() => void agreeToAll()}
           />
+          <Button
+            label="Later"
+            variant="ghost"
+            block
+            disabled={accept.isPending}
+            onPress={() => {
+              setPostponed(true);
+            }}
+          />
+          <Text variant="metaSmall" color="neutral600">
+            We'll ask again next time you open the app.
+          </Text>
         </View>
       </Screen>
     </Modal>
