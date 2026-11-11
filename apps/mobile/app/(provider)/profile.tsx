@@ -44,6 +44,7 @@ import {
 } from '../../src/api/hooks/useProviders.js';
 import { useMe, useSetActiveRole } from '../../src/api/hooks/useMe.js';
 import { PasswordSecurity } from '../../src/components/PasswordSecurity.js';
+import { HelpAndLegal } from '../../src/components/HelpAndLegal.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useAuthStore } from '../../src/state/useAuthStore.js';
 import {
@@ -627,6 +628,8 @@ export default function ProviderProfile() {
         {/* Stylists manage their account here, so password settings live on
             My page too, not only on the client-side profile screen. */}
         <PasswordSecurity email={me?.email ?? null} />
+
+        <HelpAndLegal terms="terms-stylists" />
 
         <ProfileSection label="Account">
           <Card bordered style={styles.contentCard}>

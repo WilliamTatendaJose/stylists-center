@@ -37,6 +37,7 @@ import { AdminReviewsModule } from './modules/admin-reviews/admin-reviews.module
 import { AdminVerificationsModule } from './modules/admin-verifications/admin-verifications.module';
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminExportsModule } from './modules/admin-exports/admin-exports.module';
+import { SettingsModule } from './modules/settings/settings.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { AdminExportsModule } from './modules/admin-exports/admin-exports.module
       throttlers: [{ ttl: 60_000, limit: 120 }],
     }),
     PrismaModule,
+    SettingsModule,
     RedisModule,
     StorageModule,
     HealthModule,

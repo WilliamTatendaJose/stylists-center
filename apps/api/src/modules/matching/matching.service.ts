@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import type { Queue } from 'bullmq';
@@ -10,6 +11,8 @@ import {
   canRetry,
   canTransition,
   formatBudgetLabel,
+  formatUsd,
+  isBudgetAmountAllowed,
   MATCH_REQUEST_TTL_SECONDS,
   nextMatchRadiusKm,
   OFFER_RESPONSE_TTL_SECONDS,
@@ -20,6 +23,7 @@ import {
   type MatchState,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { SettingsService, settingsFor } from '../settings/settings.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
@@ -45,12 +49,24 @@ export class MatchingService {
     private readonly socketEmitter: SocketEmitterService,
     private readonly push: PushService,
     @InjectQueue(MATCHING_QUEUE) private readonly queue: Queue,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   async createMatch(
     clientId: string,
     input: CreateMatchRequestInput,
   ): Promise<CreateMatchRequestResponse> {
+    if (input.budget.mode === 'fixed') {
+      // The range and step are console settings, so they're checked here
+      // against the values in effect rather than in the shared request schema.
+      const settings = await (this.settings ?? settingsFor(this.prisma)).all();
+      if (!isBudgetAmountAllowed(input.budget.amountUsd, settings)) {
+        throw new BadRequestException(
+          `Budget must be ${formatUsd(settings.budgetMinUsd * 100)}-${formatUsd(settings.budgetMaxUsd * 100)} in steps of ${formatUsd(settings.budgetStepUsd * 100)}`,
+        );
+      }
+    }
+
     const expiresAt = new Date(Date.now() + MATCH_REQUEST_TTL_SECONDS * 1000);
 
     const match = await this.prisma.matchRequest.create({

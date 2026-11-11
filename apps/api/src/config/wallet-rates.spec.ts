@@ -1,20 +1,31 @@
-import { describe, expect, it, vi } from 'vitest';
-import type { ConfigService } from '@nestjs/config';
-import type { Env } from './env';
+import { describe, expect, it } from 'vitest';
+import { SettingsService } from '../modules/settings/settings.service';
 import { walletRates } from './wallet-rates';
 
 describe('walletRates', () => {
-  it('uses the shared defaults when no runtime configuration is available', () => {
-    expect(walletRates()).toEqual({ coinUsdCents: 20, referralRewardCoins: 6 });
+  it('uses the shared defaults when nothing is configured', async () => {
+    expect(await walletRates(new SettingsService(undefined, {}))).toEqual({
+      coinUsdCents: 20,
+      referralRewardCoins: 6,
+      cashOutMinUsdCents: 500,
+    });
   });
 
-  it('uses backend-configured coin value and commission amount', () => {
-    const config = {
-      get: vi.fn((key: string) =>
-        key === 'COIN_USD_CENTS' ? 75 : key === 'REFERRAL_REWARD_COINS' ? 10 : undefined,
-      ),
-    } as unknown as ConfigService<Env, true>;
+  it('uses environment values when they are set', async () => {
+    const settings = new SettingsService(undefined, {
+      COIN_USD_CENTS: '75',
+      REFERRAL_REWARD_COINS: '10',
+      CASH_OUT_MIN_USD_CENTS: '1000',
+    });
+    expect(await walletRates(settings)).toEqual({
+      coinUsdCents: 75,
+      referralRewardCoins: 10,
+      cashOutMinUsdCents: 1000,
+    });
+  });
 
-    expect(walletRates(config)).toEqual({ coinUsdCents: 75, referralRewardCoins: 10 });
+  it('ignores an out-of-range environment value and falls back to the default', async () => {
+    const settings = new SettingsService(undefined, { COIN_USD_CENTS: '-3' });
+    expect((await walletRates(settings)).coinUsdCents).toBe(20);
   });
 });

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { SettingsService } from '../settings/settings.service';
 import { MatchingService } from './matching.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
@@ -182,6 +183,34 @@ describe('MatchingService', () => {
       location: CLIENT_LOCATION,
     });
   }
+
+  it('checks a fixed budget against the budget settings in effect', async () => {
+    // Settings with an explicit environment and no database: 20-60 in steps of 10.
+    const strict = new MatchingService(
+      prisma,
+      new GeoRepository(prisma),
+      new SocketEmitterService(),
+      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+      queue as unknown as Queue,
+      new SettingsService(undefined, {
+        BUDGET_MIN_USD: '20',
+        BUDGET_MAX_USD: '60',
+        BUDGET_STEP_USD: '10',
+      }),
+    );
+    const request = (amountUsd: number) =>
+      strict.createMatch(clientId, {
+        categoryId,
+        budget: { mode: 'fixed', amountUsd },
+        radiusKm: 3,
+        location: CLIENT_LOCATION,
+      });
+    await expect(request(10)).rejects.toThrow(/\$20\.00-\$60\.00 in steps of \$10\.00/);
+    await expect(request(25)).rejects.toThrow(/in steps of/);
+    await expect(request(70)).rejects.toThrow(/in steps of/);
+    const accepted = await request(40);
+    expect(accepted.state).toBe('offered');
+  });
 
   it('fans out only to providers within the radius, and schedules one expire job + one offerTimeout per offer', async () => {
     const created = await createTestMatch();

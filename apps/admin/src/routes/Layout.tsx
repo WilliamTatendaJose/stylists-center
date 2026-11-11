@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import {
   CircleUserRound,
   CreditCard,
+  FileText,
   Flag,
   HandCoins,
   LayoutDashboard,
@@ -15,6 +16,7 @@ import {
   Star,
   UserCheck,
   ShieldCheck,
+  SlidersHorizontal,
   UserCog,
   UsersRound,
   Wallet,
@@ -39,6 +41,8 @@ const NAV_ITEMS = [
   { to: '/payments', label: 'Payments', icon: Wallet },
   { to: '/cash-outs', label: 'Cash-outs', icon: HandCoins },
   { to: '/catalog', label: 'Catalog', icon: MapPinned },
+  { to: '/settings', label: 'Settings', icon: SlidersHorizontal },
+  { to: '/content', label: 'Terms and privacy', icon: FileText },
   { to: '/staff', label: 'Staff', icon: UserCog },
   { to: '/audit-log', label: 'Audit log', icon: ListChecks },
 ];

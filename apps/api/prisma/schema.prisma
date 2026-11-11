@@ -841,3 +841,28 @@ model AdminRefreshToken {
   @@index([adminUserId])
   @@index([familyId])
 }
+
+/// A business value saved by staff in the admin console (Settings page).
+/// Keys and allowed ranges live in @sc/shared SETTING_DEFINITIONS; a row here
+/// overrides the matching environment variable and the built-in default.
+/// Deleting the row ("Reset" in the console) puts those back in effect.
+model PlatformSetting {
+  key              String   @id
+  /// A number or a string, already validated against the definition.
+  value            Json
+  updatedByAdminId String?
+  updatedAt        DateTime @updatedAt
+}
+
+/// Terms and privacy text edited by staff in the admin console (Content
+/// page). Keys live in @sc/shared CONTENT_KEYS; a key with no row shows the
+/// built-in placeholder.
+model ContentDocument {
+  key              String   @id
+  title            String
+  body             String
+  /// Starts at 1 on the first save and goes up by one on every save.
+  version          Int      @default(1)
+  updatedByAdminId String?
+  updatedAt        DateTime @updatedAt
+}

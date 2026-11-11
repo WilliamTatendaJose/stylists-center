@@ -36,6 +36,8 @@ describe('recordSubscriptionPaymentStatus', () => {
       providerProfile,
     };
     const prisma = {
+      // No console values saved: the subscription length is the default 30 days.
+      platformSetting: { findMany: vi.fn().mockResolvedValue([]) },
       $transaction: vi
         .fn()
         .mockImplementation((run: (tx: typeof transaction) => Promise<unknown>) =>

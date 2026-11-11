@@ -1,16 +1,15 @@
 import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { randomBytes } from 'node:crypto';
-import { ConfigService } from '@nestjs/config';
 import {
-  CASH_OUT_MIN_USD_CENTS,
+  formatUsd,
   canCashOut,
   type CashOutRequestResponse,
   type WalletTransactionDto,
   type ReferralRowDto,
   type WalletDto,
 } from '@sc/shared';
-import type { Env } from '../../config/env';
 import { walletRates } from '../../config/wallet-rates';
+import { SettingsService } from '../settings/settings.service';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -18,11 +17,11 @@ import { PrismaService } from '../prisma/prisma.service';
 export class WalletService {
   constructor(
     private readonly prisma: PrismaService,
-    @Optional() private readonly config?: ConfigService<Env, true>,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   async getWallet(userId: string): Promise<WalletDto> {
-    const rates = walletRates(this.config);
+    const rates = await walletRates(this.settings);
     const [agent, user] = await Promise.all([
       this.prisma.agent.findUnique({ where: { userId } }),
       this.prisma.user.findUniqueOrThrow({
@@ -54,8 +53,8 @@ export class WalletService {
       referralCode: agent?.referralCode ?? '',
       referredByName: user.referralRecord?.agent.user.displayName ?? null,
       referralStatus: user.referralRecord?.status ?? 'none',
-      canCashOut: canCashOut(balance.usdCents),
-      cashOutMinUsdCents: CASH_OUT_MIN_USD_CENTS,
+      canCashOut: canCashOut(balance.usdCents, rates.cashOutMinUsdCents),
+      cashOutMinUsdCents: rates.cashOutMinUsdCents,
       isVerifiedAgent: agent
         ? agent.verificationStatus === 'verified' && agent.status === 'active'
         : false,
@@ -115,7 +114,7 @@ export class WalletService {
             agentId: referrer.id,
             referredUserId: userId,
             referredName: user.displayName,
-            coinsAwarded: walletRates(this.config).referralRewardCoins,
+            coinsAwarded: (await walletRates(this.settings)).referralRewardCoins,
           },
         });
       }
@@ -162,7 +161,7 @@ export class WalletService {
           agentId: referrer.id,
           referredUserId: userId,
           referredName: user.displayName,
-          coinsAwarded: walletRates(this.config).referralRewardCoins,
+          coinsAwarded: (await walletRates(this.settings)).referralRewardCoins,
         },
       });
     });
@@ -221,7 +220,7 @@ export class WalletService {
    * not all exist yet at lock time.
    */
   async cashOut(userId: string): Promise<CashOutRequestResponse> {
-    const { coinUsdCents } = walletRates(this.config);
+    const { coinUsdCents, cashOutMinUsdCents } = await walletRates(this.settings);
     return this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
 
@@ -234,9 +233,9 @@ export class WalletService {
       // current server-configured rate rather than a historic reward rate.
       const usdCents = coins * coinUsdCents;
 
-      if (!canCashOut(usdCents)) {
+      if (!canCashOut(usdCents, cashOutMinUsdCents)) {
         throw new BadRequestException(
-          `Balance must exceed $${String(CASH_OUT_MIN_USD_CENTS / 100)} to cash out`,
+          `Balance must exceed ${formatUsd(cashOutMinUsdCents)} to cash out`,
         );
       }
 

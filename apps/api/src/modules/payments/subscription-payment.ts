@@ -1,6 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { nextSubscriptionPaidUntil } from '@sc/shared';
 import type { PrismaService } from '../prisma/prisma.service';
+import { settingsFor } from '../settings/settings.service';
 
 interface RecordSubscriptionStatusInput {
   providerProfileId: string;
@@ -19,10 +20,12 @@ const FINAL_FAILURE_STATUSES = new Set(['failed', 'refunded', 'disputed']);
  * reference, while the exact-reference lookup prevents an old callback from
  * being applied to a provider's newer renewal attempt.
  */
-export function recordSubscriptionPaymentStatus(
+export async function recordSubscriptionPaymentStatus(
   prisma: PrismaService,
   input: RecordSubscriptionStatusInput,
 ): Promise<{ status: string; changed: boolean }> {
+  // Read before the transaction so the settings query doesn't hold it open.
+  const cycleDays = await settingsFor(prisma).get('subscriptionCycleDays');
   return prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.reference}))`;
 
@@ -64,6 +67,8 @@ export function recordSubscriptionPaymentStatus(
       });
       const paidUntil = nextSubscriptionPaidUntil(
         profile.subscriptionPaidUntil?.toISOString() ?? null,
+        Date.now(),
+        cycleDays,
       );
       await tx.providerProfile.update({
         where: { id: input.providerProfileId },

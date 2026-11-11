@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { SettingsService } from '../settings/settings.service';
 import { WalletService } from './wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
@@ -117,7 +118,11 @@ describe('WalletService', () => {
   });
 
   beforeEach(() => {
-    wallet = new WalletService(prisma, config);
+    // Coin value set the same way production sets it: an environment variable.
+    wallet = new WalletService(
+      prisma,
+      new SettingsService(undefined, { COIN_USD_CENTS: String(BASE_ENV.COIN_USD_CENTS) }),
+    );
   });
 
   it('a plain (non-agent) user has an empty, non-cash-out-able wallet', async () => {

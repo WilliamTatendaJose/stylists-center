@@ -3,16 +3,15 @@ import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { color, space } from '@sc/tokens';
 import {
-  BUDGET_MAX_USD,
-  BUDGET_MIN_USD,
-  BUDGET_STEP_USD,
   MATCH_REQUEST_TTL_SECONDS,
   MAX_MATCH_RADIUS_KM,
   MIN_MATCH_RADIUS_KM,
+  snapBudgetAmount,
 } from '@sc/shared';
 import { Screen, ScreenHeader, Text, Chip, SegmentedPills, RangeInput, Button } from '@sc/ui';
 import { useCategories } from '../../src/api/hooks/useCategories.js';
 import { useCreateMatch } from '../../src/api/hooks/useMatching.js';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { useRequestStore } from '../../src/state/index.js';
 import { useDebouncedValue } from '../../src/hooks/useDebouncedValue.js';
 import { describeError } from '../../src/api/errorMessage.js';
@@ -63,7 +62,11 @@ export default function NewRequest() {
   const { data: categories } = useCategories(radiusKm);
   const createMatch = useCreateMatch();
 
-  const [amount, setAmount] = useState(50);
+  // The budget range and step are StylistsCenter settings; the amount is
+  // kept on an allowed value even if the range changes while this is open.
+  const config = useAppConfig();
+  const [pickedAmount, setAmount] = useState(50);
+  const amount = snapBudgetAmount(pickedAmount, config);
   const [sendError, setSendError] = useState<string | null>(null);
   const inRange = categories?.find((c) => c.id === categoryId)?.nearbyCount ?? 0;
 
@@ -106,8 +109,17 @@ export default function NewRequest() {
   const sendRequest = () => {
     if (!canSend) return;
     setSendError(null);
+    // A budget remembered from before a settings change is moved onto the
+    // current range rather than rejected by the server.
+    const sent =
+      budget.mode === 'fixed'
+        ? {
+            mode: 'fixed' as const,
+            amountUsd: snapBudgetAmount(budget.amountUsd ?? amount, config),
+          }
+        : budget;
     createMatch.mutate(
-      { categoryId, budget, radiusKm },
+      { categoryId, budget: sent, radiusKm },
       {
         onSuccess: (created) => {
           setMatchId(created.id);
@@ -185,9 +197,9 @@ export default function NewRequest() {
               <Text variant="h3">${amount}</Text>
             </View>
             <RangeInput
-              min={BUDGET_MIN_USD}
-              max={BUDGET_MAX_USD}
-              step={BUDGET_STEP_USD}
+              min={config.budgetMinUsd}
+              max={config.budgetMaxUsd}
+              step={config.budgetStepUsd}
               value={amount}
               onChange={onAmountChange}
               accessibilityLabel="Budget amount"

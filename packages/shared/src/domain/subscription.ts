@@ -29,8 +29,9 @@ export function isSubscriptionActive(paidUntil: string | null, now: number = Dat
 export function nextSubscriptionPaidUntil(
   currentPaidUntil: string | null,
   now: number = Date.now(),
+  cycleDays: number = SUBSCRIPTION_CYCLE_DAYS,
 ): string {
   const current = currentPaidUntil ? new Date(currentPaidUntil).getTime() : 0;
   const base = Math.max(current, now);
-  return new Date(base + SUBSCRIPTION_CYCLE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  return new Date(base + cycleDays * 24 * 60 * 60 * 1000).toISOString();
 }

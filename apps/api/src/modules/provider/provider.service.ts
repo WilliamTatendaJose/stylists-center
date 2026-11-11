@@ -40,10 +40,9 @@ import {
   type UpdateWeeklyHoursInput,
   type CreateProviderTimeOffInput,
 } from '@sc/shared';
-import { ConfigService } from '@nestjs/config';
 import { Optional } from '@nestjs/common';
-import type { Env } from '../../config/env';
 import { walletRates } from '../../config/wallet-rates';
+import { SettingsService } from '../settings/settings.service';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
@@ -85,7 +84,7 @@ export class ProviderService {
     private readonly push: PushService,
     @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
     private readonly paymentStatus: PaymentStatusService,
-    @Optional() private readonly config?: ConfigService<Env, true>,
+    @Optional() private readonly settings?: SettingsService,
     @Optional() private readonly reminders?: ReminderService,
   ) {}
 
@@ -646,7 +645,7 @@ export class ProviderService {
             data: { status: 'paid' },
           });
           if (claimed.count === 1) {
-            const rates = walletRates(this.config);
+            const rates = await walletRates(this.settings);
             await tx.walletTransaction.create({
               data: {
                 userId: referral.agent.userId,
