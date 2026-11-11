@@ -1,27 +1,12 @@
 name: Mobile Build
 
-# An EAS build takes ~10-15 minutes and spends build-minute quota, so this
-# deliberately does NOT run on every push the way ci.yml does. It builds when a
-# push to main actually changed something that ships inside the app, and is
-# still available manually from the Actions tab for any profile.
-#
-# The paths filter is what keeps that affordable: most commits here touch the
-# API, the admin console or CI, none of which can change the binary. Without it,
-# a day of backend work would spend hours of build quota producing identical
-# apps. packages/* are listed because the app bundles them, and pnpm-lock.yaml
-# and patches/ because a dependency change alters what ships even when no
-# app source moved.
+# Manual only: run it from the Actions tab when a new binary is actually
+# needed. The EAS free plan has a small monthly build allowance, so merges to
+# main do not build. App code that needs no new native module ships as an
+# over-the-air update instead (ota-update.yml). A build is needed only when a
+# native module is added or changed, or the app version in app.config.ts is
+# bumped.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/mobile/**'
-      - 'packages/shared/**'
-      - 'packages/ui/**'
-      - 'packages/tokens/**'
-      - 'patches/**'
-      - 'pnpm-lock.yaml'
-      - '.github/workflows/mobile-build.yml'
   workflow_dispatch:
     inputs:
       profile:
