@@ -39,6 +39,15 @@ const BASE_ENV: Env = {
   ANDROID_PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=zw.co.stylistscenter.app',
 };
 
+const vendorApplication = (status: 'pending' | 'approved' | 'rejected') => ({
+  providerId: '',
+  businessName: 'Test shop',
+  shopAddress: '1 Test Road',
+  contactName: 'Owner',
+  contactPhone: '+263771234567',
+  status,
+});
+
 describe('ProviderService management', () => {
   let prisma: PrismaService;
   let provider: ProviderService;
@@ -119,6 +128,7 @@ describe('ProviderService management', () => {
     await prisma.order.deleteMany({ where: { providerId } });
     await prisma.product.deleteMany({ where: { providerId } });
     await prisma.service.deleteMany({ where: { providerId } });
+    await prisma.vendorApplication.deleteMany({ where: { providerId } });
     await prisma.payout.deleteMany({ where: { providerId } });
     await prisma.providerProfile.delete({ where: { id: providerId } });
     await prisma.user.deleteMany({ where: { id: { in: [providerUserId, buyerId] } } });
@@ -186,64 +196,31 @@ describe('ProviderService management', () => {
     });
   });
 
-  it('creates inventory, exposes incoming orders, and leaves collection confirmation to the buyer', async () => {
-    const product = await provider.createProduct(providerId, {
+  it('lists products only for an approved vendor', async () => {
+    const input = {
       name: 'Braiding hair',
       description: 'One packet',
       priceUsdCents: 500,
       stockQty: 8,
       imageUrls: [],
-    });
+    };
+    // No application, then a pending one, then a rejected one: none may list.
+    await expect(provider.createProduct(providerId, input)).rejects.toThrow('must be approved');
+    for (const status of ['pending', 'rejected'] as const) {
+      await prisma.vendorApplication.upsert({
+        where: { providerId },
+        create: { ...vendorApplication(status), providerId },
+        update: { status },
+      });
+      await expect(provider.createProduct(providerId, input)).rejects.toThrow('must be approved');
+    }
+    expect(await prisma.product.count({ where: { providerId } })).toBe(0);
+
+    await prisma.vendorApplication.update({ where: { providerId }, data: { status: 'approved' } });
+    const product = await provider.createProduct(providerId, input);
     expect((await provider.getProducts(providerId)).some((row) => row.id === product.id)).toBe(
       true,
     );
-
-    const order = await prisma.order.create({
-      data: {
-        reference: `PO-${String(Date.now())}`,
-        buyerId,
-        providerId,
-        paymentMethod: 'cash',
-        totalUsdCents: 1000,
-        items: {
-          create: {
-            productId: product.id,
-            nameSnapshot: product.name,
-            priceUsdCents: 500,
-            quantity: 2,
-          },
-        },
-      },
-    });
-    expect((await provider.getOrders(providerId))[0]).toMatchObject({
-      id: order.id,
-      buyerName: 'Test Buyer',
-      canMarkReady: true,
-    });
-
-    // A held payment must stay held until the buyer confirms collection.
-    await prisma.payment.create({
-      data: {
-        orderId: order.id,
-        provider: 'fake-ecocash',
-        status: 'held',
-        amountUsdCents: order.totalUsdCents,
-        createdAt: new Date(Date.now() - 1000),
-      },
-    });
-
-    await provider.markOrderReady(order.id, providerId);
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(
-      'ready_for_collection',
-    );
-    expect(
-      await prisma.payment.findFirst({ where: { orderId: order.id, status: 'released' } }),
-    ).toBeNull();
-    expect((await provider.getOrders(providerId))[0]).toMatchObject({
-      id: order.id,
-      status: 'ready_for_collection',
-      canMarkReady: false,
-    });
   });
 
   it('totals earnings from the newest ledger row per order and lists one entry each', async () => {

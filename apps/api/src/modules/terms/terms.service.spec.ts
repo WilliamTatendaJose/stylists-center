@@ -34,7 +34,7 @@ const BASE_ENV: Env = {
   ANDROID_PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=zw.co.stylistscenter.app',
 };
 
-const DOC_KEYS = ['terms-clients', 'terms-stylists', 'terms-agents', 'privacy'];
+const DOC_KEYS = ['terms-clients', 'terms-stylists', 'terms-agents', 'terms-vendors', 'privacy'];
 
 describe('TermsService', () => {
   let prisma: PrismaService;
@@ -212,6 +212,57 @@ describe('TermsService', () => {
     await publish('terms-agents');
     const keys = (await terms.status(agentUserId)).map((d) => d.key);
     expect(keys).toEqual(['terms-clients', 'privacy', 'terms-agents']);
+  });
+
+  it('adds the vendor terms once a vendor is approved, and never the stylist terms for a shop only', async () => {
+    const shopUserId = (
+      await prisma.user.create({
+        data: { phone: '+263771100004', displayName: 'Terms Shop', cityId },
+      })
+    ).id;
+    const shop = await prisma.providerProfile.create({
+      data: {
+        userId: shopUserId,
+        displayName: 'Terms Shop',
+        tint: '#111111',
+        initials: 'TS',
+        categoryId,
+        areaName: 'Test area',
+        latitude: -17.8,
+        longitude: 31.03,
+        cityId,
+        workingHoursLabel: 'Ask the shop',
+        offersServices: false,
+      },
+    });
+    const application = await prisma.vendorApplication.create({
+      data: {
+        providerId: shop.id,
+        businessName: 'Terms Shop',
+        shopAddress: '1 Test Road',
+        contactName: 'Owner',
+        contactPhone: '+263771000000',
+      },
+    });
+    try {
+      await publish('terms-vendors');
+      expect((await terms.status(shopUserId)).map((d) => d.key)).toEqual([
+        'terms-clients',
+        'privacy',
+      ]);
+      await prisma.vendorApplication.update({
+        where: { id: application.id },
+        data: { status: 'approved' },
+      });
+      expect((await terms.status(shopUserId)).map((d) => d.key)).toEqual([
+        'terms-clients',
+        'privacy',
+        'terms-vendors',
+      ]);
+    } finally {
+      await prisma.vendorApplication.delete({ where: { id: application.id } });
+      await prisma.providerProfile.delete({ where: { id: shop.id } });
+    }
   });
 
   it('accepting the same version twice is fine and keeps one row', async () => {

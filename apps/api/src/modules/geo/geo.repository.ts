@@ -217,7 +217,9 @@ export class GeoRepository {
       JOIN "User" u ON u.id = p."userId"
       JOIN "Category" c ON c.id = p."categoryId"
       ${textScoreJoin}
-      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL
+      -- Vendor-only shops (offersServices = false) sell products but are not stylists:
+      -- they must never show up in search, browse or smart match.
+      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL AND p."offersServices" = true
       ${radiusFilter} ${categoryFilter} ${selfFilter} ${availabilityFilter} ${restrictedFilter} ${searchFilter}
       ${orderBy}
       ${pagination}
@@ -249,6 +251,7 @@ export class GeoRepository {
       JOIN "User" u ON u.id = p."userId"
       JOIN "Category" c ON c.id = p."categoryId"
       WHERE p.id = ${id} AND u."deletedAt" IS NULL AND u."disabledAt" IS NULL
+        AND p."offersServices" = true -- a vendor-only shop has no stylist page
     `;
     return rows[0] ?? null;
   }
@@ -264,7 +267,9 @@ export class GeoRepository {
       SELECT p."categoryId", COUNT(*) AS count
       FROM "ProviderProfile" p
       JOIN "User" u ON u.id = p."userId"
-      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL
+      -- Vendor-only shops (offersServices = false) sell products but are not stylists:
+      -- they must never show up in search, browse or smart match.
+      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL AND p."offersServices" = true
         AND ST_DWithin(p.location, ${point}, ${radiusKm * 1000})
       GROUP BY p."categoryId"
     `;

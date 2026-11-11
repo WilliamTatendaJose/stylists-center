@@ -51,6 +51,9 @@ const StaffPage = lazy(() => import('./routes/StaffPage').then((m) => ({ default
 const VerificationsPage = lazy(() =>
   import('./routes/VerificationsPage').then((m) => ({ default: m.VerificationsPage })),
 );
+const VendorsPage = lazy(() =>
+  import('./routes/VendorsPage').then((m) => ({ default: m.VendorsPage })),
+);
 const UsersPage = lazy(() => import('./routes/UsersPage').then((m) => ({ default: m.UsersPage })));
 const SettingsPage = lazy(() =>
   import('./routes/SettingsPage').then((m) => ({ default: m.SettingsPage })),
@@ -111,6 +114,7 @@ export function App() {
           <Route path="providers" element={<ProvidersPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="verifications" element={<VerificationsPage />} />
+          <Route path="vendors" element={<VendorsPage />} />
           <Route path="fees" element={<FeeBalancesPage />} />
           <Route path="payments" element={<PaymentsPage />} />
           <Route path="cash-outs" element={<CashOutsPage />} />

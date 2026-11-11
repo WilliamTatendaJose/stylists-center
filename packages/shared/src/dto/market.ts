@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { payerPhoneSchema, paymentMethodSchema } from './bookings.js';
-import { payChannelSchema, paymentActionSchema } from './payments.js';
+import { paymentMethodSchema } from './bookings.js';
+import { paymentActionSchema } from './payments.js';
 import { imageUrlSchema } from './uploads.js';
 
 export const productCategorySchema = z.enum([
@@ -33,12 +33,18 @@ export const productRowSchema = z.object({
   sellerCompletedCount: z.number().int(),
   areaName: z.string(),
   distanceKm: z.number(),
+  /** Whether the vendor delivers, so a card can say so without opening the product. */
+  delivers: z.boolean(),
 });
 export type ProductRowDto = z.infer<typeof productRowSchema>;
 
 export const productDetailSchema = productRowSchema.extend({
   description: z.string(),
   pickupHours: z.string(),
+  pickupAddress: z.string(),
+  deliveryChargeUsdCents: z.number().int(),
+  /** Free-text places the vendor delivers to, as they wrote them. */
+  deliveryAreas: z.array(z.string()),
 });
 export type ProductDetailDto = z.infer<typeof productDetailSchema>;
 
@@ -63,16 +69,29 @@ export type OrderItemDto = z.infer<typeof orderItemSchema>;
 export const orderStatusSchema = z.enum([
   'reserved',
   'ready_for_collection',
+  'out_for_delivery',
   'collected',
+  'delivered',
   'cancelled',
 ]);
+
+export const fulfilmentMethodSchema = z.enum(['collection', 'delivery']);
 
 export const orderRowSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   status: orderStatusSchema,
+  /** `ecocash` only on orders paid in the app before payment moved to the vendor. */
   paymentMethod: paymentMethodSchema,
+  /** Products only. */
   totalUsdCents: z.number().int(),
+  fulfilment: fulfilmentMethodSchema,
+  deliveryAddress: z.string().nullable(),
+  deliveryChargeUsdCents: z.number().int(),
+  coinsUsed: z.number().int(),
+  coinsValueUsdCents: z.number().int(),
+  /** What the buyer pays the vendor on delivery or collection. */
+  amountDueUsdCents: z.number().int(),
   createdAt: z.iso.datetime(),
   providerId: z.uuid(),
   providerName: z.string(),
@@ -93,36 +112,43 @@ export const orderRowSchema = z.object({
 export type OrderRowDto = z.infer<typeof orderRowSchema>;
 
 /**
- * An order is placed against ONE seller, because the buyer physically
- * collects it from one place. The client enforces the same rule in its cart.
+ * An order is placed against ONE vendor, because it is delivered or
+ * collected from one place. The buyer pays the vendor directly, so there is
+ * no payment choice here.
  */
-export const createOrderSchema = z.object({
-  providerId: z.uuid(),
-  checkoutKey: z.string().min(12).max(100),
-  paymentMethod: paymentMethodSchema,
-  items: z
-    .array(
-      z.object({
-        productId: z.uuid(),
-        quantity: z.number().int().min(1).max(10),
-      }),
-    )
-    .min(1)
-    .max(20),
-  /** Required in practice for EcoCash — the number the prompt is sent to. Falls back to the account phone when absent. */
-  payerPhone: payerPhoneSchema.optional(),
-  /**
-   * Which wallet pays an online order. Card is refused here: a cart can split
-   * into several orders, and each would need its own browser page.
-   */
-  payChannel: payChannelSchema.exclude(['card']).optional(),
-});
-export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+export const createOrderSchema = z
+  .object({
+    providerId: z.uuid(),
+    checkoutKey: z.string().min(12).max(100),
+    fulfilment: fulfilmentMethodSchema.default('collection'),
+    /** Where to deliver; required (and only used) for delivery. */
+    deliveryAddress: z.string().trim().min(5).max(300).optional(),
+    /** Coins the buyer wants to spend on this order. */
+    coins: z.number().int().min(0).max(1_000_000).optional(),
+    items: z
+      .array(
+        z.object({
+          productId: z.uuid(),
+          quantity: z.number().int().min(1).max(10),
+        }),
+      )
+      .min(1)
+      .max(20),
+  })
+  .refine((v) => v.fulfilment !== 'delivery' || Boolean(v.deliveryAddress), {
+    path: ['deliveryAddress'],
+    message: 'Enter where to deliver',
+  });
+export type CreateOrderInput = z.input<typeof createOrderSchema>;
 
 export const createOrderResponseSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   totalUsdCents: z.number().int(),
+  deliveryChargeUsdCents: z.number().int(),
+  coinsValueUsdCents: z.number().int(),
+  /** What the buyer pays the vendor on delivery or collection. */
+  amountDueUsdCents: z.number().int(),
   /** Present when the gateway returned a hosted checkout page rather than a phone prompt. */
   checkoutUrl: z.url().optional(),
   /** Present when the gateway pushed an EcoCash prompt to the buyer's phone — show this while polling payment-status. */
@@ -179,14 +205,25 @@ export const providerOrderSchema = z.object({
   id: z.uuid(),
   reference: z.string(),
   buyerName: z.string(),
+  /** So the vendor can arrange delivery: the buyer's account number. */
+  buyerPhone: z.string().nullable(),
   status: orderStatusSchema,
   paymentMethod: paymentMethodSchema,
   totalUsdCents: z.number().int(),
+  fulfilment: fulfilmentMethodSchema,
+  deliveryAddress: z.string().nullable(),
+  deliveryChargeUsdCents: z.number().int(),
+  coinsUsed: z.number().int(),
+  coinsValueUsdCents: z.number().int(),
+  /** What the vendor collects from the buyer. */
+  amountDueUsdCents: z.number().int(),
   createdAt: z.iso.datetime(),
   pickupNote: z.string().nullable(),
-  paymentCleared: z.boolean(),
   items: z.array(orderItemSchema),
+  /** Server-decided, like the buyer's flags. */
   canMarkReady: z.boolean(),
+  canComplete: z.boolean(),
+  canCancel: z.boolean(),
 });
 export type ProviderOrderDto = z.infer<typeof providerOrderSchema>;
 

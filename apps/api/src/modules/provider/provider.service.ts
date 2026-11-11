@@ -25,8 +25,6 @@ import {
   type ProviderJobsDto,
   type ProviderOfferDto,
   type ProviderManagementProfileDto,
-  type ProviderOrderDto,
-  type MarkOrderReadyInput,
   type ProductCategory,
   type ProviderProductDto,
   type ServiceDto,
@@ -334,10 +332,25 @@ export class ProviderService {
     );
   }
 
+  /**
+   * Only an approved vendor may list products. Checked on the vendor record
+   * rather than trusting the app to hide the button.
+   */
+  private async requireApprovedVendor(providerProfileId: string): Promise<void> {
+    const vendor = await this.prisma.vendorApplication.findUnique({
+      where: { providerId: providerProfileId },
+      select: { status: true },
+    });
+    if (vendor?.status !== 'approved') {
+      throw new ForbiddenException('Your shop must be approved before you can list products');
+    }
+  }
+
   async createProduct(
     providerProfileId: string,
     input: CreateProviderProductInput,
   ): Promise<ProviderProductDto> {
+    await this.requireApprovedVendor(providerProfileId);
     const product = await this.prisma.product.create({
       data: { providerId: providerProfileId, ...input, category: input.category ?? 'other' },
     });
@@ -383,88 +396,6 @@ export class ProviderService {
       where: { id: productId },
       data: { active: false, version: { increment: 1 } },
     });
-  }
-
-  async getOrders(providerProfileId: string): Promise<ProviderOrderDto[]> {
-    const orders = await this.prisma.order.findMany({
-      where: { providerId: providerProfileId },
-      // Only what the mapping below reads, and only the newest 100 — the
-      // seller screen never needs a shop's full order history.
-      select: {
-        id: true,
-        reference: true,
-        status: true,
-        paymentMethod: true,
-        totalUsdCents: true,
-        createdAt: true,
-        pickupNote: true,
-        buyer: { select: { displayName: true } },
-        items: {
-          select: { productId: true, nameSnapshot: true, priceUsdCents: true, quantity: true },
-        },
-        payments: { select: { status: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-    return orders.map((order) => ({
-      id: order.id,
-      reference: order.reference,
-      buyerName: order.buyer.displayName,
-      status: order.status,
-      paymentMethod: order.paymentMethod,
-      totalUsdCents: order.totalUsdCents,
-      createdAt: order.createdAt.toISOString(),
-      pickupNote: order.pickupNote,
-      paymentCleared:
-        order.paymentMethod === 'cash' ||
-        order.payments.some((payment) => payment.status === 'paid' || payment.status === 'held'),
-      items: order.items.map((item) => ({
-        productId: item.productId,
-        name: item.nameSnapshot,
-        priceUsdCents: item.priceUsdCents,
-        quantity: item.quantity,
-      })),
-      canMarkReady:
-        order.status === 'reserved' &&
-        (order.paymentMethod === 'cash' ||
-          order.payments.some((payment) => payment.status === 'paid' || payment.status === 'held')),
-    }));
-  }
-
-  /** Seller confirms packing is complete; the buyer still controls final collection and escrow release. */
-  async markOrderReady(
-    orderId: string,
-    providerProfileId: string,
-    input: MarkOrderReadyInput = {},
-  ): Promise<void> {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Order not found');
-    if (order.providerId !== providerProfileId) throw new ForbiddenException();
-    if (order.status === 'ready_for_collection' || order.status === 'collected') return;
-    if (order.status !== 'reserved') {
-      throw new BadRequestException(`Cannot prepare an order that is ${order.status}`);
-    }
-    if (order.paymentMethod === 'ecocash') {
-      const funded = await this.prisma.payment.findFirst({
-        where: { orderId, status: { in: ['paid', 'held'] } },
-      });
-      if (!funded) throw new BadRequestException('Payment has not cleared yet');
-    }
-
-    const pickupNote = input.pickupNote?.trim();
-    const updated = await this.prisma.order.updateMany({
-      where: { id: orderId, providerId: providerProfileId, status: 'reserved' },
-      data: { status: 'ready_for_collection', pickupNote: pickupNote?.length ? pickupNote : null },
-    });
-    if (updated.count > 0) {
-      void this.reminders?.schedulePickup(orderId, new Date());
-      void this.push.sendToUser(order.buyerId, {
-        title: 'Your order is ready',
-        body: `Order ${order.reference} is ready for collection.`,
-        data: { type: 'market.order.ready', orderId },
-      });
-    }
   }
 
   private async listBookings(providerProfileId: string): Promise<ProviderBookingRowDto[]> {

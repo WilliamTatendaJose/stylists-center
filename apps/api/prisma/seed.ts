@@ -486,6 +486,31 @@ async function main() {
     },
   ];
 
+  // Only approved vendors can sell, so the demo sellers are pre-approved.
+  for (const providerId of new Set(PRODUCTS.map((p) => p.providerId))) {
+    const seller = await prisma.providerProfile.findUniqueOrThrow({
+      where: { id: providerId },
+      include: { user: { select: { displayName: true, phone: true } } },
+    });
+    await prisma.vendorApplication.upsert({
+      where: { providerId },
+      update: {},
+      create: {
+        providerId,
+        businessName: seller.displayName,
+        shopAddress: seller.areaName,
+        contactName: seller.user.displayName,
+        contactPhone: seller.user.phone ?? '',
+        status: 'approved',
+        reviewNote: 'Demo seller',
+        reviewedAt: new Date(),
+        delivers: true,
+        deliveryChargeUsdCents: 300,
+        deliveryAreas: [seller.areaName],
+      },
+    });
+  }
+
   for (const product of PRODUCTS) {
     await prisma.product.upsert({
       where: { id: product.id },

@@ -252,7 +252,8 @@ export class AuthService {
       activeRole: user.activeRole,
       selectedAccountType: user.selectedAccountType,
       onboardingComplete: user.onboardingCompletedAt !== null,
-      hasProviderProfile: !!user.providerProfile,
+      // A vendor-only shop is not a stylist page: it must not unlock the stylist side.
+      hasProviderProfile: !!user.providerProfile?.offersServices,
       providerProfileId: user.providerProfile?.id ?? null,
       verificationStatus: user.verificationStatus,
       profileComplete: isProfileComplete(user.displayName, user.email ?? user.phone ?? ''),
@@ -275,7 +276,8 @@ export class AuthService {
       where: { id: userId },
       include: { providerProfile: true },
     });
-    const provider = user.providerProfile;
+    // A vendor-only shop keeps its business name; only a stylist page follows the account name.
+    const provider = user.providerProfile?.offersServices ? user.providerProfile : null;
     await this.prisma.$transaction([
       this.prisma.user.update({
         where: { id: userId },
@@ -321,8 +323,11 @@ export class AuthService {
       where: { id: userId },
       data: {
         selectedAccountType: accountType,
-        activeRole: accountType === 'provider' && user.providerProfile ? 'provider' : 'client',
-        ...(accountType === 'provider' && user.providerProfile
+        activeRole:
+          accountType === 'provider' && user.providerProfile?.offersServices
+            ? 'provider'
+            : 'client',
+        ...(accountType === 'provider' && user.providerProfile?.offersServices
           ? { onboardingCompletedAt: new Date() }
           : {}),
       },
@@ -404,7 +409,7 @@ export class AuthService {
       // anyone else's behalf; without this check it would only mislabel the
       // account as a stylist it isn't, which is worth refusing outright.
       const profile = await this.prisma.providerProfile.findUnique({ where: { userId } });
-      if (!profile) {
+      if (!profile?.offersServices) {
         throw new BadRequestException('This account does not have a stylist page yet');
       }
     }

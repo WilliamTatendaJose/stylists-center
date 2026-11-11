@@ -22,6 +22,8 @@ import { ChatModule } from './modules/chat/chat.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { MarketModule } from './modules/market/market.module';
+import { VendorsModule } from './modules/vendors/vendors.module';
+import { AdminVendorsModule } from './modules/admin-vendors/admin-vendors.module';
 import { ProviderModule } from './modules/provider/provider.module';
 import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
 import { AdminTrustModule } from './modules/admin-trust/admin-trust.module';
@@ -77,6 +79,7 @@ import { TermsModule } from './modules/terms/terms.module';
     WalletModule,
     ReportsModule,
     MarketModule,
+    VendorsModule,
     ProviderModule,
     AdminAuthModule,
     AdminTrustModule,
@@ -90,6 +93,7 @@ import { TermsModule } from './modules/terms/terms.module';
     AdminLookupModule,
     AdminReviewsModule,
     AdminVerificationsModule,
+    AdminVendorsModule,
     AdminUsersModule,
     AdminExportsModule,
     TermsModule,

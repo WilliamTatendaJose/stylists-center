@@ -75,15 +75,21 @@ export class TermsService {
     return this.status(userId);
   }
 
-  /** The documents that apply to this user. Vendor terms go here once vendor accounts exist. */
+  /** The documents that apply to this user. */
   private async requiredKeys(userId: string): Promise<ContentKey[]> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { providerProfile: { select: { id: true } }, agent: { select: { id: true } } },
+      select: {
+        providerProfile: { select: { offersServices: true, vendor: { select: { status: true } } } },
+        agent: { select: { id: true } },
+      },
     });
     const keys: ContentKey[] = ['terms-clients', 'privacy'];
-    if (user?.providerProfile) keys.push('terms-stylists');
+    // A vendor-only shop has a profile but offers no services: stylist terms don't apply.
+    if (user?.providerProfile?.offersServices) keys.push('terms-stylists');
     if (user?.agent) keys.push('terms-agents');
+    // Vendors agree to the vendor terms once StylistsCenter has approved them to sell.
+    if (user?.providerProfile?.vendor?.status === 'approved') keys.push('terms-vendors');
     return keys;
   }
 }

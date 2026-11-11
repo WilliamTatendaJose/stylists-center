@@ -1,28 +1,53 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../prisma/prisma.service';
-import type { PaymentGatewayPort } from '../payments/payment-gateway.port';
 import type { PaymentStatusService } from '../payments/payment-status.service';
 import type { PushService } from '../notifications/push.service';
+import type { FeeLedgerService } from '../fees/fee-ledger.service';
+import { FeeStandingService } from '../fees/fee-standing.service';
+import { RewardsHooksService } from '../rewards/rewards-hooks.service';
 import { MarketService } from './market.service';
+
+/** Builds the service with inert collaborators unless a test overrides one. */
+function buildService(
+  prisma: unknown,
+  overrides: { push?: unknown; rewards?: unknown; standing?: unknown } = {},
+): MarketService {
+  return new MarketService(
+    prisma as PrismaService,
+    {} as PaymentStatusService,
+    (overrides.push ?? { sendToUser: vi.fn() }) as PushService,
+    { chargeOrder: vi.fn() } as unknown as FeeLedgerService,
+    (overrides.standing ?? {
+      // Nobody restricted: the stub behaviour these unit tests were written against.
+      assertCanTrade: vi.fn().mockResolvedValue(undefined),
+      restrictedProviderIds: vi.fn().mockResolvedValue([]),
+    }) as unknown as FeeStandingService,
+    (overrides.rewards ?? {
+      onOrderCompleted: vi.fn().mockResolvedValue(undefined),
+      redeemForOrder: vi.fn().mockRejectedValue(new Error('No coins in unit tests')),
+      refundRedemption: vi.fn().mockResolvedValue(undefined),
+    }) as unknown as RewardsHooksService,
+  );
+}
 
 describe('MarketService order transitions', () => {
   it('returns the original checkout on retry without reserving stock again', async () => {
     const input = {
       providerId: 'seller-1',
       checkoutKey: 'stable-checkout-key',
-      paymentMethod: 'cash' as const,
       items: [{ productId: 'product-1', quantity: 2 }],
     };
     const previous = {
       id: 'order-1',
       reference: 'ORD-1',
       totalUsdCents: 200,
-      checkoutUrl: null,
-      checkoutInstructions: null,
+      deliveryChargeUsdCents: 0,
+      coinsValueUsdCents: 0,
       checkoutFingerprint: JSON.stringify({
         providerId: input.providerId,
-        paymentMethod: input.paymentMethod,
-        payerPhone: null,
+        fulfilment: 'collection',
+        deliveryAddress: null,
+        coins: 0,
         items: input.items,
       }),
     };
@@ -35,22 +60,18 @@ describe('MarketService order transitions', () => {
     const prisma = {
       $transaction: vi.fn((run: (tx: typeof transaction) => Promise<unknown>) => run(transaction)),
     };
-    const gateway = { createCheckout: vi.fn() };
     const push = { sendToUser: vi.fn() };
-    const service = new MarketService(
-      prisma as unknown as PrismaService,
-      gateway as unknown as PaymentGatewayPort,
-      {} as PaymentStatusService,
-      push as unknown as PushService,
-    );
+    const service = buildService(prisma, { push });
 
     await expect(service.createOrder('buyer-1', input)).resolves.toEqual({
       id: previous.id,
       reference: previous.reference,
       totalUsdCents: previous.totalUsdCents,
+      deliveryChargeUsdCents: 0,
+      coinsValueUsdCents: 0,
+      amountDueUsdCents: 200,
     });
     expect(transaction.product.update).not.toHaveBeenCalled();
-    expect(gateway.createCheckout).not.toHaveBeenCalled();
     expect(push.sendToUser).not.toHaveBeenCalled();
     await expect(
       service.createOrder('buyer-1', {
@@ -60,35 +81,31 @@ describe('MarketService order transitions', () => {
     ).rejects.toThrow('This checkout was changed');
   });
 
-  it('refuses a seller buying their own products, before touching stock or payment', async () => {
+  it('refuses a seller buying their own products, before touching stock', async () => {
     const transaction = {
       $executeRaw: vi.fn(() => Promise.resolve(1)),
       $queryRaw: vi.fn(() => Promise.resolve([])),
       order: { findUnique: vi.fn(() => Promise.resolve(null)) },
-      providerProfile: { findUnique: vi.fn(() => Promise.resolve({ userId: 'seller-user' })) },
+      providerProfile: {
+        findUnique: vi.fn(() =>
+          Promise.resolve({ userId: 'seller-user', vendor: { status: 'approved' } }),
+        ),
+      },
       product: { update: vi.fn() },
     };
     const prisma = {
       $transaction: vi.fn((run: (tx: typeof transaction) => Promise<unknown>) => run(transaction)),
     };
-    const gateway = { createCheckout: vi.fn() };
-    const service = new MarketService(
-      prisma as unknown as PrismaService,
-      gateway as unknown as PaymentGatewayPort,
-      {} as PaymentStatusService,
-      { sendToUser: vi.fn() } as unknown as PushService,
-    );
+    const service = buildService(prisma);
 
     await expect(
       service.createOrder('seller-user', {
         providerId: 'seller-1',
         checkoutKey: 'own-stock-checkout',
-        paymentMethod: 'cash',
         items: [{ productId: 'product-1', quantity: 1 }],
       }),
     ).rejects.toThrow("You can't buy your own products");
     expect(transaction.product.update).not.toHaveBeenCalled();
-    expect(gateway.createCheckout).not.toHaveBeenCalled();
   });
 
   it('restores stock once when two cancellation requests race', async () => {
@@ -118,6 +135,11 @@ describe('MarketService order transitions', () => {
       reference: 'ORD-1',
       paymentMethod: 'cash',
       totalUsdCents: 100,
+      fulfilment: 'collection',
+      deliveryAddress: null,
+      deliveryChargeUsdCents: 0,
+      coinsUsed: 0,
+      coinsValueUsdCents: 0,
       createdAt: new Date(),
       pickupAddress: 'Harare',
       pickupHours: 'Weekdays',
@@ -132,8 +154,10 @@ describe('MarketService order transitions', () => {
           status = 'cancelled';
           return Promise.resolve({ count: 1 });
         }),
+        findUniqueOrThrow: vi.fn(() => Promise.resolve({ ...order, status })),
       },
       orderItem: { findMany: vi.fn(() => Promise.resolve([item])) },
+      payment: { findFirst: vi.fn(() => Promise.resolve(null)) },
       product: {
         update: vi.fn(() => {
           stock += item.quantity;
@@ -162,12 +186,7 @@ describe('MarketService order transitions', () => {
       },
       $transaction: vi.fn((run: (tx: typeof transaction) => Promise<unknown>) => run(transaction)),
     };
-    const service = new MarketService(
-      prisma as unknown as PrismaService,
-      {} as PaymentGatewayPort,
-      {} as PaymentStatusService,
-      {} as PushService,
-    );
+    const service = buildService(prisma);
 
     const results = await Promise.all([
       service.cancelOrder(order.id, order.buyerId),
