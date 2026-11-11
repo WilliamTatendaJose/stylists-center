@@ -43,7 +43,7 @@ function extractCode(text: string): string | undefined {
 }
 
 interface ApiFetchOptions {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   /** false for /admin/auth/login and /admin/auth/refresh themselves, which run before an access token exists. */
   auth?: boolean;

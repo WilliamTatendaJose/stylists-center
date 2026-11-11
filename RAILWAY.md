@@ -154,6 +154,13 @@ COIN_USD_CENTS=20
 CASH_OUT_MIN_USD_CENTS=500
 ```
 
+Prices, rewards, the budget range and support contacts can all be set here
+as environment variables (full list in `apps/api/.env.example`) or changed by
+an owner in the admin console under **Settings**, which takes effect within
+about 30 seconds without a redeploy. A console value wins over the variable;
+**Reset** removes it so the variable applies again. Terms and Conditions and
+the privacy policy are edited under **Terms and privacy**.
+
 `${{db.VARIABLE}}` is Railway's cross-service variable reference syntax —
 it resolves at deploy time once both services exist, and uses Railway's
 private network rather than the public internet between services in the

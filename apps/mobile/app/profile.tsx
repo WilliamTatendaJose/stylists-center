@@ -40,6 +40,7 @@ import { ServerConnectionPanel } from '../src/components/ServerConnectionPanel.j
 import { RoleSwitcher } from '../src/components/RoleSwitcher.js';
 import { NotificationPreferences } from '../src/components/NotificationPreferences.js';
 import { PasswordSecurity } from '../src/components/PasswordSecurity.js';
+import { HelpAndLegal } from '../src/components/HelpAndLegal.js';
 
 const VERIFICATION_LABEL: Record<'unverified' | 'pending' | 'verified', string> = {
   verified: 'Verified professional',
@@ -267,6 +268,8 @@ export default function Profile() {
             />
           </Card>
         </ProfileSection>
+
+        <HelpAndLegal terms="terms-clients" />
 
         <ProfileSection label="Work on Style Center">
           <Card bordered style={styles.professionalCard}>

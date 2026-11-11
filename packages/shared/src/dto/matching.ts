@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import {
   isMatchRadiusKm,
-  isValidBudgetAmount,
   MATCH_STATES,
   MAX_MATCH_RADIUS_KM,
   MIN_MATCH_RADIUS_KM,
@@ -16,9 +15,18 @@ const budgetSchema = z
     z.object({ mode: z.literal('flex') }),
     z.object({ mode: z.literal('fixed'), amountUsd: z.number() }),
   ])
-  .refine((b) => b.mode === 'flex' || isValidBudgetAmount(b.amountUsd), {
-    message: 'amountUsd must be 10-120 in steps of 5',
-  });
+  // Shape and sanity only: the allowed range and step are settings that staff
+  // can change, so the API checks the amount against the settings in effect
+  // (isBudgetAmountAllowed). A stored request made under older settings must
+  // still parse here.
+  .refine(
+    (b) =>
+      b.mode === 'flex' ||
+      (Number.isInteger(b.amountUsd) && b.amountUsd > 0 && b.amountUsd <= 10_000),
+    {
+      message: 'amountUsd must be a whole number of dollars',
+    },
+  );
 
 export const latLngSchema = z.object({
   lat: z.number().min(-90).max(90),

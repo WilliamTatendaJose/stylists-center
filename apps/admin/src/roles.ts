@@ -26,6 +26,9 @@ const PAGES: Record<Exclude<AdminRoleName, 'owner'>, string[]> = {
     '/subscriptions',
     '/payments',
     '/cash-outs',
+    // Read-only for finance and support; only owners can change them.
+    '/settings',
+    '/content',
     '/account',
   ],
   support: [
@@ -38,6 +41,8 @@ const PAGES: Record<Exclude<AdminRoleName, 'owner'>, string[]> = {
     '/users',
     '/verifications',
     '/catalog',
+    '/settings',
+    '/content',
     '/account',
   ],
 };

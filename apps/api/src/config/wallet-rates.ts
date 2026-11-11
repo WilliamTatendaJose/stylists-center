@@ -1,12 +1,17 @@
-import type { ConfigService } from '@nestjs/config';
-import { COIN_USD_CENTS, REFERRAL_REWARD_COINS } from '@sc/shared';
-import type { Env } from './env';
+import { SettingsService } from '../modules/settings/settings.service';
 
-/** Runtime wallet rates. Environment values let operations change policy without rebuilding the app. */
-export function walletRates(config?: ConfigService<Env, true>) {
+/** Env-and-defaults only, for services built by hand without the settings module. */
+const fallbackSettings = new SettingsService();
+
+/**
+ * Wallet rates in effect now: console value, else environment variable, else
+ * default (see SETTING_DEFINITIONS in @sc/shared).
+ */
+export async function walletRates(settings?: SettingsService) {
+  const s = await (settings ?? fallbackSettings).all();
   return {
-    coinUsdCents: config?.get('COIN_USD_CENTS', { infer: true }) ?? COIN_USD_CENTS,
-    referralRewardCoins:
-      config?.get('REFERRAL_REWARD_COINS', { infer: true }) ?? REFERRAL_REWARD_COINS,
+    coinUsdCents: s.coinUsdCents,
+    referralRewardCoins: s.referralRewardCoins,
+    cashOutMinUsdCents: s.cashOutMinUsdCents,
   };
 }

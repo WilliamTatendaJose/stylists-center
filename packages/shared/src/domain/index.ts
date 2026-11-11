@@ -10,3 +10,5 @@ export * from './order.js';
 export * from './avatar.js';
 export * from './profile.js';
 export * from './subscription.js';
+export * from './settings.js';
+export * from './content.js';

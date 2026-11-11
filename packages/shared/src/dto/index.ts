@@ -12,3 +12,4 @@ export * from './subscription.js';
 export * from './uploads.js';
 export * from './verification.js';
 export * from './admin.js';
+export * from './config.js';

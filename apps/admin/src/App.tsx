@@ -52,6 +52,12 @@ const VerificationsPage = lazy(() =>
   import('./routes/VerificationsPage').then((m) => ({ default: m.VerificationsPage })),
 );
 const UsersPage = lazy(() => import('./routes/UsersPage').then((m) => ({ default: m.UsersPage })));
+const SettingsPage = lazy(() =>
+  import('./routes/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+);
+const ContentPage = lazy(() =>
+  import('./routes/ContentPage').then((m) => ({ default: m.ContentPage })),
+);
 const AccountPage = lazy(() =>
   import('./routes/AccountPage').then((m) => ({ default: m.AccountPage })),
 );
@@ -114,6 +120,8 @@ export function App() {
           <Route path="reviews" element={<ReviewsPage />} />
           <Route path="catalog" element={<CatalogPage />} />
           <Route path="staff" element={<StaffPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="content" element={<ContentPage />} />
           <Route path="account" element={<AccountPage />} />
           <Route path="audit-log" element={<AuditLogPage />} />
         </Route>

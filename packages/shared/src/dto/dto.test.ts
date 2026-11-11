@@ -75,12 +75,17 @@ describe('createMatchRequestSchema', () => {
     expect(createMatchRequestSchema.safeParse({ ...valid, radiusKm: 51 }).success).toBe(false);
   });
 
-  it('rejects a fixed budget amount off the step boundary', () => {
-    const result = createMatchRequestSchema.safeParse({
-      ...valid,
-      budget: { mode: 'fixed', amountUsd: 31 },
-    });
-    expect(result.success).toBe(false);
+  // The allowed range and step are console settings, checked by the API
+  // against the values in effect (isBudgetAmountAllowed, settings.test.ts);
+  // the schema itself only insists on a whole, positive number of dollars.
+  it('rejects a fixed budget that is not a whole positive number of dollars', () => {
+    for (const amountUsd of [31.5, 0, -5]) {
+      const result = createMatchRequestSchema.safeParse({
+        ...valid,
+        budget: { mode: 'fixed', amountUsd },
+      });
+      expect(result.success, String(amountUsd)).toBe(false);
+    }
   });
 
   it('rejects an out-of-range latitude', () => {

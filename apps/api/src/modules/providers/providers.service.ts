@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { deriveInitials, deriveTint } from '@sc/shared';
 import type {
   CreateProviderProfileInput,
@@ -7,6 +7,7 @@ import type {
   ProviderSlotsResponse,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { SettingsService, settingsFor } from '../settings/settings.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { toProviderListRow } from '../geo/mappers';
 import { isWithinWeeklyHours, readWeeklyHours } from './calendar-policy';
@@ -54,6 +55,7 @@ export class ProvidersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly geo: GeoRepository,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   /**
@@ -273,6 +275,11 @@ export class ProvidersService {
 
     // Single-city M1 build (plan §5) — there is nowhere else to assign one from yet.
     const city = await this.prisma.city.findFirstOrThrow();
+    // New pages start on the subscription price in effect now (console
+    // setting); staff can still change one page's price on the Providers page.
+    const subscriptionPriceUsdCents = await (this.settings ?? settingsFor(this.prisma)).get(
+      'subscriptionPriceUsdCents',
+    );
 
     const profile = await this.prisma.$transaction(async (tx) => {
       const created = await tx.providerProfile.create({
@@ -288,6 +295,7 @@ export class ProvidersService {
           cityId: city.id,
           yearsExperience: input.yearsExperience,
           workingHoursLabel: input.workingHoursLabel,
+          subscriptionPriceUsdCents,
           services: { create: input.services },
         },
       });

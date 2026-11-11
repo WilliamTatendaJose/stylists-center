@@ -17,20 +17,26 @@ export const REFERRAL_REWARD_COINS = 6;
 /** Cash-out unlocks once the wallet balance EXCEEDS $5 — 500 is not enough, 501 is. */
 export const CASH_OUT_MIN_USD_CENTS = 500;
 
-export function coinsToUsdCents(coins: number): UsdCents {
-  return coins * COIN_USD_CENTS;
+export function coinsToUsdCents(coins: number, coinUsdCents: number = COIN_USD_CENTS): UsdCents {
+  return coins * coinUsdCents;
 }
 
 /**
  * Whole coins a USD amount converts to, rounded down — an agent is never
  * credited a fractional coin they didn't fully earn.
  */
-export function usdCentsToCoins(amountCents: UsdCents): number {
-  return Math.floor(amountCents / COIN_USD_CENTS);
+export function usdCentsToCoins(
+  amountCents: UsdCents,
+  coinUsdCents: number = COIN_USD_CENTS,
+): number {
+  return Math.floor(amountCents / coinUsdCents);
 }
 
-export function canCashOut(balanceCents: UsdCents): boolean {
-  return balanceCents > CASH_OUT_MIN_USD_CENTS;
+export function canCashOut(
+  balanceCents: UsdCents,
+  minimumCents: UsdCents = CASH_OUT_MIN_USD_CENTS,
+): boolean {
+  return balanceCents > minimumCents;
 }
 
 export function formatUsd(cents: UsdCents): string {

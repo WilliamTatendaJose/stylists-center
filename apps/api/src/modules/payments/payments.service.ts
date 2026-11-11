@@ -12,6 +12,7 @@ import {
 } from '@sc/shared';
 import type { Env } from '../../config/env';
 import { PrismaService } from '../prisma/prisma.service';
+import { settingsFor } from '../settings/settings.service';
 import { ledgerStatus } from './ledger-status';
 import {
   PAYMENT_GATEWAY,
@@ -232,7 +233,11 @@ export async function applySubscriptionPayment(
     where: { id: providerProfileId },
     select: { subscriptionPaidUntil: true },
   });
-  const paidUntil = nextSubscriptionPaidUntil(profile.subscriptionPaidUntil?.toISOString() ?? null);
+  const paidUntil = nextSubscriptionPaidUntil(
+    profile.subscriptionPaidUntil?.toISOString() ?? null,
+    Date.now(),
+    await settingsFor(prisma).get('subscriptionCycleDays'),
+  );
   await prisma.providerProfile.update({
     where: { id: providerProfileId },
     data: { subscriptionPaidUntil: paidUntil },

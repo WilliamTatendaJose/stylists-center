@@ -1,10 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import {
   isSubscriptionActive,
   nextSubscriptionPaidUntil,
   type AdminProviderRowDto,
   type UpdateProviderAdminInput,
 } from '@sc/shared';
+import { SettingsService, settingsFor } from '../settings/settings.service';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImageStorageService } from '../provider/image-storage.service';
@@ -41,6 +42,7 @@ export class AdminProvidersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly images: ImageStorageService,
+    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   async list(input: {
@@ -191,7 +193,11 @@ export class AdminProvidersService {
       select: { subscriptionPriceUsdCents: true, subscriptionPaidUntil: true },
     });
     const currentPaidUntil = provider.subscriptionPaidUntil?.toISOString() ?? null;
-    const paidUntil = nextSubscriptionPaidUntil(currentPaidUntil);
+    const paidUntil = nextSubscriptionPaidUntil(
+      currentPaidUntil,
+      Date.now(),
+      await (this.settings ?? settingsFor(this.prisma)).get('subscriptionCycleDays'),
+    );
 
     const [updated] = await this.prisma.$transaction([
       this.prisma.providerProfile.update({
