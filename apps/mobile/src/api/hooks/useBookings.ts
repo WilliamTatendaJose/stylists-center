@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
-  BookingPaymentStatus,
   BookingRowDto,
   ConfirmCompletionResponse,
   CreateBookingInput,
@@ -14,7 +13,7 @@ import { getSocket } from '../../realtime/socket.js';
 
 const BOOKINGS_KEY = ['bookings'] as const;
 
-/** `GET /v1/bookings` — the Bookings tab's three row states (awaiting/cash-reconcile/completed). */
+/** `GET /v1/bookings` — the Bookings tab's row states (awaiting, confirm job done, completed). */
 export function useMyBookings() {
   return useQuery({
     queryKey: BOOKINGS_KEY,
@@ -78,7 +77,7 @@ export function useBookingUpdates() {
   }, [queryClient]);
 }
 
-/** `POST /v1/bookings` — Payment screen's confirm action. */
+/** `POST /v1/bookings` — the confirm screen's action. Nothing is paid in the app. */
 export function useCreateBooking() {
   const queryClient = useQueryClient();
 
@@ -91,35 +90,7 @@ export function useCreateBooking() {
   });
 }
 
-const TERMINAL_PAYMENT_STATUSES = new Set<BookingPaymentStatus['status']>([
-  'held',
-  'paid',
-  'released',
-  'refunded',
-  'failed',
-  'disputed',
-]);
-
-/**
- * `GET /v1/bookings/:id/payment-status` — polled by the "check your phone"
- * screen after a phone-prompt checkout, since the only other way to learn
- * the outcome (Paynow's webhook) can't reach a non-public dev server and
- * even in production isn't instant. Stops polling once the status is no
- * longer 'pending'/'none'.
- */
-export function useBookingPaymentStatus(bookingId: string | undefined, enabled: boolean) {
-  return useQuery({
-    queryKey: ['booking-payment-status', bookingId],
-    queryFn: () => apiFetch<BookingPaymentStatus>(`/v1/bookings/${bookingId}/payment-status`),
-    enabled: Boolean(bookingId) && enabled,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status && TERMINAL_PAYMENT_STATUSES.has(status) ? false : 3000;
-    },
-  });
-}
-
-/** `POST /v1/bookings/:id/confirm-completion` — the cash-reconciliation "Yes, it happened" button. */
+/** `POST /v1/bookings/:id/confirm-completion` — the client's "Yes, it was done" button. */
 export function useConfirmCompletion() {
   const queryClient = useQueryClient();
 

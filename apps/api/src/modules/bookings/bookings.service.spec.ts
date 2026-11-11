@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { ForbiddenException } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { TrustService } from '../trust/trust.service';
 import { MatchingService } from '../matching/matching.service';
@@ -9,11 +10,12 @@ import { GeoRepository } from '../geo/geo.repository';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
 import { PaymentStatusService } from '../payments/payment-status.service';
-import type {
-  PaymentGatewayPort,
-  PaymentIntentResult,
-  PaymentPollStatus,
-} from '../payments/payment-gateway.port';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
+import { FeeStandingService } from '../fees/fee-standing.service';
+import { RewardsHooksService } from '../rewards/rewards-hooks.service';
+import { SettingsService } from '../settings/settings.service';
+import { BookingLifecycleService } from './booking-lifecycle.service';
+import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
 import type { Env } from '../../config/env';
@@ -77,22 +79,62 @@ class FakeQueue {
   }
 }
 
-/** Simulates a Paynow outage — used to prove a checkout failure never touches the match or the database. */
-class FailingGateway implements PaymentGatewayPort {
-  createCheckout(): Promise<PaymentIntentResult> {
-    return Promise.reject(new Error('gateway unavailable'));
+/**
+ * Stands in for the rewards programme (built separately): the real hook
+ * refuses until it exists, and these tests are about what bookings do around
+ * it. Records every call so tests can see which ones happened and in what
+ * transaction.
+ */
+class FakeRewards extends RewardsHooksService {
+  completed: { bookingId: string; clientId: string; amountPaidUsdCents: number }[] = [];
+  redeemed: { bookingId: string; providerUserId: string; coins: number }[] = [];
+  refunded: string[] = [];
+  /** Coins are worth 10 cents each (the `coinUsdCents` default). */
+  failRedeem = false;
+
+  override onBookingCompleted(
+    _tx: Prisma.TransactionClient,
+    input: { bookingId: string; clientId: string; amountPaidUsdCents: number },
+  ): Promise<void> {
+    this.completed.push(input);
+    return Promise.resolve();
   }
-  verifyCallback(): boolean {
-    return false;
+
+  override redeemForBooking(
+    _tx: Prisma.TransactionClient,
+    input: { bookingId: string; clientId: string; providerUserId: string; coins: number },
+  ): Promise<{ usdCents: number }> {
+    if (this.failRedeem) return Promise.reject(new Error('Not enough coins'));
+    this.redeemed.push(input);
+    return Promise.resolve({ usdCents: input.coins * 10 });
   }
-  pollStatus(): Promise<PaymentPollStatus> {
-    return Promise.reject(new Error('gateway unavailable'));
+
+  override refundRedemption(
+    _tx: Prisma.TransactionClient,
+    ref: { bookingId: string } | { orderId: string },
+  ): Promise<void> {
+    if ('bookingId' in ref) this.refunded.push(ref.bookingId);
+    return Promise.resolve();
+  }
+}
+
+class FakeStanding extends FeeStandingService {
+  restricted = new Set<string>();
+  override assertCanTrade(providerId: string): Promise<void> {
+    if (this.restricted.has(providerId)) {
+      return Promise.reject(new ForbiddenException('Pay your balance to take new bookings'));
+    }
+    return Promise.resolve();
   }
 }
 
 describe('BookingsService', () => {
   let prisma: PrismaService;
   let bookings: BookingsService;
+  let rewards: FakeRewards;
+  let standing: FakeStanding;
+  let lifecycle: BookingLifecycleService;
+  let fees: FeeLedgerService;
   let matching: MatchingService;
   let cityId: string;
   let categoryId: string;
@@ -229,6 +271,9 @@ describe('BookingsService', () => {
   });
 
   afterAll(async () => {
+    await prisma.feeLedgerEntry.deleteMany({
+      where: { providerId: { in: [providerAId, providerBId, providerCId] } },
+    });
     await prisma.review.deleteMany({ where: { bookingId: { in: createdBookingIds } } });
     await prisma.payment.deleteMany({ where: { bookingId: { in: createdBookingIds } } });
     await prisma.booking.deleteMany({ where: { id: { in: createdBookingIds } } });
@@ -264,14 +309,31 @@ describe('BookingsService', () => {
       new FakeQueue() as unknown as Queue,
     );
     const gateway = new FakeEcoCashAdapter();
+    // 3% fee, 10c coins: the defaults, pinned so the sums below are stable.
+    const settings = new SettingsService(undefined, {});
+    rewards = new FakeRewards();
+    standing = new FakeStanding();
+    fees = new FeeLedgerService(prisma, settings);
+    lifecycle = new BookingLifecycleService(
+      prisma,
+      fees,
+      rewards,
+      standing,
+      socketEmitter,
+      push,
+      settings,
+    );
     bookings = new BookingsService(
       prisma,
       socketEmitter,
       matching,
       new TrustService(prisma),
       push,
-      gateway,
       new PaymentStatusService(prisma, gateway),
+      standing,
+      rewards,
+      lifecycle,
+      settings,
     );
   });
 
@@ -282,11 +344,40 @@ describe('BookingsService', () => {
    * ran later in the day, so which tests failed depended on the clock.
    * Offsets up to 11 keep a 30-minute service inside the same working day.
    */
-  function futureSlot(offsetHours: number): string {
+  function futureSlot(offsetHours: number, daysAhead = 1): string {
     const tomorrow = new Date();
-    tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+    tomorrow.setUTCDate(tomorrow.getUTCDate() + daysAhead);
     tomorrow.setUTCHours(6, 0, 0, 0);
     return new Date(tomorrow.getTime() + offsetHours * 60 * 60_000).toISOString();
+  }
+
+  /** A booking paid in the app, as made before clients paid stylists directly. */
+  async function seedLegacyOnlineBooking(slot: string, status: 'awaiting_provider' | 'confirmed') {
+    const startsAt = new Date(slot);
+    const booking = await prisma.booking.create({
+      data: {
+        reference: `SC-L${String(Math.floor(Math.random() * 90000) + 10000)}`,
+        clientId,
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + 30 * 60_000),
+        paymentMethod: 'ecocash',
+        priceUsdCents: 2000,
+        status,
+      },
+    });
+    createdBookingIds.push(booking.id);
+    await prisma.payment.create({
+      data: {
+        bookingId: booking.id,
+        provider: 'fake-ecocash',
+        status: 'held',
+        amountUsdCents: 2000,
+        externalRef: `legacy-${booking.id}`,
+      },
+    });
+    return booking;
   }
 
   it('creates a cash booking with a reference and no payment row', async () => {
@@ -295,7 +386,6 @@ describe('BookingsService', () => {
       providerId: providerAId,
       serviceId: serviceAId,
       startsAt,
-      paymentMethod: 'cash',
     });
     createdBookingIds.push(created.id);
 
@@ -306,21 +396,177 @@ describe('BookingsService', () => {
     expect(payments).toHaveLength(0);
   });
 
-  it('creates an ecocash booking and holds the amount in escrow', async () => {
-    const startsAt = futureSlot(2);
+  it('is paid to the stylist directly: the price plus the 3% fee is frozen, with no payment row', async () => {
     const created = await bookings.create(clientId, {
       providerId: providerAId,
       serviceId: serviceAId,
-      startsAt,
-      paymentMethod: 'ecocash',
+      startsAt: futureSlot(2, 3),
     });
     createdBookingIds.push(created.id);
 
-    const payments = await prisma.payment.findMany({ where: { bookingId: created.id } });
-    expect(payments).toHaveLength(1);
-    expect(payments[0]?.status).toBe('held');
-    expect(payments[0]?.amountUsdCents).toBe(2000);
-    expect(payments[0]?.feeUsdCents).toBe(0); // no per-payment fee — providers pay a flat subscription instead
+    expect(await prisma.payment.count({ where: { bookingId: created.id } })).toBe(0);
+    expect(await prisma.booking.findUniqueOrThrow({ where: { id: created.id } })).toMatchObject({
+      paymentMethod: 'cash',
+      priceUsdCents: 2000,
+      serviceFeeUsdCents: 60,
+      serviceFeeBps: 300,
+      coinsUsed: 0,
+      coinsUsdCents: 0,
+    });
+    const row = (await bookings.listForClient(clientId)).find((r) => r.id === created.id);
+    expect(row).toMatchObject({
+      priceUsdCents: 2000,
+      serviceFeeUsdCents: 60,
+      clientTotalUsdCents: 2060,
+      amountDueUsdCents: 2060,
+      providerPaymentPhone: null,
+    });
+  });
+
+  it('shows the stylist payment number to the client once the booking is confirmed', async () => {
+    await prisma.providerProfile.update({
+      where: { id: providerAId },
+      data: { paymentPhone: '+263771234567' },
+    });
+    const created = await bookings.create(clientId, {
+      providerId: providerAId,
+      serviceId: serviceAId,
+      startsAt: futureSlot(10, 3),
+    });
+    createdBookingIds.push(created.id);
+    const phoneOf = async () =>
+      (await bookings.listForClient(clientId)).find((r) => r.id === created.id)
+        ?.providerPaymentPhone;
+    expect(await phoneOf()).toBeNull();
+    await lifecycle.accept(created.id, providerAId);
+    expect(await phoneOf()).toBe('+263771234567');
+  });
+
+  it('refuses a booking with a restricted stylist, and a stylist accepting once restricted', async () => {
+    const created = await bookings.create(clientId, {
+      providerId: providerAId,
+      serviceId: serviceAId,
+      startsAt: futureSlot(9, 3),
+    });
+    createdBookingIds.push(created.id);
+
+    standing.restricted.add(providerAId);
+    try {
+      await expect(
+        bookings.create(clientId, {
+          providerId: providerAId,
+          serviceId: serviceAId,
+          startsAt: futureSlot(8, 3),
+        }),
+      ).rejects.toThrow('Pay your balance');
+      await expect(lifecycle.accept(created.id, providerAId)).rejects.toThrow('Pay your balance');
+    } finally {
+      standing.restricted.delete(providerAId);
+    }
+    const unchanged = await prisma.booking.findUniqueOrThrow({ where: { id: created.id } });
+    expect(unchanged.status).toBe('awaiting_provider');
+  });
+
+  describe('paying with coins', () => {
+    it('redeems inside the booking, stores coins and their value, and lowers what is due', async () => {
+      const created = await bookings.create(clientId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt: futureSlot(2, 4),
+        coins: 5,
+      });
+      createdBookingIds.push(created.id);
+
+      expect(rewards.redeemed).toEqual([
+        { bookingId: created.id, clientId, providerUserId: providerAUserId, coins: 5 },
+      ]);
+      const row = (await bookings.listForClient(clientId)).find((r) => r.id === created.id);
+      expect(row).toMatchObject({
+        coinsUsed: 5,
+        coinsUsdCents: 50,
+        clientTotalUsdCents: 2060,
+        amountDueUsdCents: 2010,
+      });
+    });
+
+    it('refuses more coins than the booking is worth, before touching the wallet', async () => {
+      // $20.60 at 10c a coin is 206 coins at most.
+      await expect(
+        bookings.create(clientId, {
+          providerId: providerAId,
+          serviceId: serviceAId,
+          startsAt: futureSlot(3, 4),
+          coins: 207,
+        }),
+      ).rejects.toThrow('at most 206 coins');
+      expect(rewards.redeemed).toHaveLength(0);
+    });
+
+    it('can cover the whole amount', async () => {
+      const created = await bookings.create(clientId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt: futureSlot(4, 4),
+        coins: 206,
+      });
+      createdBookingIds.push(created.id);
+      const row = (await bookings.listForClient(clientId)).find((r) => r.id === created.id);
+      expect(row?.amountDueUsdCents).toBe(0);
+    });
+
+    it('gives the coins back when the client cancels', async () => {
+      const created = await bookings.create(clientId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt: futureSlot(5, 4),
+        coins: 3,
+      });
+      createdBookingIds.push(created.id);
+      await bookings.cancel(created.id, clientId);
+      await bookings.cancel(created.id, clientId); // a retry must not refund twice
+      expect(rewards.refunded).toEqual([created.id]);
+    });
+
+    it('gives the coins back when the stylist declines or the request expires', async () => {
+      const declined = await bookings.create(clientId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt: futureSlot(6, 4),
+        coins: 2,
+      });
+      const expired = await bookings.create(clientId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt: futureSlot(7, 4),
+        coins: 4,
+      });
+      createdBookingIds.push(declined.id, expired.id);
+
+      await lifecycle.decline(declined.id, providerAId);
+      await prisma.booking.update({
+        where: { id: expired.id },
+        data: { createdAt: new Date(Date.now() - 61 * 60_000) },
+      });
+      await bookings.listForClient(clientId);
+      expect(rewards.refunded.sort()).toEqual([declined.id, expired.id].sort());
+    });
+
+    it('creates no booking and takes nothing when the wallet refuses', async () => {
+      rewards.failRedeem = true;
+      await expect(
+        bookings.create(clientId, {
+          providerId: providerAId,
+          serviceId: serviceAId,
+          startsAt: futureSlot(8, 4),
+          coins: 5,
+        }),
+      ).rejects.toThrow('Not enough coins');
+      expect(
+        await prisma.booking.findFirst({
+          where: { providerId: providerAId, startsAt: new Date(futureSlot(8, 4)) },
+        }),
+      ).toBeNull();
+    });
   });
 
   it('rejects a booking when the slot is already taken', async () => {
@@ -329,7 +575,6 @@ describe('BookingsService', () => {
       providerId: providerAId,
       serviceId: serviceAId,
       startsAt,
-      paymentMethod: 'cash',
     });
     createdBookingIds.push(first.id);
 
@@ -338,7 +583,6 @@ describe('BookingsService', () => {
         providerId: providerAId,
         serviceId: serviceAId,
         startsAt,
-        paymentMethod: 'cash',
       }),
     ).rejects.toThrow('no longer available');
   });
@@ -349,20 +593,18 @@ describe('BookingsService', () => {
         providerId: providerAId,
         serviceId: serviceAId,
         startsAt: futureSlot(5),
-        paymentMethod: 'cash',
       }),
     ).rejects.toThrow("You can't book your own services");
   });
 
-  it('rejects a direct booking against a provider whose subscription has lapsed', async () => {
-    await expect(
-      bookings.create(clientId, {
-        providerId: providerCId,
-        serviceId: serviceCId,
-        startsAt: futureSlot(4),
-        paymentMethod: 'cash',
-      }),
-    ).rejects.toThrow("isn't currently accepting bookings");
+  it('does not need the stylist to hold a subscription: stylists no longer pay one', async () => {
+    const created = await bookings.create(clientId, {
+      providerId: providerCId,
+      serviceId: serviceCId,
+      startsAt: futureSlot(4),
+    });
+    createdBookingIds.push(created.id);
+    expect(created.status).toBe('awaiting_provider');
   });
 
   it('confirmCompletion refuses a booking that is not yet confirmed by the provider', async () => {
@@ -370,7 +612,6 @@ describe('BookingsService', () => {
       providerId: providerAId,
       serviceId: serviceAId,
       startsAt: futureSlot(4),
-      paymentMethod: 'cash',
     });
     createdBookingIds.push(created.id);
 
@@ -379,60 +620,52 @@ describe('BookingsService', () => {
     );
   });
 
-  it('expires an unanswered booking after one hour and refunds EcoCash', async () => {
-    const created = await bookings.create(clientId, {
-      providerId: providerAId,
-      serviceId: serviceAId,
-      startsAt: futureSlot(10),
-      paymentMethod: 'ecocash',
-    });
-    createdBookingIds.push(created.id);
+  it('expires an unanswered booking after one hour and refunds an older online payment', async () => {
+    const legacy = await seedLegacyOnlineBooking(futureSlot(10), 'awaiting_provider');
     await prisma.booking.update({
-      where: { id: created.id },
+      where: { id: legacy.id },
       data: { createdAt: new Date(Date.now() - 61 * 60_000) },
     });
 
     const listed = await bookings.listForClient(clientId);
-    expect(listed.find((booking) => booking.id === created.id)?.status).toBe('declined');
+    expect(listed.find((booking) => booking.id === legacy.id)?.status).toBe('declined');
     expect(
       await prisma.payment.findFirst({
-        where: { bookingId: created.id },
+        where: { bookingId: legacy.id },
         orderBy: { createdAt: 'desc' },
       }),
     ).toMatchObject({ status: 'refunded', feeUsdCents: 0 });
   });
 
-  it('a cash booking needs both sides confirmed before it completes', async () => {
+  it('a booking needs both sides confirmed before it completes', async () => {
     const created = await bookings.create(clientId, {
       providerId: providerAId,
       serviceId: serviceAId,
       startsAt: futureSlot(5),
-      paymentMethod: 'cash',
     });
     createdBookingIds.push(created.id);
-    await prisma.booking.update({ where: { id: created.id }, data: { status: 'confirmed' } });
+    await lifecycle.accept(created.id, providerAId);
     const result = await bookings.confirmCompletion(created.id, clientId);
     expect(result.confirmedByClient).toBe(true);
-    expect(result.status).toBe('confirmed'); // still waiting on the provider's side
+    expect(result.status).toBe('confirmed'); // still waiting on the stylist's side
+    expect(rewards.completed).toHaveLength(0);
+    expect(await prisma.feeLedgerEntry.count({ where: { bookingId: created.id } })).toBe(0);
 
-    await prisma.booking.update({ where: { id: created.id }, data: { confirmedByProvider: true } });
-    const second = await bookings.confirmCompletion(created.id, clientId);
-    expect(second.status).toBe('confirmed'); // no-op: client already confirmed, this call short-circuits
+    const again = await bookings.confirmCompletion(created.id, clientId);
+    expect(again.status).toBe('confirmed'); // a retry is not a second confirmation
+
+    await lifecycle.confirm(created.id, 'provider');
+    const done = await prisma.booking.findUniqueOrThrow({ where: { id: created.id } });
+    expect(done.status).toBe('completed');
+    expect(done.autoCompleted).toBe(false);
   });
 
-  it('an ecocash booking completes and releases escrow on the client confirmation alone', async () => {
+  it('an older online booking completes and releases escrow on the client confirmation alone, with no fee', async () => {
     const completedBefore = await prisma.providerProfile.findUniqueOrThrow({
       where: { id: providerAId },
       select: { completedCount: true },
     });
-    const created = await bookings.create(clientId, {
-      providerId: providerAId,
-      serviceId: serviceAId,
-      startsAt: futureSlot(6),
-      paymentMethod: 'ecocash',
-    });
-    createdBookingIds.push(created.id);
-    await prisma.booking.update({ where: { id: created.id }, data: { status: 'confirmed' } });
+    const created = await seedLegacyOnlineBooking(futureSlot(6), 'confirmed');
     const held = await prisma.payment.findFirstOrThrow({
       where: { bookingId: created.id, status: 'held' },
     });
@@ -470,6 +703,8 @@ describe('BookingsService', () => {
       select: { completedCount: true },
     });
     expect(afterRetry.completedCount).toBe(completedAfter.completedCount);
+    expect(await prisma.feeLedgerEntry.count({ where: { bookingId: created.id } })).toBe(0);
+    expect(rewards.completed).toHaveLength(0);
   });
 
   it('lets the client review a completed booking exactly once, and updates the provider rating', async () => {
@@ -477,7 +712,6 @@ describe('BookingsService', () => {
       providerId: providerAId,
       serviceId: serviceAId,
       startsAt: futureSlot(7),
-      paymentMethod: 'cash',
     });
     createdBookingIds.push(created.id);
     await prisma.booking.update({ where: { id: created.id }, data: { status: 'completed' } });
@@ -538,7 +772,6 @@ describe('BookingsService', () => {
       providerId: providerAId,
       serviceId: serviceAId,
       startsAt: futureSlot(8),
-      paymentMethod: 'cash',
       matchId: match.id,
     });
     createdBookingIds.push(created.id);
@@ -550,87 +783,5 @@ describe('BookingsService', () => {
     expect(winning.state).toBe('accepted');
     const sibling = await prisma.matchOffer.findUniqueOrThrow({ where: { id: siblingOffer.id } });
     expect(sibling.state).toBe('declined');
-  });
-
-  it('leaves the match retryable, and creates no booking, when EcoCash checkout fails', async () => {
-    const match = await prisma.matchRequest.create({
-      data: {
-        clientId,
-        categoryId,
-        budgetMode: 'flex',
-        radiusKm: 3,
-        latitude: CLIENT_LOCATION.lat,
-        longitude: CLIENT_LOCATION.lng,
-        state: 'accepted',
-        expiresAt: new Date(Date.now() + 5 * 60_000),
-      },
-    });
-    const winningOffer = await prisma.matchOffer.create({
-      data: {
-        matchRequestId: match.id,
-        providerId: providerAId,
-        state: 'accepted',
-        quoteUsdCents: 2000,
-        respondBy: new Date(Date.now() + 30_000),
-      },
-    });
-    const siblingOffer = await prisma.matchOffer.create({
-      data: {
-        matchRequestId: match.id,
-        providerId: providerBId,
-        state: 'accepted',
-        quoteUsdCents: 1500,
-        respondBy: new Date(Date.now() + 30_000),
-      },
-    });
-
-    const failingGateway = new FailingGateway();
-    const flakyBookings = new BookingsService(
-      prisma,
-      new SocketEmitterService(),
-      matching,
-      new TrustService(prisma),
-      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
-      failingGateway,
-      new PaymentStatusService(prisma, failingGateway),
-    );
-
-    await expect(
-      flakyBookings.create(clientId, {
-        providerId: providerAId,
-        serviceId: serviceAId,
-        startsAt: futureSlot(9),
-        paymentMethod: 'ecocash',
-        matchId: match.id,
-      }),
-    ).rejects.toThrow('gateway unavailable');
-
-    // The match was never touched by the failed checkout attempt — a client
-    // whose gateway call failed can still confirm the same match again,
-    // instead of it being wedged in 'confirmed' with no booking behind it.
-    const untouchedMatch = await prisma.matchRequest.findUniqueOrThrow({ where: { id: match.id } });
-    expect(untouchedMatch.state).toBe('accepted');
-
-    const winning = await prisma.matchOffer.findUniqueOrThrow({ where: { id: winningOffer.id } });
-    expect(winning.state).toBe('accepted');
-    const sibling = await prisma.matchOffer.findUniqueOrThrow({ where: { id: siblingOffer.id } });
-    expect(sibling.state).toBe('accepted');
-
-    const orphanedBooking = await prisma.booking.findFirst({ where: { matchRequestId: match.id } });
-    expect(orphanedBooking).toBeNull();
-
-    // The match is still usable: a retry with a working gateway succeeds.
-    const retried = await bookings.create(clientId, {
-      providerId: providerAId,
-      serviceId: serviceAId,
-      startsAt: futureSlot(9),
-      paymentMethod: 'ecocash',
-      matchId: match.id,
-    });
-    createdBookingIds.push(retried.id);
-    expect(retried.status).toBe('awaiting_provider');
-
-    const confirmedMatch = await prisma.matchRequest.findUniqueOrThrow({ where: { id: match.id } });
-    expect(confirmedMatch.state).toBe('confirmed');
   });
 });

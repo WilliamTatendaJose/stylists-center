@@ -10,6 +10,9 @@ import {
   FREE_CANCELLATION_WINDOW_HOURS,
   formatBookingReference,
   formatOrderReference,
+  bookingAmounts,
+  maxCoinsForBooking,
+  canReportNonPayment,
 } from './booking.js';
 
 const base = {
@@ -176,5 +179,83 @@ describe('reference formatting', () => {
 
   it('matches the handoff format for marketplace orders', () => {
     expect(formatOrderReference(22)).toBe('SC-M0022');
+  });
+});
+
+describe('bookingAmounts', () => {
+  it('adds the fee to the price and takes coins off what is paid in cash', () => {
+    expect(
+      bookingAmounts({
+        paymentMethod: 'cash',
+        priceUsdCents: 2000,
+        serviceFeeUsdCents: 60,
+        coinsUsdCents: 50,
+      }),
+    ).toEqual({ clientTotalUsdCents: 2060, amountDueUsdCents: 2010 });
+  });
+
+  it('never goes below zero when coins cover everything', () => {
+    expect(
+      bookingAmounts({
+        paymentMethod: 'cash',
+        priceUsdCents: 2000,
+        serviceFeeUsdCents: 60,
+        coinsUsdCents: 2060,
+      }).amountDueUsdCents,
+    ).toBe(0);
+  });
+
+  it('owes nothing directly on a booking that was paid in the app', () => {
+    expect(
+      bookingAmounts({
+        paymentMethod: 'ecocash',
+        priceUsdCents: 2000,
+        serviceFeeUsdCents: 0,
+        coinsUsdCents: 0,
+      }),
+    ).toEqual({ clientTotalUsdCents: 2000, amountDueUsdCents: 0 });
+  });
+});
+
+describe('maxCoinsForBooking', () => {
+  it('allows whole coins worth no more than the total', () => {
+    expect(maxCoinsForBooking(2060, 10)).toBe(206);
+    expect(maxCoinsForBooking(2065, 10)).toBe(206);
+  });
+
+  it('allows none without a total or a coin value', () => {
+    expect(maxCoinsForBooking(0, 10)).toBe(0);
+    expect(maxCoinsForBooking(2060, 0)).toBe(0);
+  });
+});
+
+describe('canReportNonPayment', () => {
+  const hour = 60 * 60_000;
+  const startsAt = new Date('2026-11-10T10:00:00Z');
+  const base = {
+    paymentMethod: 'cash' as const,
+    status: 'confirmed' as const,
+    startsAtIso: startsAt.toISOString(),
+    alreadyReported: false,
+  };
+  const at = (hoursAfterStart: number) => startsAt.getTime() + hoursAfterStart * hour;
+
+  it('opens at the appointment start and closes after the window', () => {
+    expect(canReportNonPayment(base, 48, at(-1))).toBe(false);
+    expect(canReportNonPayment(base, 48, at(0))).toBe(true);
+    expect(canReportNonPayment(base, 48, at(48))).toBe(true);
+    expect(canReportNonPayment(base, 48, at(48.01))).toBe(false);
+  });
+
+  it('applies to confirmed and completed jobs only', () => {
+    expect(canReportNonPayment({ ...base, status: 'completed' }, 48, at(1))).toBe(true);
+    for (const status of ['awaiting_provider', 'declined', 'cancelled'] as const) {
+      expect(canReportNonPayment({ ...base, status }, 48, at(1))).toBe(false);
+    }
+  });
+
+  it('is not offered twice, or for a job paid in the app', () => {
+    expect(canReportNonPayment({ ...base, alreadyReported: true }, 48, at(1))).toBe(false);
+    expect(canReportNonPayment({ ...base, paymentMethod: 'ecocash' }, 48, at(1))).toBe(false);
   });
 });

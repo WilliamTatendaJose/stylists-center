@@ -177,6 +177,12 @@ function UserRow({ user }: { user: AdminUserRowDto }) {
           <p className="mt-1 break-all text-xs text-neutral-500 dark:text-dark-muted">
             Firebase UID: {user.firebaseUid ?? 'none'}
           </p>
+          {user.nonPaymentReports > 0 ? (
+            <p className="mt-1 text-xs text-accent-700 dark:text-dark-accent">
+              Reported for not paying a stylist: {user.nonPaymentReports}{' '}
+              {user.nonPaymentReports === 1 ? 'time' : 'times'}
+            </p>
+          ) : null}
           {error ? (
             <p className="mt-2 text-sm text-accent-700 dark:text-dark-accent">{error}</p>
           ) : null}

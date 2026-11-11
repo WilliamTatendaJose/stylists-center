@@ -11,6 +11,7 @@ import {
   markOrderReadySchema,
   updateWeeklyHoursSchema,
   createProviderTimeOffSchema,
+  reportNonPaymentSchema,
 } from '@sc/shared';
 
 export class SetAvailabilityDto extends createZodDto(providerAvailabilitySchema) {}
@@ -24,3 +25,4 @@ export class MarkOrderReadyDto extends createZodDto(markOrderReadySchema) {}
 export class PaySubscriptionDto extends createZodDto(paySubscriptionSchema) {}
 export class UpdateWeeklyHoursDto extends createZodDto(updateWeeklyHoursSchema) {}
 export class CreateProviderTimeOffDto extends createZodDto(createProviderTimeOffSchema) {}
+export class ReportNonPaymentDto extends createZodDto(reportNonPaymentSchema) {}

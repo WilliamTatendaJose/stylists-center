@@ -96,7 +96,10 @@ export class AdminLookupService {
       where: { id },
       include: BOOKING_DETAIL_INCLUDE,
     });
-    return toBookingDetail(booking);
+    const clientNonPaymentReports = await this.prisma.booking.count({
+      where: { clientId: booking.clientId, nonPaymentReportedAt: { not: null } },
+    });
+    return toBookingDetail(booking, clientNonPaymentReports);
   }
 
   async getOrder(id: string): Promise<AdminOrderDetailDto> {
@@ -147,11 +150,20 @@ function toBookingSummary(booking: BookingSummary): AdminBookingSummaryDto {
   };
 }
 
-function toBookingDetail(booking: BookingDetail): AdminBookingDetailDto {
+function toBookingDetail(
+  booking: BookingDetail,
+  clientNonPaymentReports: number,
+): AdminBookingDetailDto {
   return {
     ...toBookingSummary(booking),
     confirmedByClient: booking.confirmedByClient,
     confirmedByProvider: booking.confirmedByProvider,
+    serviceFeeUsdCents: booking.serviceFeeUsdCents,
+    coinsUsed: booking.coinsUsed,
+    coinsUsdCents: booking.coinsUsdCents,
+    nonPaymentReportedAt: booking.nonPaymentReportedAt?.toISOString() ?? null,
+    nonPaymentNote: booking.nonPaymentNote,
+    clientNonPaymentReports,
     payments: booking.payments.map(toLedgerRow),
     trips: booking.trips.map((trip) => ({
       mode: trip.mode,

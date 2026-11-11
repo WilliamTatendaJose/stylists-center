@@ -59,7 +59,30 @@ export function BookingDetailPage() {
             </dd>
           </div>
           <div>
-            <dt className="text-neutral-600 dark:text-dark-muted">Cash confirmation</dt>
+            <dt className="text-neutral-600 dark:text-dark-muted">Service fee / coins</dt>
+            <dd className="font-medium text-neutral-900 dark:text-dark-text">
+              {formatUsd(booking.serviceFeeUsdCents)} fee ·{' '}
+              {booking.coinsUsed > 0
+                ? `${String(booking.coinsUsed)} coins (${formatUsd(booking.coinsUsdCents)})`
+                : 'no coins'}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-neutral-600 dark:text-dark-muted">Non-payment report</dt>
+            <dd className="font-medium text-neutral-900 dark:text-dark-text">
+              {booking.nonPaymentReportedAt
+                ? `Reported ${new Date(booking.nonPaymentReportedAt).toLocaleString()}${
+                    booking.nonPaymentNote ? ` — “${booking.nonPaymentNote}”` : ''
+                  }`
+                : 'None'}
+              <span className="block text-xs font-normal text-neutral-600 dark:text-dark-muted">
+                {booking.clientNonPaymentReports} report
+                {booking.clientNonPaymentReports === 1 ? '' : 's'} against this client in total
+              </span>
+            </dd>
+          </div>
+          <div>
+            <dt className="text-neutral-600 dark:text-dark-muted">Completion confirmation</dt>
             <dd className="font-medium text-neutral-900 dark:text-dark-text">
               client {booking.confirmedByClient ? '✓' : '—'} · provider{' '}
               {booking.confirmedByProvider ? '✓' : '—'}

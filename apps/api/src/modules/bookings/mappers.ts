@@ -1,5 +1,10 @@
 import type { BookingRowDto } from '@sc/shared';
-import { canCancelBooking, formatBookingWhen, FREE_CANCELLATION_WINDOW_HOURS } from '@sc/shared';
+import {
+  bookingAmounts,
+  canCancelBooking,
+  formatBookingWhen,
+  FREE_CANCELLATION_WINDOW_HOURS,
+} from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 
 export type BookingWithRelations = Prisma.BookingGetPayload<{
@@ -25,6 +30,12 @@ export function toBookingRowDto(
     startsAt: booking.startsAt.toISOString(),
     paymentMethod: booking.paymentMethod,
     priceUsdCents: booking.priceUsdCents,
+    serviceFeeUsdCents: booking.serviceFeeUsdCents,
+    ...bookingAmounts(booking),
+    coinsUsed: booking.coinsUsed,
+    coinsUsdCents: booking.coinsUsdCents,
+    // Only once the stylist has accepted: until then there is nobody to pay.
+    providerPaymentPhone: booking.status === 'confirmed' ? booking.provider.paymentPhone : null,
     status: booking.status,
     confirmedByClient: booking.confirmedByClient,
     confirmedByProvider: booking.confirmedByProvider,

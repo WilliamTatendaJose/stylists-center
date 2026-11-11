@@ -1,8 +1,7 @@
 import { create } from 'zustand';
-import type { PaymentMethod } from '@sc/shared';
 
 /**
- * Choose a slot -> Payment -> Booked. Reset once the booking is confirmed.
+ * Choose a slot -> Confirm -> Booked. Reset once the booking is confirmed.
  *
  * `matchId` carries the smart-match this booking is settling, if any (set
  * alongside `providerId` since Provider profile is the one screen reachable
@@ -15,14 +14,12 @@ export interface BookingDraftState {
   serviceId: string | null;
   date: string | null;
   time: string | null;
-  paymentMethod: PaymentMethod;
   matchId: string | null;
   rescheduleBookingId: string | null;
   setProvider: (providerId: string, matchId?: string | null) => void;
   startReschedule: (bookingId: string, providerId: string, serviceId: string) => void;
   setService: (serviceId: string) => void;
   setSlot: (date: string, time: string) => void;
-  setPaymentMethod: (method: PaymentMethod) => void;
   reset: () => void;
 }
 
@@ -31,7 +28,6 @@ const INITIAL = {
   serviceId: null,
   date: null,
   time: null,
-  paymentMethod: 'ecocash' as PaymentMethod,
   matchId: null,
   rescheduleBookingId: null,
 };
@@ -44,6 +40,5 @@ export const useBookingDraftStore = create<BookingDraftState>((set) => ({
     set({ rescheduleBookingId, providerId, serviceId, matchId: null, date: null, time: null }),
   setService: (serviceId) => set({ serviceId }),
   setSlot: (date, time) => set({ date, time }),
-  setPaymentMethod: (paymentMethod) => set({ paymentMethod }),
   reset: () => set(INITIAL),
 }));

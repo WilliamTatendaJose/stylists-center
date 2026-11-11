@@ -1,5 +1,6 @@
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import type { RewardsHooksService } from '../rewards/rewards-hooks.service';
 
 export const PROVIDER_RESPONSE_WINDOW_MINUTES = 60;
 
@@ -14,6 +15,7 @@ export const PROVIDER_RESPONSE_WINDOW_MINUTES = 60;
 export async function expireStaleBookingRequests(
   prisma: PrismaService,
   scope: Pick<Prisma.BookingWhereInput, 'clientId' | 'providerId'>,
+  rewards: RewardsHooksService,
 ): Promise<void> {
   const cutoff = new Date(Date.now() - PROVIDER_RESPONSE_WINDOW_MINUTES * 60_000);
   const stale = await prisma.booking.findMany({
@@ -40,6 +42,8 @@ export async function expireStaleBookingRequests(
           : null;
 
       await tx.booking.update({ where: { id }, data: { status: 'declined' } });
+      // Coins spent on a request nobody answered go back to the client.
+      if (booking.coinsUsed > 0) await rewards.refundRedemption(tx, { bookingId: id });
 
       if (currentPayment && ['paid', 'held'].includes(currentPayment.status)) {
         await tx.payment.create({

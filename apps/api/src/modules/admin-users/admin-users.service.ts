@@ -59,8 +59,11 @@ export class AdminUsersService {
       this.prisma.user.count({ where }),
     ]);
     const firebase = await this.firebaseSnapshot(users);
+    const reports = await this.nonPaymentReports(users.map((user) => user.id));
     return {
-      items: users.map((user) => toRow(user, !!user.providerProfile, firebase)),
+      items: users.map((user) =>
+        toRow(user, !!user.providerProfile, firebase, reports.get(user.id) ?? 0),
+      ),
       total,
       limit,
       offset: input.offset,
@@ -73,7 +76,18 @@ export class AdminUsersService {
       include: { providerProfile: { select: { id: true } } },
     });
     const firebase = await this.firebaseSnapshot([user]);
-    return toRow(user, !!user.providerProfile, firebase);
+    const reports = await this.nonPaymentReports([user.id]);
+    return toRow(user, !!user.providerProfile, firebase, reports.get(user.id) ?? 0);
+  }
+
+  /** How often stylists reported each user as not paying, in one query for the whole page. */
+  private async nonPaymentReports(userIds: string[]): Promise<Map<string, number>> {
+    const rows = await this.prisma.booking.groupBy({
+      by: ['clientId'],
+      where: { clientId: { in: userIds }, nonPaymentReportedAt: { not: null } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.clientId, row._count._all]));
   }
 
   async create(input: CreateAdminUserInput): Promise<AdminUserRowDto> {
@@ -93,11 +107,16 @@ export class AdminUsersService {
           cityId: city.id,
         },
       });
-      return toRow(user, false, {
-        uidStatuses: new Map([[firebaseUser.uid, 'active']]),
-        emailMatches: new Map([[email, { uid: firebaseUser.uid, status: 'active' }]]),
-        unavailable: false,
-      });
+      return toRow(
+        user,
+        false,
+        {
+          uidStatuses: new Map([[firebaseUser.uid, 'active']]),
+          emailMatches: new Map([[email, { uid: firebaseUser.uid, status: 'active' }]]),
+          unavailable: false,
+        },
+        0,
+      );
     } catch (error) {
       await this.firebase.deleteAccount(firebaseUser.uid);
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -250,6 +269,7 @@ function toRow(
   user: User,
   hasProviderProfile: boolean,
   firebase: FirebaseSnapshot,
+  nonPaymentReports: number,
 ): AdminUserRowDto {
   const storedStatus = user.firebaseUid ? firebase.uidStatuses.get(user.firebaseUid) : undefined;
   const emailMatch = user.email ? firebase.emailMatches.get(user.email.toLowerCase()) : undefined;
@@ -272,6 +292,7 @@ function toRow(
     displayName: user.displayName,
     activeRole: user.activeRole,
     hasProviderProfile,
+    nonPaymentReports,
     appStatus: user.deletedAt ? 'deleted' : user.disabledAt ? 'disabled' : 'active',
     firebaseStatus,
     createdAt: user.createdAt.toISOString(),
