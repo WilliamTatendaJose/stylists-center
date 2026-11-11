@@ -1,11 +1,14 @@
 import {
   createUserWithEmailAndPassword,
+  EmailAuthProvider,
   GoogleAuthProvider,
+  reauthenticateWithCredential,
   reload,
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
+  updatePassword,
   type User,
 } from 'firebase/auth';
 import {
@@ -130,6 +133,42 @@ export async function sendPasswordReset(email: string): Promise<void> {
   }
 }
 
+/**
+ * How the signed-in account logs in, as far as this device knows. Firebase
+ * keeps its user across restarts (AsyncStorage persistence), so this is
+ * normally known; 'unknown' covers a device whose Firebase session was
+ * cleared while the app session survived.
+ */
+export function signInMethod(): 'password' | 'google' | 'unknown' {
+  const user = firebaseAuth.currentUser;
+  if (!user) return 'unknown';
+  const providers = user.providerData.map((info) => info.providerId);
+  if (providers.includes('password')) return 'password';
+  if (providers.includes('google.com')) return 'google';
+  return 'unknown';
+}
+
+/**
+ * Changes the password of an email/password account. Firebase requires a
+ * recent sign-in for this, so the current password is checked first: by
+ * re-authenticating the existing Firebase user, or, when this device has no
+ * Firebase user, by signing in with it. A wrong current password fails here
+ * and nothing changes.
+ */
+export async function changePassword(
+  email: string,
+  currentPassword: string,
+  newPassword: string,
+): Promise<void> {
+  const credential = EmailAuthProvider.credential(email.trim(), currentPassword);
+  const existing = firebaseAuth.currentUser;
+  const user =
+    existing && existing.email?.toLowerCase() === email.trim().toLowerCase()
+      ? (await reauthenticateWithCredential(existing, credential)).user
+      : (await signInWithEmailAndPassword(firebaseAuth, email.trim(), currentPassword)).user;
+  await updatePassword(user, newPassword);
+}
+
 export async function resendVerification(): Promise<void> {
   const user = firebaseAuth.currentUser;
   if (!user) throw new Error('Sign in again to resend your verification email.');
@@ -154,6 +193,9 @@ export function firebaseErrorMessage(error: unknown): string {
     typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
   const messages: Record<string, string> = {
     'auth/invalid-credential': 'That email or password is incorrect.',
+    'auth/wrong-password': 'Your current password is incorrect.',
+    'auth/missing-password': 'Enter your current password.',
+    'auth/requires-recent-login': 'For your security, sign out and back in, then try again.',
     'auth/user-disabled': 'This account has been disabled. Contact support for help.',
     'auth/user-not-found': 'If that email has an account, a reset link will arrive shortly.',
     'auth/email-already-in-use': 'An account already exists for that email.',
