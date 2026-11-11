@@ -23,14 +23,6 @@ export interface Paged<T> {
   offset: number;
 }
 
-/** Subscription totals across every provider, for the Subscriptions page header. */
-export const adminSubscriptionSummarySchema = z.object({
-  activeCount: z.number().int().nonnegative(),
-  lapsedCount: z.number().int().nonnegative(),
-  mrrUsdCents: z.number().int().nonnegative(),
-});
-export type AdminSubscriptionSummaryDto = z.infer<typeof adminSubscriptionSummarySchema>;
-
 /**
  * Admin console DTOs (apps/admin). Deliberately separate from the client/
  * provider DTOs in auth.ts — an admin session is a different identity with
@@ -250,7 +242,7 @@ export const resolveAppealSchema = z.object({
 });
 export type ResolveAppealInput = z.infer<typeof resolveAppealSchema>;
 
-// --- Providers (verification + subscription pricing) ------------------
+// --- Providers (verification) ------------------
 
 export const adminProviderRowSchema = z.object({
   id: z.uuid(),
@@ -272,9 +264,6 @@ export const adminProviderRowSchema = z.object({
   productImageUrls: z.array(imageUrlSchema).max(100),
   ratingAvg: z.number(),
   completedCount: z.number().int(),
-  subscriptionPriceUsdCents: z.number().int(),
-  subscriptionPaidUntil: z.iso.datetime().nullable(),
-  subscriptionActive: z.boolean(),
   createdAt: z.iso.datetime(),
 });
 export type AdminProviderRowDto = z.infer<typeof adminProviderRowSchema>;
@@ -284,14 +273,12 @@ export const updateProviderAdminSchema = z
     verified: z.boolean().optional(),
     verificationStatus: verificationStatusSchema.optional(),
     verificationNote: z.string().trim().max(2000).nullable().optional(),
-    subscriptionPriceUsdCents: z.number().int().min(0).optional(),
   })
   .refine(
     (input) =>
       input.verified !== undefined ||
       input.verificationStatus !== undefined ||
-      input.verificationNote !== undefined ||
-      input.subscriptionPriceUsdCents !== undefined,
+      input.verificationNote !== undefined,
     {
       message: 'Provide at least one field to update',
     },

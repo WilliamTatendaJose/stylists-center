@@ -7,7 +7,7 @@ import type {
   ProviderSlotsResponse,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { SettingsService, settingsFor } from '../settings/settings.service';
+import { FeeStandingService } from '../fees/fee-standing.service';
 import { GeoRepository } from '../geo/geo.repository';
 import { toProviderListRow } from '../geo/mappers';
 import { isWithinWeeklyHours, readWeeklyHours } from './calendar-policy';
@@ -55,7 +55,7 @@ export class ProvidersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly geo: GeoRepository,
-    @Optional() private readonly settings?: SettingsService,
+    @Optional() private readonly standing?: FeeStandingService,
   ) {}
 
   /**
@@ -191,6 +191,9 @@ export class ProvidersService {
       })),
       workingHoursLabel: provider.workingHoursLabel,
       paymentPhone: provider.paymentPhone,
+      // Paused for unpaid fees: the page still opens (links and chats point
+      // at it) but must read as unavailable.
+      ...((await this.standing?.isRestricted(id)) ? { unavailable: true } : {}),
     };
   }
 
@@ -275,11 +278,6 @@ export class ProvidersService {
 
     // Single-city M1 build (plan §5) — there is nowhere else to assign one from yet.
     const city = await this.prisma.city.findFirstOrThrow();
-    // New pages start on the subscription price in effect now (console
-    // setting); staff can still change one page's price on the Providers page.
-    const subscriptionPriceUsdCents = await (this.settings ?? settingsFor(this.prisma)).get(
-      'subscriptionPriceUsdCents',
-    );
 
     const profile = await this.prisma.$transaction(async (tx) => {
       const created = await tx.providerProfile.create({
@@ -295,7 +293,6 @@ export class ProvidersService {
           cityId: city.id,
           yearsExperience: input.yearsExperience,
           workingHoursLabel: input.workingHoursLabel,
-          subscriptionPriceUsdCents,
           services: { create: input.services },
         },
       });

@@ -1,9 +1,10 @@
 import { create } from 'zustand';
 import type { PayChannel, PaymentAction } from '@sc/shared';
 
-export interface PendingSubscription {
+/** A fee payment that has been started and is waiting for the gateway's verdict. */
+export interface PendingFeePayment {
   reference?: string;
-  priceUsdCents: number;
+  amountUsdCents: number;
   instructions?: string;
   checkoutUrl?: string;
   /** An InnBucks code to show, or an O'mari OTP to collect, before the payment can settle. */
@@ -11,13 +12,13 @@ export interface PendingSubscription {
   payChannel?: PayChannel;
 }
 
-interface PendingSubscriptionState {
-  pending: PendingSubscription | null;
-  setPending: (pending: PendingSubscription) => void;
+interface PendingFeePaymentState {
+  pending: PendingFeePayment | null;
+  setPending: (pending: PendingFeePayment) => void;
   clearPending: () => void;
 }
 
-export const usePendingSubscriptionStore = create<PendingSubscriptionState>((set) => ({
+export const usePendingFeePaymentStore = create<PendingFeePaymentState>((set) => ({
   pending: null,
   setPending: (pending) => set({ pending }),
   clearPending: () => set({ pending: null }),

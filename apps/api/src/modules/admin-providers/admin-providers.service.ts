@@ -1,15 +1,9 @@
-import { Injectable, Optional } from '@nestjs/common';
-import {
-  isSubscriptionActive,
-  nextSubscriptionPaidUntil,
-  type AdminProviderRowDto,
-  type UpdateProviderAdminInput,
-} from '@sc/shared';
-import { SettingsService, settingsFor } from '../settings/settings.service';
+import { Injectable } from '@nestjs/common';
+import { type AdminProviderRowDto, type UpdateProviderAdminInput } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImageStorageService } from '../provider/image-storage.service';
-import type { AdminSubscriptionSummaryDto, Paged } from '@sc/shared';
+import type { Paged } from '@sc/shared';
 import { toPage, type PageRequest } from '../../common/paging';
 
 const PROVIDER_INCLUDE = {
@@ -31,36 +25,21 @@ const PROVIDER_INCLUDE = {
 
 type ProviderWithRelations = Prisma.ProviderProfileGetPayload<{ include: typeof PROVIDER_INCLUDE }>;
 
-/**
- * Provider verification and subscription pricing — the two admin actions
- * `ProviderProfile.verified` and `subscriptionPriceUsdCents` were always
- * modelled for (see their doc comments in schema.prisma) but had no write
- * path anywhere until now.
- */
+/** Provider verification. (Fee balances live in the fees module.) */
 @Injectable()
 export class AdminProvidersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly images: ImageStorageService,
-    @Optional() private readonly settings?: SettingsService,
   ) {}
 
   async list(input: {
     verified?: boolean | undefined;
-    subscription?: 'active' | 'lapsed' | undefined;
     q?: string | undefined;
     page: PageRequest;
   }): Promise<Paged<AdminProviderRowDto>> {
-    const now = new Date();
     const filters: Prisma.ProviderProfileWhereInput[] = [{ user: { deletedAt: null } }];
     if (input.verified !== undefined) filters.push({ verified: input.verified });
-    // Same rule as isSubscriptionActive: paid until a moment still in the future.
-    if (input.subscription === 'active') filters.push({ subscriptionPaidUntil: { gt: now } });
-    if (input.subscription === 'lapsed') {
-      filters.push({
-        OR: [{ subscriptionPaidUntil: null }, { subscriptionPaidUntil: { lte: now } }],
-      });
-    }
     if (input.q) {
       filters.push({
         OR: [
@@ -83,30 +62,6 @@ export class AdminProvidersService {
       this.prisma.providerProfile.count({ where: searched }),
     ]);
     return toPage(providers.map(toRow), total, input.page);
-  }
-
-  /** Totals across every provider, so the Subscriptions header doesn't depend on which page is shown. */
-  async subscriptionSummary(): Promise<AdminSubscriptionSummaryDto> {
-    const now = new Date();
-    const notDeleted = { user: { deletedAt: null } };
-    const [active, lapsedCount] = await this.prisma.$transaction([
-      this.prisma.providerProfile.aggregate({
-        where: { ...notDeleted, subscriptionPaidUntil: { gt: now } },
-        _count: { _all: true },
-        _sum: { subscriptionPriceUsdCents: true },
-      }),
-      this.prisma.providerProfile.count({
-        where: {
-          ...notDeleted,
-          OR: [{ subscriptionPaidUntil: null }, { subscriptionPaidUntil: { lte: now } }],
-        },
-      }),
-    ]);
-    return {
-      activeCount: active._count._all,
-      lapsedCount,
-      mrrUsdCents: active._sum.subscriptionPriceUsdCents ?? 0,
-    };
   }
 
   async get(id: string): Promise<AdminProviderRowDto> {
@@ -138,9 +93,6 @@ export class AdminProvidersService {
         where: { id },
         data: {
           ...(input.verified !== undefined ? { verified: input.verified } : {}),
-          ...(input.subscriptionPriceUsdCents !== undefined
-            ? { subscriptionPriceUsdCents: input.subscriptionPriceUsdCents }
-            : {}),
         },
       });
       if (status || input.verificationNote !== undefined) {
@@ -176,51 +128,9 @@ export class AdminProvidersService {
     }
     return toRow(updated);
   }
-
-  /**
-   * The admin-side counterpart to the provider's own `POST
-   * /provider/subscription/pay` — for a payment that happened outside the
-   * app (bank transfer, a courtesy extension) rather than through EcoCash or
-   * a cash confirmation. Extends from the current expiry the same way the
-   * paid flow does (`nextSubscriptionPaidUntil`), so an early grant doesn't
-   * cost the provider unused days, and still writes a Payment row — tagged
-   * `admin_grant` rather than `cash`/`ecocash` so it's excluded from real
-   * revenue sums but still shows up in the provider's own payment history.
-   */
-  async extendSubscription(id: string): Promise<AdminProviderRowDto> {
-    const provider = await this.prisma.providerProfile.findUniqueOrThrow({
-      where: { id },
-      select: { subscriptionPriceUsdCents: true, subscriptionPaidUntil: true },
-    });
-    const currentPaidUntil = provider.subscriptionPaidUntil?.toISOString() ?? null;
-    const paidUntil = nextSubscriptionPaidUntil(
-      currentPaidUntil,
-      Date.now(),
-      await (this.settings ?? settingsFor(this.prisma)).get('subscriptionCycleDays'),
-    );
-
-    const [updated] = await this.prisma.$transaction([
-      this.prisma.providerProfile.update({
-        where: { id },
-        data: { subscriptionPaidUntil: paidUntil },
-        include: PROVIDER_INCLUDE,
-      }),
-      this.prisma.payment.create({
-        data: {
-          subscriptionProviderId: id,
-          provider: 'admin_grant',
-          status: 'released',
-          amountUsdCents: 0,
-        },
-      }),
-    ]);
-
-    return toRow(updated);
-  }
 }
 
 function toRow(provider: ProviderWithRelations): AdminProviderRowDto {
-  const subscriptionPaidUntil = provider.subscriptionPaidUntil?.toISOString() ?? null;
   return {
     id: provider.id,
     userId: provider.userId,
@@ -241,9 +151,6 @@ function toRow(provider: ProviderWithRelations): AdminProviderRowDto {
     productImageUrls: provider.products.flatMap((product) => product.imageUrls),
     ratingAvg: provider.ratingAvg,
     completedCount: provider.completedCount,
-    subscriptionPriceUsdCents: provider.subscriptionPriceUsdCents,
-    subscriptionPaidUntil,
-    subscriptionActive: isSubscriptionActive(subscriptionPaidUntil),
     createdAt: provider.createdAt.toISOString(),
   };
 }

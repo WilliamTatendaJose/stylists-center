@@ -7,3 +7,4 @@ export * from './useProviders.js';
 export * from './useWallet.js';
 export * from './useVerification.js';
 export * from './usePayments.js';
+export * from './useFees.js';

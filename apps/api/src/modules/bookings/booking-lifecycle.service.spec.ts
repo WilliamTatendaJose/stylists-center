@@ -139,7 +139,7 @@ describe('BookingLifecycleService', () => {
       prisma,
       fees,
       rewards,
-      new FeeStandingService(),
+      new FeeStandingService(prisma),
       new SocketEmitterService(),
       new PushService(prisma, new ConfigService({ NODE_ENV: 'test' })),
       settings,

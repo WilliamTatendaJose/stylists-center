@@ -201,10 +201,6 @@ describe('BookingsService', () => {
         longitude: 31.0345,
         cityId,
         workingHoursLabel: 'Always',
-        // bookings.create() rejects a direct booking against a provider
-        // whose subscription has lapsed — without this every booking test
-        // below would fail that check before reaching what it's testing.
-        subscriptionPaidUntil: new Date(Date.now() + 30 * 24 * 60 * 60_000),
         services: { create: [{ name: 'Test service', durationMinutes: 30, priceUsdCents: 2000 }] },
       },
       include: { services: true },
@@ -233,7 +229,6 @@ describe('BookingsService', () => {
         longitude: 31.034,
         cityId,
         workingHoursLabel: 'Always',
-        subscriptionPaidUntil: new Date(Date.now() + 30 * 24 * 60 * 60_000),
       },
     });
     providerBId = providerB.id;
@@ -242,7 +237,7 @@ describe('BookingsService', () => {
     const providerCUser = await prisma.user.create({
       data: {
         phone: `+263776${String(Math.floor(Math.random() * 900000) + 100000)}`,
-        displayName: 'Provider C (lapsed)',
+        displayName: 'Provider C (no subscription)',
         cityId,
       },
     });
@@ -259,7 +254,7 @@ describe('BookingsService', () => {
         longitude: 31.036,
         cityId,
         workingHoursLabel: 'Always',
-        // Deliberately no subscriptionPaidUntil — a lapsed/never-paid provider.
+        // Never paid a subscription: stylists don't pay one any more, so it must not matter.
         services: { create: [{ name: 'Test service', durationMinutes: 30, priceUsdCents: 1500 }] },
       },
       include: { services: true },
@@ -312,7 +307,7 @@ describe('BookingsService', () => {
     // 3% fee, 10c coins: the defaults, pinned so the sums below are stable.
     const settings = new SettingsService(undefined, {});
     rewards = new FakeRewards(prisma);
-    standing = new FakeStanding();
+    standing = new FakeStanding(prisma);
     fees = new FeeLedgerService(prisma, settings);
     lifecycle = new BookingLifecycleService(
       prisma,

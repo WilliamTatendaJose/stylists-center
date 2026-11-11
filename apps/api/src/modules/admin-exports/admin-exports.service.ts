@@ -26,6 +26,7 @@ export class AdminExportsService {
         booking: { select: { reference: true, provider: { select: { displayName: true } } } },
         order: { select: { reference: true, provider: { select: { displayName: true } } } },
         subscriptionProvider: { select: { displayName: true } },
+        feeProvider: { select: { displayName: true } },
       },
     });
     return toCsv(
@@ -43,12 +44,20 @@ export class AdminExportsService {
         'Payment ID',
       ],
       rows.map((p) => {
-        const type = p.booking ? 'Booking' : p.order ? 'Order' : 'Subscription';
+        // Old subscription rows stay readable; new fee payments are their own type.
+        const type = p.booking
+          ? 'Booking'
+          : p.order
+            ? 'Order'
+            : p.feeProvider
+              ? 'Fee payment'
+              : 'Subscription';
         const reference = p.booking?.reference ?? p.order?.reference ?? p.reference ?? '';
         const stylist =
           p.booking?.provider.displayName ??
           p.order?.provider.displayName ??
           p.subscriptionProvider?.displayName ??
+          p.feeProvider?.displayName ??
           '';
         return [
           harareTime(p.createdAt),
@@ -59,7 +68,9 @@ export class AdminExportsService {
           p.status,
           usd(p.amountUsdCents),
           usd(p.feeUsdCents),
-          type === 'Subscription' ? 0 : usd(p.amountUsdCents - p.feeUsdCents),
+          type === 'Subscription' || type === 'Fee payment'
+            ? 0
+            : usd(p.amountUsdCents - p.feeUsdCents),
           p.externalRef,
           p.id,
         ];

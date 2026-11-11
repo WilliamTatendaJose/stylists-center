@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   PAYMENT_GATEWAY,
@@ -6,8 +6,9 @@ import {
   type PaymentGatewayPort,
 } from './payment-gateway.port';
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
-import { recordSubscriptionPaymentStatus } from './subscription-payment';
 import { recordAgentSubscriptionPaymentStatus } from '../wallet/agent-subscription-payment';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
+import { recordFeePaymentStatus } from './fee-payment';
 
 /**
  * Statuses that will never change on their own. Anything else is still in
@@ -18,8 +19,9 @@ const TERMINAL = new Set(['held', 'paid', 'released', 'refunded', 'failed', 'dis
 export interface PaymentSubject {
   bookingId?: string;
   orderId?: string;
-  subscriptionProviderId?: string;
   agentId?: string;
+  /** A stylist or vendor paying their fee balance. */
+  feeProviderId?: string;
 }
 
 export interface PaymentStatusResult {
@@ -30,8 +32,8 @@ export interface PaymentStatusResult {
 }
 
 /**
- * Answers "did this actually get paid?" for a booking, order, or
- * subscription, asking the gateway directly when the answer isn't already settled.
+ * Answers "did this actually get paid?" for a booking, order, or fee
+ * payment, asking the gateway directly when the answer isn't already settled.
  *
  * Every checkout in this app used to be treated as successful the moment it
  * was *initiated* — the client opened a browser and the app moved straight to
@@ -47,6 +49,7 @@ export class PaymentStatusService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGatewayPort,
+    @Optional() private readonly feeLedger?: FeeLedgerService,
   ) {}
 
   async resolve(subject: PaymentSubject): Promise<PaymentStatusResult> {
@@ -87,14 +90,17 @@ export class PaymentStatusService {
       });
     }
 
-    if (subject.subscriptionProviderId && payment.reference) {
-      const result = await recordSubscriptionPaymentStatus(this.prisma, {
-        providerProfileId: subject.subscriptionProviderId,
-        reference: payment.reference,
-        status: polled,
-        ...(payment.externalRef ? { externalRef: payment.externalRef } : {}),
-      });
-      return result;
+    if (subject.feeProviderId && payment.reference) {
+      return recordFeePaymentStatus(
+        this.prisma,
+        this.feeLedger ?? new FeeLedgerService(this.prisma),
+        {
+          providerId: subject.feeProviderId,
+          reference: payment.reference,
+          status: polled,
+          ...(payment.externalRef ? { externalRef: payment.externalRef } : {}),
+        },
+      );
     }
 
     await this.prisma.payment.create({

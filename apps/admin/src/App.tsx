@@ -20,8 +20,8 @@ const BansPage = lazy(() => import('./routes/BansPage').then((m) => ({ default: 
 const ProvidersPage = lazy(() =>
   import('./routes/ProvidersPage').then((m) => ({ default: m.ProvidersPage })),
 );
-const SubscriptionsPage = lazy(() =>
-  import('./routes/SubscriptionsPage').then((m) => ({ default: m.SubscriptionsPage })),
+const FeeBalancesPage = lazy(() =>
+  import('./routes/FeeBalancesPage').then((m) => ({ default: m.FeeBalancesPage })),
 );
 const PaymentsPage = lazy(() =>
   import('./routes/PaymentsPage').then((m) => ({ default: m.PaymentsPage })),
@@ -111,7 +111,7 @@ export function App() {
           <Route path="providers" element={<ProvidersPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="verifications" element={<VerificationsPage />} />
-          <Route path="subscriptions" element={<SubscriptionsPage />} />
+          <Route path="fees" element={<FeeBalancesPage />} />
           <Route path="payments" element={<PaymentsPage />} />
           <Route path="cash-outs" element={<CashOutsPage />} />
           <Route path="lookup" element={<LookupPage />} />

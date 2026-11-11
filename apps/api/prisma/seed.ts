@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { formatBookingReference, SUBSCRIPTION_CYCLE_DAYS } from '@sc/shared';
+import { formatBookingReference } from '@sc/shared';
 import { PrismaClient } from '../src/generated/prisma/index.js';
 import { hashPassword } from '../src/modules/admin-auth/password.js';
 import { CATEGORIES, CATEGORY_IDS, HARARE_CITY, HARARE_CITY_ID } from './reference-data.js';
@@ -253,10 +253,6 @@ async function main() {
         verified: provider.verified,
         ratingAvg: provider.ratingAvg,
         completedCount: provider.completedCount,
-        // A provider with a lapsed subscription is excluded from search and
-        // smart-match, and can't be booked directly — every seeded demo
-        // provider needs one so the seed still demos a bookable app.
-        subscriptionPaidUntil: new Date(Date.now() + SUBSCRIPTION_CYCLE_DAYS * 24 * 60 * 60_000),
         services: { create: provider.services },
       },
     });

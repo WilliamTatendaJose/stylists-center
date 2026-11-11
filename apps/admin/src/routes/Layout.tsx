@@ -37,7 +37,7 @@ const NAV_ITEMS = [
   { to: '/providers', label: 'Providers', icon: UserCheck },
   { to: '/users', label: 'Users', icon: UsersRound },
   { to: '/verifications', label: 'Verifications', icon: ShieldCheck },
-  { to: '/subscriptions', label: 'Subscriptions', icon: CreditCard },
+  { to: '/fees', label: 'Fee balances', icon: CreditCard },
   { to: '/payments', label: 'Payments', icon: Wallet },
   { to: '/cash-outs', label: 'Cash-outs', icon: HandCoins },
   { to: '/catalog', label: 'Catalog', icon: MapPinned },
