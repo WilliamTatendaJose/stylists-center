@@ -13,6 +13,7 @@ import {
   formatBookingWhen,
   isSubscriptionActive,
   needsCashReconciliation,
+  normalizePhone,
   type BookingStatus,
   type CreateProviderProductInput,
   type UpdateProviderProductInput,
@@ -116,6 +117,7 @@ export class ProviderService {
       lng: profile.longitude,
       profileImageUrl: profile.profileImageUrl,
       portfolioImageUrls: profile.portfolioImageUrls,
+      paymentPhone: profile.paymentPhone,
       services: profile.services.map(({ id, name, durationMinutes, priceUsdCents, imageUrls }) => ({
         id,
         name,
@@ -238,6 +240,13 @@ export class ProviderService {
             ? { profileImageUrl: input.profileImageUrl }
             : {}),
           ...(input.portfolioImageUrls ? { portfolioImageUrls: input.portfolioImageUrls } : {}),
+          // Stored in E.164 so every screen formats it the same way.
+          ...(input.paymentPhone !== undefined
+            ? {
+                paymentPhone:
+                  input.paymentPhone === null ? null : normalizePhone(input.paymentPhone),
+              }
+            : {}),
         },
       }),
       this.prisma.user.update({

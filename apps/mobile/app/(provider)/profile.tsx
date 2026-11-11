@@ -10,8 +10,16 @@ import {
   Moon,
   Sun,
   UserRound,
+  Wallet,
 } from 'lucide-react-native';
-import { deriveInitials, formatInHarare, formatUsd, type ServiceDto } from '@sc/shared';
+import {
+  deriveInitials,
+  formatInHarare,
+  formatLocalPhone,
+  formatUsd,
+  isValidMobileMoneyPhone,
+  type ServiceDto,
+} from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
   Badge,
@@ -56,6 +64,7 @@ import {
 } from '../../src/components/ProfileChrome.js';
 
 const styles = StyleSheet.create({
+  fieldHelp: { marginTop: space.s },
   error: { marginBottom: space.m },
   contentCard: { padding: space.l },
   detailsCard: { paddingHorizontal: space.l },
@@ -145,6 +154,7 @@ export default function ProviderProfile() {
   const [displayName, setDisplayName] = useState('');
   const [areaName, setAreaName] = useState('');
   const [workingHoursLabel, setWorkingHoursLabel] = useState('');
+  const [paymentPhone, setPaymentPhone] = useState('');
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
   const [portfolioImageUrls, setPortfolioImageUrls] = useState<string[]>([]);
   const [lat, setLat] = useState(0);
@@ -165,6 +175,7 @@ export default function ProviderProfile() {
     setDisplayName(data.displayName);
     setAreaName(data.areaName);
     setWorkingHoursLabel(data.workingHoursLabel);
+    setPaymentPhone(data.paymentPhone ? formatLocalPhone(data.paymentPhone) : '');
     setProfileImageUrl(data.profileImageUrl ?? null);
     setPortfolioImageUrls(data.portfolioImageUrls);
     setLat(data.lat);
@@ -204,6 +215,8 @@ export default function ProviderProfile() {
     displayName: displayName.trim(),
     areaName: areaName.trim(),
     workingHoursLabel: workingHoursLabel.trim(),
+    // Every save sends it, so a photo change never clears it; empty = none.
+    paymentPhone: paymentPhone.trim() ? paymentPhone.trim() : null,
     lat,
     lng,
     profileImageUrl: nextProfileImage,
@@ -304,7 +317,9 @@ export default function ProviderProfile() {
     });
   };
 
+  const paymentPhoneValid = !paymentPhone.trim() || isValidMobileMoneyPhone(paymentPhone.trim());
   const profileValid =
+    paymentPhoneValid &&
     displayName.trim().length >= 2 &&
     areaName.trim().length >= 2 &&
     locationAttached &&
@@ -415,6 +430,12 @@ export default function ProviderProfile() {
               icon={<Clock3 size={20} color={colors.neutral700} />}
               label="Working hours"
               value={workingHoursLabel || 'Not set'}
+              divided
+            />
+            <ProfileInfoRow
+              icon={<Wallet size={20} color={colors.neutral700} />}
+              label="Payment number"
+              value={paymentPhone || 'Not set'}
               divided
             />
             {/* Wrapped so the two buttons get a gap; stacked bare they touched. */}
@@ -745,6 +766,24 @@ export default function ProviderProfile() {
             value={workingHoursLabel}
             onChangeText={setWorkingHoursLabel}
           />
+        </View>
+        <View style={styles.sheetField}>
+          <TextField
+            label="Payment number (optional)"
+            value={paymentPhone}
+            onChangeText={setPaymentPhone}
+            placeholder="077 000 0000"
+            keyboardType="phone-pad"
+          />
+          <Text
+            variant="metaSmall"
+            color={paymentPhoneValid ? 'neutral600' : colors.accent700}
+            style={styles.fieldHelp}
+          >
+            {paymentPhoneValid
+              ? 'Your EcoCash, OneMoney or other mobile money number. Shown on your public page so clients can pay you directly.'
+              : 'Enter a valid mobile number, for example 077 000 0000.'}
+          </Text>
         </View>
         <View style={styles.row}>
           <View style={styles.grow}>

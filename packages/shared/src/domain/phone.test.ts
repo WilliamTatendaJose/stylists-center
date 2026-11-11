@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { normalizePhone, isValidPhone, isValidMobileMoneyPhone } from './phone.js';
+import {
+  formatLocalPhone,
+  normalizePhone,
+  isValidPhone,
+  isValidMobileMoneyPhone,
+} from './phone.js';
 
 describe('phone normalisation', () => {
   it('normalises a local Zimbabwean number to E.164', () => {
@@ -65,5 +70,15 @@ describe('mobile money numbers', () => {
   it('rejects garbage and empty input', () => {
     expect(isValidMobileMoneyPhone('not a phone')).toBe(false);
     expect(isValidMobileMoneyPhone('')).toBe(false);
+  });
+});
+
+describe('formatLocalPhone', () => {
+  it('writes a Zimbabwean mobile number the local way', () => {
+    expect(formatLocalPhone('+263771234567')).toBe('077 123 4567');
+  });
+
+  it('leaves any other number as it is', () => {
+    expect(formatLocalPhone('+27821234567')).toBe('+27821234567');
   });
 });

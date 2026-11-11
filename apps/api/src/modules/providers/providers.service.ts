@@ -188,6 +188,7 @@ export class ProvidersService {
         text: r.text ?? '',
       })),
       workingHoursLabel: provider.workingHoursLabel,
+      paymentPhone: provider.paymentPhone,
     };
   }
 
