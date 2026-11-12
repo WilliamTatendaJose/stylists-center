@@ -43,6 +43,8 @@ export const productDetailSchema = productRowSchema.extend({
   pickupHours: z.string(),
   pickupAddress: z.string(),
   deliveryChargeUsdCents: z.number().int(),
+  /** Delivery rate per km (the shop's own, or the standard rate). */
+  deliveryPerKmUsdCents: z.number().int(),
   /** Free-text places the vendor delivers to, as they wrote them. */
   deliveryAreas: z.array(z.string()),
 });
@@ -88,6 +90,8 @@ export const orderRowSchema = z.object({
   fulfilment: fulfilmentMethodSchema,
   deliveryAddress: z.string().nullable(),
   deliveryChargeUsdCents: z.number().int(),
+  /** Billed km for a per-km delivery; null for collection and older orders. */
+  deliveryDistanceKm: z.number().nullable(),
   coinsUsed: z.number().int(),
   coinsValueUsdCents: z.number().int(),
   /** Service fee the buyer pays on top (0 when the vendor carries the commission). */
@@ -125,6 +129,9 @@ export const createOrderSchema = z
     fulfilment: fulfilmentMethodSchema.default('collection'),
     /** Where to deliver; required (and only used) for delivery. */
     deliveryAddress: z.string().trim().min(5).max(300).optional(),
+    /** The delivery point on the map; the charge is per km from the shop to here. */
+    deliveryLat: z.number().min(-90).max(90).optional(),
+    deliveryLng: z.number().min(-180).max(180).optional(),
     /** Coins the buyer wants to spend on this order. */
     coins: z.number().int().min(0).max(1_000_000).optional(),
     items: z
@@ -161,6 +168,20 @@ export const createOrderResponseSchema = z.object({
   action: paymentActionSchema.optional(),
 });
 export type CreateOrderResponse = z.infer<typeof createOrderResponseSchema>;
+
+/** GET /v1/market/delivery-quote: what delivery to a point costs from one shop. */
+export const deliveryQuoteQuerySchema = z.object({
+  providerId: z.uuid(),
+  lat: z.coerce.number().min(-90).max(90),
+  lng: z.coerce.number().min(-180).max(180),
+});
+export const deliveryQuoteSchema = z.object({
+  /** Whole km charged (rounded up, at least 1). */
+  distanceKm: z.number(),
+  perKmUsdCents: z.number().int(),
+  chargeUsdCents: z.number().int(),
+});
+export type DeliveryQuoteDto = z.infer<typeof deliveryQuoteSchema>;
 
 /** `GET /v1/market/orders/:id/payment-status` — polled while an EcoCash order payment is in flight. */
 export const orderPaymentStatusSchema = z.object({
@@ -217,6 +238,8 @@ export const providerOrderSchema = z.object({
   fulfilment: fulfilmentMethodSchema,
   deliveryAddress: z.string().nullable(),
   deliveryChargeUsdCents: z.number().int(),
+  /** Billed km for a per-km delivery; null for collection and older orders. */
+  deliveryDistanceKm: z.number().nullable(),
   coinsUsed: z.number().int(),
   coinsValueUsdCents: z.number().int(),
   /** Service fee the buyer pays on top (0 when the vendor carries the commission). */

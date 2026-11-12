@@ -136,3 +136,39 @@ export function maxCoinsForOrder(
     (productTotalUsdCents + deliveryChargeUsdCents + serviceFeeUsdCents) / coinUsdCents,
   );
 }
+
+/** Straight-line distance between two points, in km. */
+export function distanceKmBetween(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * The per-km delivery rate a shop charges: its own rate, or the standard
+ * rate (setting deliveryPerKmUsdCents) when it hasn't set one.
+ */
+export function effectiveDeliveryPerKmUsdCents(shopRate: number, standardRate: number): number {
+  return shopRate > 0 ? shopRate : Math.max(0, standardRate);
+}
+
+/**
+ * Delivery charge for a distance: the per-km rate times the distance rounded
+ * up to whole km, with a minimum of 1 km (a delivery next door is still a trip).
+ */
+export function deliveryChargeUsdCents(distanceKm: number, perKmUsdCents: number): number {
+  if (!Number.isFinite(distanceKm) || perKmUsdCents <= 0) return 0;
+  return billableDeliveryKm(distanceKm) * perKmUsdCents;
+}
+
+/** Whole km charged for a delivery: rounded up, at least 1. */
+export function billableDeliveryKm(distanceKm: number): number {
+  return Math.max(1, Math.ceil(Math.max(0, distanceKm) - 1e-9));
+}

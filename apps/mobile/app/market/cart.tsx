@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
@@ -24,15 +24,18 @@ import {
   TextField,
   useTheme,
 } from '@sc/ui';
-import { useCreateOrder } from '../../src/api/hooks/useMarket.js';
+import { useCreateOrder, useDeliveryQuotes } from '../../src/api/hooks/useMarket.js';
 import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { useWallet } from '../../src/api/hooks/useWallet.js';
 import {
   cartTotalUsdCents,
   groupCartBySeller,
   useCartStore,
+  useLocationPickerStore,
   type CartGroup,
 } from '../../src/state/index.js';
+
+const DELIVERY_POINT_PURPOSE = 'market-delivery';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useBack, useMarketHome } from '../../src/navigation/useBack.js';
 
@@ -85,6 +88,19 @@ function variantTag(parts: (string | number)[]): string {
  * money when they collect or receive the goods. Coins are the one thing that
  * moves in the app, as a discount the shop is paid back for.
  */
+/** "Deliver to me — $1.50 (3 km)" once quoted, otherwise the rate per km. */
+function deliveryTitle(
+  group: CartGroup,
+  quote: { chargeUsdCents: number; distanceKm: number } | null,
+): string {
+  if (quote) {
+    return `Deliver to me — ${formatUsd(quote.chargeUsdCents)} (${String(quote.distanceKm)} km)`;
+  }
+  return group.deliveryPerKmUsdCents > 0
+    ? `Deliver to me — ${formatUsd(group.deliveryPerKmUsdCents)} per km`
+    : 'Deliver to me — charged per km';
+}
+
 export default function Cart() {
   const { colors } = useTheme();
   const onBack = useBack(useMarketHome());
@@ -110,6 +126,37 @@ export default function Cart() {
     group.delivers && methods[group.providerId] === 'delivery' ? 'delivery' : 'collection';
   const needsAddress = groups.some((g) => methodFor(g) === 'delivery');
 
+  // Delivery is charged per km from each shop to this point, picked on the
+  // map (type the address, then move the pin onto the gate).
+  const [deliveryPoint, setDeliveryPoint] = useState<{ lat: number; lng: number } | null>(null);
+  const pickedLocation = useLocationPickerStore((s) => s.result);
+  const clearPickedLocation = useLocationPickerStore((s) => s.clearResult);
+  useEffect(() => {
+    if (pickedLocation?.purpose !== DELIVERY_POINT_PURPOSE) return;
+    setDeliveryPoint({ lat: pickedLocation.lat, lng: pickedLocation.lng });
+    if (pickedLocation.areaName) {
+      setDeliveryAddress((typed) => typed.trim() || pickedLocation.areaName || '');
+    }
+    setAddressError(null);
+    clearPickedLocation();
+  }, [pickedLocation, clearPickedLocation]);
+  const deliveringIds = groups.filter((g) => g.delivers).map((g) => g.providerId);
+  const quoteResults = useDeliveryQuotes(deliveringIds, deliveryPoint);
+  const quoteFor = (providerId: string) =>
+    quoteResults[deliveringIds.indexOf(providerId)]?.data ?? null;
+  const openDeliveryMap = () => {
+    router.push({
+      pathname: '/map/pick-location',
+      params: {
+        purpose: DELIVERY_POINT_PURPOSE,
+        ...(deliveryAddress.trim() ? { q: deliveryAddress.trim() } : {}),
+        ...(deliveryPoint
+          ? { lat: String(deliveryPoint.lat), lng: String(deliveryPoint.lng) }
+          : {}),
+      },
+    });
+  };
+
   // Coins pay for whole orders only, never part of one: shop by shop, an
   // order is paid with coins if the balance left covers all of it. The
   // server enforces the same rule.
@@ -124,7 +171,9 @@ export default function Cart() {
     return groups.map((group) => {
       const fulfilment = methodFor(group);
       const products = group.lines.reduce((n, l) => n + l.priceUsdCents * l.quantity, 0);
-      const delivery = fulfilment === 'delivery' ? group.deliveryChargeUsdCents : 0;
+      // Unknown (0) until the delivery point is picked and quoted.
+      const delivery =
+        fulfilment === 'delivery' ? (quoteFor(group.providerId)?.chargeUsdCents ?? 0) : 0;
       const serviceFee = orderServiceFeeUsdCents(products, marketplaceFeeBps, marketplaceFeePaidBy);
       const orderAmount = products + delivery + serviceFee;
       const coins = coinsToPayInFull(orderAmount, coinUsdCents, coinsLeft);
@@ -177,6 +226,17 @@ export default function Cart() {
       setAddressError('Enter where to deliver.');
       return;
     }
+    if (needsAddress && !deliveryPoint) {
+      setAddressError('Pick the delivery point on the map, so delivery can be charged per km.');
+      return;
+    }
+    if (
+      needsAddress &&
+      plan.some((p) => p.fulfilment === 'delivery' && !quoteFor(p.group.providerId))
+    ) {
+      setAddressError('Working out the delivery charge. Try again in a moment.');
+      return;
+    }
     setAddressError(null);
     setSellerErrors({});
     setSubmitting(true);
@@ -194,10 +254,19 @@ export default function Cart() {
               checkoutKey: `${getCheckoutKey(group.providerId)}-${variantTag([
                 fulfilment,
                 fulfilment === 'delivery' ? deliveryAddress.trim() : '',
+                fulfilment === 'delivery' && deliveryPoint
+                  ? `${deliveryPoint.lat.toFixed(5)},${deliveryPoint.lng.toFixed(5)}`
+                  : '',
                 coins,
               ])}`,
               fulfilment,
-              ...(fulfilment === 'delivery' ? { deliveryAddress: deliveryAddress.trim() } : {}),
+              ...(fulfilment === 'delivery' && deliveryPoint
+                ? {
+                    deliveryAddress: deliveryAddress.trim(),
+                    deliveryLat: deliveryPoint.lat,
+                    deliveryLng: deliveryPoint.lng,
+                  }
+                : {}),
               ...(coins > 0 ? { coins } : {}),
               items: group.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
             })
@@ -360,8 +429,8 @@ export default function Cart() {
             />
             {group.delivers ? (
               <RadioCard
-                title={`Deliver to me — ${formatUsd(group.deliveryChargeUsdCents)}`}
-                description="The shop brings it to your address."
+                title={deliveryTitle(group, quoteFor(group.providerId))}
+                description="The shop brings it to your address. Charged per km from the shop."
                 dot
                 selected={fulfilment === 'delivery'}
                 onPress={() => {
@@ -394,6 +463,16 @@ export default function Cart() {
             }}
             placeholder="House number, street and suburb"
           />
+          <Button
+            label={deliveryPoint ? 'Move the delivery point' : 'Pick the delivery point on the map'}
+            variant="secondary"
+            onPress={openDeliveryMap}
+          />
+          <Text variant="metaSmall" color="neutral600">
+            {deliveryPoint
+              ? 'Delivery point set. Delivery is charged per km from the shop to it.'
+              : 'Delivery is charged per km from the shop, so set where it should go.'}
+          </Text>
           {addressError ? (
             <Text
               variant="meta"

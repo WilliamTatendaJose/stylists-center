@@ -3,6 +3,7 @@ import {
   canCollectOrder,
   canVendorCancelOrder,
   dispatchedStatusFor,
+  effectiveDeliveryPerKmUsdCents,
   orderAmountDueUsdCents,
   type OrderRowDto,
   type ProductDetailDto,
@@ -33,6 +34,7 @@ export interface ProductGeoRow {
   pickupAddress: string;
   delivers: boolean;
   deliveryChargeUsdCents: number;
+  deliveryPerKmUsdCents: number;
   deliveryAreas: string[];
   distanceKm: number;
 }
@@ -59,13 +61,20 @@ export function toProductRow(row: ProductGeoRow): ProductRowDto {
   };
 }
 
-export function toProductDetail(row: ProductGeoRow): ProductDetailDto {
+export function toProductDetail(
+  row: ProductGeoRow,
+  standardDeliveryPerKmUsdCents: number,
+): ProductDetailDto {
   return {
     ...toProductRow(row),
     description: row.description,
     pickupHours: row.pickupHours,
     pickupAddress: row.pickupAddress,
     deliveryChargeUsdCents: row.deliveryChargeUsdCents,
+    deliveryPerKmUsdCents: effectiveDeliveryPerKmUsdCents(
+      row.deliveryPerKmUsdCents,
+      standardDeliveryPerKmUsdCents,
+    ),
     deliveryAreas: row.deliveryAreas,
   };
 }
@@ -85,6 +94,7 @@ export function toOrderRow(order: OrderWithRelations): OrderRowDto {
     fulfilment: order.fulfilment,
     deliveryAddress: order.deliveryAddress,
     deliveryChargeUsdCents: order.deliveryChargeUsdCents,
+    deliveryDistanceKm: order.deliveryDistanceKm,
     coinsUsed: order.coinsUsed,
     coinsValueUsdCents: order.coinsValueUsdCents,
     serviceFeeUsdCents: order.serviceFeeUsdCents,
@@ -145,6 +155,7 @@ export function toProviderOrder(order: VendorOrderWithRelations): ProviderOrderD
     fulfilment: order.fulfilment,
     deliveryAddress: order.deliveryAddress,
     deliveryChargeUsdCents: order.deliveryChargeUsdCents,
+    deliveryDistanceKm: order.deliveryDistanceKm,
     coinsUsed: order.coinsUsed,
     coinsValueUsdCents: order.coinsValueUsdCents,
     serviceFeeUsdCents: order.serviceFeeUsdCents,

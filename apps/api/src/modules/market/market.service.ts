@@ -13,7 +13,12 @@ import {
   dispatchedStatusFor,
   formatOrderReference,
   isOrderCompleted,
+  billableDeliveryKm,
   coinsToCover,
+  deliveryChargeUsdCents as deliveryChargeFor,
+  distanceKmBetween,
+  effectiveDeliveryPerKmUsdCents,
+  type DeliveryQuoteDto,
   orderServiceFeeUsdCents,
   orderTotalUsdCents,
   type CreateOrderInput,
@@ -64,7 +69,7 @@ const PRODUCT_COLUMNS = Prisma.sql`
   pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName",
   COALESCE(va."collectionHours", pr."workingHoursLabel") AS "pickupHours",
   COALESCE(va."collectionAddress", va."shopAddress") AS "pickupAddress",
-  va.delivers, va."deliveryChargeUsdCents", va."deliveryAreas",
+  va.delivers, va."deliveryChargeUsdCents", va."deliveryPerKmUsdCents", va."deliveryAreas",
   pr."ratingAvg" AS "sellerRatingAvg", pr."completedCount" AS "sellerCompletedCount"`;
 
 @Injectable()
@@ -200,7 +205,7 @@ export class MarketService {
     `;
     const row = rows[0];
     if (!row) throw new NotFoundException('Product not found');
-    return toProductDetail(row);
+    return toProductDetail(row, await this.standardDeliveryRate());
   }
 
   /**
@@ -229,10 +234,17 @@ export class MarketService {
     }
     const coinUsdCents = coins > 0 ? await this.setting('coinUsdCents') : 0;
     const settings = this.settings ?? settingsFor(this.prisma);
-    const [marketplaceFeeBps, marketplaceFeePaidBy] = await Promise.all([
+    const [marketplaceFeeBps, marketplaceFeePaidBy, standardDeliveryPerKm] = await Promise.all([
       settings.get('marketplaceFeeBps'),
       settings.get('marketplaceFeePaidBy'),
+      settings.get('deliveryPerKmUsdCents'),
     ]);
+    const deliveryPoint =
+      fulfilment === 'delivery' &&
+      input.deliveryLat !== undefined &&
+      input.deliveryLng !== undefined
+        ? { lat: input.deliveryLat, lng: input.deliveryLng }
+        : null;
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Serialize retries for this buyer/request before touching stock. A
@@ -247,6 +259,9 @@ export class MarketService {
         providerId: input.providerId,
         fulfilment,
         deliveryAddress,
+        // Only when sent, so a checkout fingerprinted before per-km delivery
+        // still matches on retry.
+        ...(deliveryPoint ? { deliveryPoint } : {}),
         coins,
         items: [...input.items].sort((a, b) => a.productId.localeCompare(b.productId)),
       });
@@ -331,8 +346,19 @@ export class MarketService {
       const totalUsdCents = orderTotalUsdCents(
         lines.map((l) => ({ priceUsdCents: l.product.priceUsdCents, quantity: l.quantity })),
       );
-      const deliveryChargeUsdCents =
-        fulfilment === 'delivery' ? seller.vendor.deliveryChargeUsdCents : 0;
+      // Per km from the shop to the delivery point. An app version from
+      // before per-km delivery sends no point and keeps the old flat charge.
+      let deliveryChargeUsdCents = 0;
+      let deliveryDistanceKm: number | null = null;
+      if (fulfilment === 'delivery') {
+        if (deliveryPoint) {
+          const quote = deliveryQuote(seller, deliveryPoint, standardDeliveryPerKm);
+          deliveryChargeUsdCents = quote.chargeUsdCents;
+          deliveryDistanceKm = quote.distanceKm;
+        } else {
+          deliveryChargeUsdCents = seller.vendor.deliveryChargeUsdCents;
+        }
+      }
       const serviceFeeUsdCents = orderServiceFeeUsdCents(
         totalUsdCents,
         marketplaceFeeBps,
@@ -376,6 +402,9 @@ export class MarketService {
           paymentMethod: 'cash',
           fulfilment,
           deliveryAddress,
+          deliveryLat: deliveryPoint?.lat ?? null,
+          deliveryLng: deliveryPoint?.lng ?? null,
+          deliveryDistanceKm,
           deliveryChargeUsdCents,
           serviceFeeUsdCents,
           checkoutKey: input.checkoutKey,
@@ -743,6 +772,28 @@ export class MarketService {
     return order;
   }
 
+  /**
+   * What delivery from a shop to a point costs, for the cart to show before
+   * checkout. Checkout works it out again the same way.
+   */
+  async quoteDelivery(
+    providerId: string,
+    point: { lat: number; lng: number },
+  ): Promise<DeliveryQuoteDto> {
+    const seller = await this.prisma.providerProfile.findUnique({
+      where: { id: providerId },
+      include: { vendor: true },
+    });
+    if (seller?.vendor?.status !== 'approved' || !seller.vendor.delivers) {
+      throw new BadRequestException("This shop doesn't deliver");
+    }
+    return deliveryQuote(seller, point, await this.standardDeliveryRate());
+  }
+
+  private async standardDeliveryRate(): Promise<number> {
+    return (this.settings ?? settingsFor(this.prisma)).get('deliveryPerKmUsdCents');
+  }
+
   private async setting(key: 'coinUsdCents'): Promise<number> {
     return (this.settings ?? settingsFor(this.prisma)).get(key);
   }
@@ -792,6 +843,35 @@ export class MarketService {
     });
     return toProviderOrder(order);
   }
+}
+
+/**
+ * Per-km delivery from the shop (its pin, or the stylist's location when it
+ * has none) to a point: straight-line km, rounded up, at least 1 km.
+ */
+function deliveryQuote(
+  seller: {
+    latitude: number;
+    longitude: number;
+    vendor: {
+      shopLat: number | null;
+      shopLng: number | null;
+      deliveryPerKmUsdCents: number;
+    } | null;
+  },
+  point: { lat: number; lng: number },
+  standardRate: number,
+): DeliveryQuoteDto {
+  const shop =
+    seller.vendor?.shopLat != null && seller.vendor.shopLng != null
+      ? { lat: seller.vendor.shopLat, lng: seller.vendor.shopLng }
+      : { lat: seller.latitude, lng: seller.longitude };
+  const km = billableDeliveryKm(distanceKmBetween(shop, point));
+  const perKmUsdCents = effectiveDeliveryPerKmUsdCents(
+    seller.vendor?.deliveryPerKmUsdCents ?? 0,
+    standardRate,
+  );
+  return { distanceKm: km, perKmUsdCents, chargeUsdCents: deliveryChargeFor(km, perKmUsdCents) };
 }
 
 /** The checkout response, rebuilt from a stored order so a replayed request gets the same answer. */

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createZodDto } from 'nestjs-zod';
 import {
   createOrderSchema,
+  deliveryQuoteQuerySchema,
   isBrowseRadiusKm,
   MAX_BROWSE_RADIUS_KM,
   MIN_BROWSE_RADIUS_KM,
@@ -47,3 +48,5 @@ export class ProductDetailQueryDto extends createZodDto(productDetailQuerySchema
 export class CreateOrderDto extends createZodDto(createOrderSchema) {}
 export class CreateProductReviewDto extends createZodDto(createProductReviewSchema) {}
 export class MarkOrderReadyDto extends createZodDto(markOrderReadySchema) {}
+
+export class DeliveryQuoteQueryDto extends createZodDto(deliveryQuoteQuerySchema) {}

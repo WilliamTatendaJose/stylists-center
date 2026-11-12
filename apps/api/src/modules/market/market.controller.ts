@@ -7,6 +7,7 @@ import { MarketService } from './market.service';
 import {
   CreateOrderDto,
   CreateProductReviewDto,
+  DeliveryQuoteQueryDto,
   MarkOrderReadyDto,
   ProductDetailQueryDto,
   ProductsQueryDto,
@@ -35,6 +36,11 @@ export class MarketController {
       limit: query.limit,
       offset: query.offset,
     });
+  }
+
+  @Get('delivery-quote')
+  deliveryQuote(@Query() query: DeliveryQuoteQueryDto) {
+    return this.market.quoteDelivery(query.providerId, { lat: query.lat, lng: query.lng });
   }
 
   @Get('products/:id')

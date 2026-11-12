@@ -187,7 +187,7 @@ describe('vendor applications', () => {
   describe('delivery and collection settings', () => {
     const settings = {
       delivers: true,
-      deliveryChargeUsdCents: 250,
+      deliveryPerKmUsdCents: 60,
       deliveryAreas: ['Avondale', 'Borrowdale', 'Avondale'],
       collectionAddress: '12 Julius Nyerere Way',
       collectionHours: 'Mon-Sat 8-5',
@@ -202,7 +202,7 @@ describe('vendor applications', () => {
       const saved = await vendors.updateFulfilment(userId, settings);
       expect(saved).toMatchObject({
         delivers: true,
-        deliveryChargeUsdCents: 250,
+        deliveryPerKmUsdCents: 60,
         // Duplicates collapse.
         deliveryAreas: ['Avondale', 'Borrowdale'],
         collectionHours: 'Mon-Sat 8-5',
