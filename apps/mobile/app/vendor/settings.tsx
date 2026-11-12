@@ -14,6 +14,7 @@ import {
   useTheme,
 } from '@sc/ui';
 import { useUpdateVendorFulfilment, useVendorMe } from '../../src/api/hooks/useMarket.js';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useBack } from '../../src/navigation/useBack.js';
 
@@ -49,6 +50,7 @@ export default function VendorSettings() {
   const application = vendorMe?.application ?? null;
 
   const [delivers, setDelivers] = useState(false);
+  const { deliveryPerKmUsdCents: standardPerKm } = useAppConfig();
   const [charge, setCharge] = useState('');
   const [areas, setAreas] = useState('');
   const [collectionAddress, setCollectionAddress] = useState('');
@@ -61,8 +63,8 @@ export default function VendorSettings() {
     setLoaded(true);
     setDelivers(application.delivers);
     setCharge(
-      application.deliveryChargeUsdCents > 0
-        ? (application.deliveryChargeUsdCents / 100).toFixed(2)
+      application.deliveryPerKmUsdCents > 0
+        ? (application.deliveryPerKmUsdCents / 100).toFixed(2)
         : '',
     );
     setAreas(application.deliveryAreas.join(', '));
@@ -78,16 +80,19 @@ export default function VendorSettings() {
     );
   }
 
+  const typedRate = Math.round(Number(charge || '0') * 100);
+  const ratePreview = Number.isFinite(typedRate) && typedRate > 0 ? typedRate : standardPerKm;
+
   const save = () => {
     setError(null);
     const chargeCents = Math.round(Number(charge || '0') * 100);
     if (!Number.isFinite(chargeCents) || chargeCents < 0) {
-      setError('Enter the delivery charge in dollars, for example 2.50.');
+      setError('Enter the delivery rate per km in dollars, for example 0.50.');
       return;
     }
     const parsed = vendorFulfilmentSchema.safeParse({
       delivers,
-      deliveryChargeUsdCents: delivers ? chargeCents : 0,
+      deliveryPerKmUsdCents: delivers ? chargeCents : 0,
       deliveryAreas: delivers ? parseAreas(areas) : [],
       collectionAddress: collectionAddress.trim() || null,
       collectionHours: collectionHours.trim() || null,
@@ -155,15 +160,16 @@ export default function VendorSettings() {
         <View style={styles.section}>
           <View style={styles.field}>
             <TextField
-              label="Delivery charge (USD)"
+              label="Delivery rate per km (USD)"
               value={charge}
               onChangeText={setCharge}
               keyboardType="decimal-pad"
-              placeholder="0.00"
+              placeholder={(standardPerKm / 100).toFixed(2)}
             />
             <Text variant="metaSmall" color="neutral600">
-              Added to each delivery order. Buyers see{' '}
-              {formatUsd(Math.round(Number(charge || '0') * 100))}.
+              Buyers pay this for each km from your shop to their delivery point (rounded up, at
+              least 1 km): 4 km at {formatUsd(ratePreview)} is {formatUsd(ratePreview * 4)}. Leave
+              it empty to use the standard {formatUsd(standardPerKm)} per km.
             </Text>
           </View>
           <TextField

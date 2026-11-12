@@ -45,7 +45,10 @@ export type ApplyVendorInput = z.infer<typeof applyVendorSchema>;
 export const vendorFulfilmentSchema = z
   .object({
     delivers: z.boolean(),
-    deliveryChargeUsdCents: z.number().int().min(0).max(100_000),
+    /** Old flat charge; no longer used for new orders. */
+    deliveryChargeUsdCents: z.number().int().min(0).max(100_000).optional(),
+    /** The shop's delivery rate per km; 0 uses the standard rate. */
+    deliveryPerKmUsdCents: z.number().int().min(0).max(10_000).default(0),
     deliveryAreas: z.array(z.string().trim().min(1).max(60)).max(30),
     collectionAddress: z.string().trim().max(200).nullable(),
     collectionHours: z.string().trim().max(120).nullable(),
@@ -73,6 +76,8 @@ export const vendorApplicationSchema = z.object({
   submittedAt: z.iso.datetime(),
   delivers: z.boolean(),
   deliveryChargeUsdCents: z.number().int(),
+  /** The shop's own rate per km; 0 means it uses the standard rate. */
+  deliveryPerKmUsdCents: z.number().int(),
   deliveryAreas: z.array(z.string()),
   collectionAddress: z.string().nullable(),
   collectionHours: z.string().nullable(),

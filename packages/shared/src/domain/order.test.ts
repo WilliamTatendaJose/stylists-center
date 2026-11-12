@@ -137,3 +137,26 @@ describe('marketplace service fee', () => {
     expect(maxCoinsForOrder(1000, 200, 10, 30)).toBe(123);
   });
 });
+
+describe('per-km delivery', () => {
+  it('charges whole km, rounded up, at least 1 km', async () => {
+    const { deliveryChargeUsdCents, billableDeliveryKm, effectiveDeliveryPerKmUsdCents } =
+      await import('./order.js');
+    expect(billableDeliveryKm(0.2)).toBe(1);
+    expect(billableDeliveryKm(4)).toBe(4);
+    expect(billableDeliveryKm(4.1)).toBe(5);
+    expect(deliveryChargeUsdCents(4.1, 50)).toBe(250);
+    expect(deliveryChargeUsdCents(3, 0)).toBe(0);
+    expect(effectiveDeliveryPerKmUsdCents(0, 50)).toBe(50);
+    expect(effectiveDeliveryPerKmUsdCents(80, 50)).toBe(80);
+  });
+
+  it('measures straight-line distance', async () => {
+    const { distanceKmBetween } = await import('./order.js');
+    // 0.01 degrees of latitude is about 1.11 km.
+    expect(distanceKmBetween({ lat: -17.8, lng: 31 }, { lat: -17.81, lng: 31 })).toBeCloseTo(
+      1.11,
+      1,
+    );
+  });
+});

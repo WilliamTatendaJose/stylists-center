@@ -27,6 +27,8 @@ export interface CartLine {
    */
   delivers?: boolean;
   deliveryChargeUsdCents?: number;
+  /** Delivery rate per km, shown until the delivery point is picked. */
+  deliveryPerKmUsdCents?: number;
 }
 
 export interface CartState {
@@ -141,6 +143,8 @@ export interface CartGroup {
   providerName: string;
   delivers: boolean;
   deliveryChargeUsdCents: number;
+  /** 0 on lines saved before per-km delivery. */
+  deliveryPerKmUsdCents: number;
   lines: CartLine[];
 }
 
@@ -157,6 +161,7 @@ export function groupCartBySeller(lines: readonly CartLine[]): CartGroup[] {
         providerName: line.providerName,
         delivers: line.delivers ?? false,
         deliveryChargeUsdCents: line.deliveryChargeUsdCents ?? 0,
+        deliveryPerKmUsdCents: line.deliveryPerKmUsdCents ?? 0,
         lines: [],
       };
       groups.set(line.providerId, group);

@@ -232,7 +232,11 @@ const keyExtractor = (item: OrderListItem) => item.order.id;
 function includedExtras(order: OrderRowDto): string {
   const parts: string[] = [];
   if (order.deliveryChargeUsdCents > 0) {
-    parts.push(`${formatUsd(order.deliveryChargeUsdCents)} delivery`);
+    parts.push(
+      `${formatUsd(order.deliveryChargeUsdCents)} delivery${
+        order.deliveryDistanceKm ? ` (${String(order.deliveryDistanceKm)} km)` : ''
+      }`,
+    );
   }
   if (order.serviceFeeUsdCents > 0) {
     parts.push(`${formatUsd(order.serviceFeeUsdCents)} service fee`);

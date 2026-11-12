@@ -1,6 +1,13 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {
   PRODUCT_PAGE_SIZE,
+  type DeliveryQuoteDto,
   type CreateOrderInput,
   type CreateOrderResponse,
   type CreateProviderProductInput,
@@ -321,5 +328,30 @@ export function useUpdateVendorFulfilment() {
       void queryClient.invalidateQueries({ queryKey: VENDOR_KEY });
       void queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
     },
+  });
+}
+
+/**
+ * `GET /v1/market/delivery-quote` for each delivering shop: what delivery to
+ * the picked point costs (per km from the shop). Checkout charges the same.
+ */
+export function useDeliveryQuotes(
+  providerIds: readonly string[],
+  point: { lat: number; lng: number } | null,
+) {
+  return useQueries({
+    queries: providerIds.map((providerId) => ({
+      enabled: point !== null,
+      queryKey: ['market', 'delivery-quote', providerId, point?.lat, point?.lng],
+      queryFn: () =>
+        apiFetch<DeliveryQuoteDto>(
+          `/v1/market/delivery-quote?${new URLSearchParams({
+            providerId,
+            lat: String(point?.lat),
+            lng: String(point?.lng),
+          }).toString()}`,
+        ),
+      staleTime: 5 * 60_000,
+    })),
   });
 }

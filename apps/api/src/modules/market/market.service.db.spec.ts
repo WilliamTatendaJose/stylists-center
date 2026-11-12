@@ -251,6 +251,51 @@ describe('MarketService against the database', () => {
       });
     });
 
+    it('charges delivery per km from the shop to the picked point', async () => {
+      // The shop has no pin, so it is measured from the profile at -17.8, 31.03.
+      // -17.82 is about 2.2 km south: billed as 3 km at the standard 50c.
+      const point = { lat: -17.82, lng: 31.03 };
+      expect(await market.quoteDelivery(providerId, point)).toEqual({
+        distanceKm: 3,
+        perKmUsdCents: 50,
+        chargeUsdCents: 150,
+      });
+      const created = await market.createOrder(buyerId, {
+        providerId,
+        checkoutKey: checkoutKey('per-km'),
+        fulfilment: 'delivery',
+        deliveryAddress: '12 Samora Machel Ave',
+        deliveryLat: point.lat,
+        deliveryLng: point.lng,
+        items: [{ productId, quantity: 1 }],
+      });
+      expect(created).toMatchObject({
+        totalUsdCents: 1000,
+        deliveryChargeUsdCents: 150,
+        serviceFeeUsdCents: 30,
+        amountDueUsdCents: 1180,
+      });
+      const order = await prisma.order.findUniqueOrThrow({ where: { id: created.id } });
+      expect(order).toMatchObject({ deliveryDistanceKm: 3, deliveryLat: -17.82 });
+
+      // The shop's own rate wins over the standard one.
+      await prisma.vendorApplication.update({
+        where: { providerId },
+        data: { deliveryPerKmUsdCents: 80 },
+      });
+      try {
+        expect(await market.quoteDelivery(providerId, point)).toMatchObject({
+          perKmUsdCents: 80,
+          chargeUsdCents: 240,
+        });
+      } finally {
+        await prisma.vendorApplication.update({
+          where: { providerId },
+          data: { deliveryPerKmUsdCents: 0 },
+        });
+      }
+    });
+
     it('keeps the delivery charge apart from the product total', async () => {
       const created = await market.createOrder(buyerId, {
         providerId,
@@ -609,6 +654,8 @@ describe('MarketService against the database', () => {
       expect(detail).toMatchObject({
         delivers: true,
         deliveryChargeUsdCents: 300,
+        // The shop set no rate of its own, so the standard rate applies.
+        deliveryPerKmUsdCents: 50,
         deliveryAreas: ['Avondale'],
         pickupAddress: '1 Test Road, Avondale',
         pickupHours: 'Mon-Sat 9-5',

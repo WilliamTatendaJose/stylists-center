@@ -166,6 +166,17 @@ export const SETTING_DEFINITIONS = {
     min: 0,
     max: 5_000,
   },
+  deliveryPerKmUsdCents: {
+    kind: 'cents',
+    label: 'Standard delivery rate per km',
+    help: "Marketplace delivery is charged per km from the shop to the buyer's delivery point (straight-line distance, rounded up to whole km, at least 1 km). Used for shops that have not set their own rate.",
+    group: 'Fees and billing',
+    env: 'DELIVERY_PER_KM_USD_CENTS',
+    public: true,
+    default: 50,
+    min: 0,
+    max: 10_000,
+  },
   marketplaceFeePaidBy: {
     kind: 'text',
     label: 'Who pays the marketplace commission',

@@ -87,6 +87,7 @@ export default function ProductDetail() {
         stockQty: product.stockQty,
         delivers: product.delivers,
         deliveryChargeUsdCents: product.deliveryChargeUsdCents,
+        deliveryPerKmUsdCents: product.deliveryPerKmUsdCents,
       },
     );
     setAdded(true);
@@ -184,7 +185,7 @@ export default function ProductDetail() {
         </Text>
         <Text variant="meta" color="neutral700">
           {product.delivers
-            ? `Delivery: ${formatUsd(product.deliveryChargeUsdCents)}${
+            ? `Delivery: ${formatUsd(product.deliveryPerKmUsdCents)} per km${
                 product.deliveryAreas.length ? ` · ${product.deliveryAreas.join(', ')}` : ''
               }`
             : 'Collection only. This shop does not deliver.'}

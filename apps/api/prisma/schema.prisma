@@ -560,6 +560,11 @@ model Order {
   pickupNote             String?
   fulfilment             FulfilmentMethod @default(collection)
   deliveryAddress        String?
+  /// The delivery point the buyer picked on the map; the charge is per km from the shop to here.
+  deliveryLat            Float?
+  deliveryLng            Float?
+  /// Whole km billed (rounded up, at least 1). Null for collection and older flat-charge orders.
+  deliveryDistanceKm     Float?
   /// Kept apart from totalUsdCents: the commission is on the product total only.
   deliveryChargeUsdCents Int              @default(0)
   /// Coins the buyer spent on this order and what they were worth at the time.
@@ -608,7 +613,10 @@ model VendorApplication {
   submittedAt            DateTime        @default(now())
   /// Delivery and collection defaults, set by the vendor once approved.
   delivers               Boolean         @default(false)
+  /// Old flat delivery charge; new orders charge per km instead.
   deliveryChargeUsdCents Int             @default(0)
+  /// The shop's delivery rate per km; 0 uses the standard rate (setting deliveryPerKmUsdCents).
+  deliveryPerKmUsdCents  Int             @default(0)
   deliveryAreas          String[]        @default([])
   collectionAddress      String?
   collectionHours        String?

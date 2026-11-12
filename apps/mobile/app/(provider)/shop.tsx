@@ -225,7 +225,11 @@ function VendorStatusCard() {
 function amountBreakdown(order: ProviderOrderDto): string {
   const parts = [`Products ${formatUsd(order.totalUsdCents)}`];
   if (order.deliveryChargeUsdCents > 0) {
-    parts.push(`delivery ${formatUsd(order.deliveryChargeUsdCents)}`);
+    parts.push(
+      `delivery ${formatUsd(order.deliveryChargeUsdCents)}${
+        order.deliveryDistanceKm ? ` (${String(order.deliveryDistanceKm)} km)` : ''
+      }`,
+    );
   }
   if (order.serviceFeeUsdCents > 0) {
     parts.push(`service fee ${formatUsd(order.serviceFeeUsdCents)}`);
@@ -544,7 +548,11 @@ export function ShopScreen({ standalone = false }: { standalone?: boolean }) {
             <Text variant="cardTitle">Delivery and collection</Text>
             <Text variant="meta" color="neutral700" style={styles.meta}>
               {vendor?.delivers
-                ? `You deliver (${formatUsd(vendor.deliveryChargeUsdCents)}) to ${vendor.deliveryAreas.join(', ')}.`
+                ? `You deliver (${
+                    vendor.deliveryPerKmUsdCents > 0
+                      ? `${formatUsd(vendor.deliveryPerKmUsdCents)} per km`
+                      : 'standard rate per km'
+                  }) to ${vendor.deliveryAreas.join(', ')}.`
                 : 'You do not deliver. Buyers collect from your shop.'}
             </Text>
             <Button

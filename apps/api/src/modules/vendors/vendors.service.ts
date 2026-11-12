@@ -32,6 +32,7 @@ export function toVendorApplicationDto(row: VendorApplication): VendorApplicatio
     submittedAt: row.submittedAt.toISOString(),
     delivers: row.delivers,
     deliveryChargeUsdCents: row.deliveryChargeUsdCents,
+    deliveryPerKmUsdCents: row.deliveryPerKmUsdCents,
     deliveryAreas: row.deliveryAreas,
     collectionAddress: row.collectionAddress,
     collectionHours: row.collectionHours,
@@ -153,7 +154,7 @@ export class VendorsService {
       where: { id: vendor.id },
       data: {
         delivers: input.delivers,
-        deliveryChargeUsdCents: input.deliveryChargeUsdCents,
+        deliveryPerKmUsdCents: input.deliveryPerKmUsdCents,
         deliveryAreas: [...new Set(input.deliveryAreas)],
         collectionAddress: input.collectionAddress?.length ? input.collectionAddress : null,
         collectionHours: input.collectionHours?.length ? input.collectionHours : null,
