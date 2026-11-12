@@ -427,6 +427,13 @@ platform: the app just never obtains a token, so the server has nowhere to
 send. `_layout.tsx` logs `[push] could not register this device…` when that
 happens — check the device log first if notifications are missing.
 
+**Checking it end to end:** in the app, open the profile (or My page) →
+Notifications → **Send me a test notification**. The app says whether the
+phone is registered and what Expo answered; "push setup isn't finished"
+means Expo returned `InvalidCredentials`, i.e. the FCM key below is missing.
+The API also logs `Expo refused N push(es): <reason>` for any failed send
+other than an uninstalled app.
+
 Two separate credentials, both required, neither in this repo:
 
 1. **`google-services.json`** — lets Firebase initialise inside the app, which

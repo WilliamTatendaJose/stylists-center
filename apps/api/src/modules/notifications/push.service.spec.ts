@@ -181,4 +181,23 @@ describe('PushService', () => {
     await expect(push.sendToUser(userId, { title: 'x', body: 'y' })).resolves.toBeUndefined();
     expect(await prisma.devicePushToken.count({ where: { userId } })).toBe(1);
   });
+
+  describe('sendTest', () => {
+    it('reports no devices when the app never registered', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      expect(await push.sendTest(userId)).toEqual({ devices: 0, delivered: 0, errors: [] });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("reports Expo's error codes, e.g. missing Android credentials", async () => {
+      await addToken('ExponentPushToken[ok]');
+      await addToken('ExponentPushToken[nocreds]');
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(ticketsFor(null, 'InvalidCredentials'));
+      expect(await push.sendTest(userId)).toEqual({
+        devices: 2,
+        delivered: 1,
+        errors: ['InvalidCredentials'],
+      });
+    });
+  });
 });

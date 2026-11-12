@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import { color } from '@sc/tokens';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { apiFetch } from '../api/client.js';
@@ -27,6 +28,21 @@ function projectIdFromExtra(extra: unknown): string | undefined {
  */
 export async function registerPushToken(): Promise<void> {
   if (Platform.OS !== 'android' && Platform.OS !== 'ios') return;
+
+  // The server sends every notification on channel "default". Creating it
+  // ourselves (rather than letting Android invent "Miscellaneous") gives it
+  // the brand name and colour in system settings, high importance so it pops
+  // up, and the brand-red notification light where phones have one.
+  if (Platform.OS === 'android') {
+    await Notifications.setNotificationChannelAsync('default', {
+      name: 'Style Center',
+      description: 'Bookings, messages, orders and payment updates',
+      importance: Notifications.AndroidImportance.HIGH,
+      lightColor: color.accent,
+      vibrationPattern: [0, 250, 150, 250],
+      sound: 'default',
+    });
+  }
 
   const existing = await Notifications.getPermissionsAsync();
   const permission =

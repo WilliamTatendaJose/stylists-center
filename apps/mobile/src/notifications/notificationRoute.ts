@@ -13,7 +13,13 @@
  */
 export function notificationRoute(data: unknown): string | null {
   if (typeof data !== 'object' || data === null) return null;
-  const { type, matchId, conversationId, bookingId, orderId } = data as Record<string, unknown>;
+  const { type, matchId, conversationId, bookingId, orderId, audience } = data as Record<
+    string,
+    unknown
+  >;
+  // Booking updates sent to the stylist open their Jobs screen, not the
+  // client's bookings list.
+  const forStylist = audience === 'provider';
 
   switch (type) {
     case 'match.offered':
@@ -22,14 +28,23 @@ export function notificationRoute(data: unknown): string | null {
       return typeof matchId === 'string' ? '/(provider)/jobs' : null;
     case 'message.created':
       return typeof conversationId === 'string' ? `/chat/${conversationId}` : null;
+    case 'booking.requested':
+      return typeof bookingId === 'string' ? '/(provider)/jobs' : null;
     case 'booking.updated':
-      return typeof bookingId === 'string' ? '/(tabs)/bookings' : null;
+      if (typeof bookingId !== 'string') return null;
+      return forStylist ? '/(provider)/jobs' : '/(tabs)/bookings';
     case 'market.order.created':
       return typeof orderId === 'string' ? '/(provider)/shop' : null;
     case 'market.order.ready':
       return typeof orderId === 'string' ? '/market/orders' : null;
     case 'fees.reminder':
       return '/fees';
+    case 'vendor.reviewed':
+      return '/vendor/shop';
+    case 'agent.subscription':
+      return '/agent-subscription';
+    case 'wallet.cashout.paid':
+      return '/(tabs)/wallet';
     default:
       return null;
   }

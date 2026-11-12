@@ -1,6 +1,10 @@
+import { useState } from 'react';
 import { StyleSheet, Switch, View } from 'react-native';
+import { useMutation } from '@tanstack/react-query';
 import { space } from '@sc/tokens';
-import { Card, Text, useTheme } from '@sc/ui';
+import { Button, Card, Text, useTheme } from '@sc/ui';
+import { apiFetch } from '../api/client.js';
+import { registerPushToken } from '../notifications/registerPushToken.js';
 import { useMe, useUpdateNotificationPreferences } from '../api/hooks/useMe.js';
 import { describeError } from '../api/errorMessage.js';
 
@@ -10,10 +14,48 @@ const styles = StyleSheet.create({
   copy: { flex: 1 },
 });
 
+interface PushTestResult {
+  devices: number;
+  delivered: number;
+  errors: string[];
+}
+
+/** Plain-language outcome of a test notification. */
+export function describePushTest(result: PushTestResult): string {
+  if (result.devices === 0) {
+    return "This phone isn't set up for notifications yet. Allow notifications for Style Center in your phone's settings, then try again.";
+  }
+  if (result.delivered > 0) {
+    return "Test sent. It should arrive in a few seconds. If it doesn't, check that notifications for Style Center are on in your phone's settings.";
+  }
+  if (result.errors.includes('InvalidCredentials')) {
+    return "Notifications can't be delivered yet because the app's push setup isn't finished. Please let StylistsCenter support know.";
+  }
+  if (result.errors.includes('DeviceNotRegistered')) {
+    return 'This phone needs to sign up for notifications again. Close and reopen the app, then try again.';
+  }
+  return `The test couldn't be sent (${result.errors.join(', ') || 'unknown reason'}). Try again later.`;
+}
+
 export function NotificationPreferences() {
   const { colors } = useTheme();
   const { data: me } = useMe();
   const update = useUpdateNotificationPreferences();
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  const test = useMutation({
+    mutationFn: async () => {
+      // Register first: this asks for permission if needed and refreshes the
+      // phone's token, so the test checks the current setup.
+      await registerPushToken().catch(() => undefined);
+      return apiFetch<PushTestResult>('/v1/me/push-test', { method: 'POST' });
+    },
+    onSuccess: (result) => {
+      setTestMessage(describePushTest(result));
+    },
+    onError: (error) => {
+      setTestMessage(describeError(error, "Couldn't send a test notification."));
+    },
+  });
   if (!me) return null;
   return (
     <Card bordered style={styles.card}>
@@ -59,6 +101,21 @@ export function NotificationPreferences() {
           thumbColor={colors.bg}
         />
       </View>
+      <Button
+        label={test.isPending ? 'Sending…' : 'Send me a test notification'}
+        variant="secondary"
+        block
+        disabled={test.isPending}
+        onPress={() => {
+          setTestMessage(null);
+          test.mutate();
+        }}
+      />
+      {testMessage ? (
+        <Text variant="meta" color="neutral700" accessibilityLiveRegion="polite">
+          {testMessage}
+        </Text>
+      ) : null}
       {update.isError ? (
         <Text variant="meta" color="accent700" accessibilityRole="alert">
           {describeError(update.error, "Couldn't save notification settings.")}

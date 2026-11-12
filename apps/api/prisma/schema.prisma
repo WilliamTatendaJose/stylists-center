@@ -767,15 +767,19 @@ model MessageAttachment {
 /// currently allowed to earn (SRS §7: fraud mitigation can suspend an agent
 /// without deleting their history).
 model Agent {
-  id                    String             @id @default(uuid())
-  userId                String             @unique
-  user                  User               @relation(fields: [userId], references: [id])
-  referralCode          String             @unique
-  verificationStatus    VerificationStatus @default(unverified)
-  status                String             @default("active") // active | suspended
+  id                         String             @id @default(uuid())
+  userId                     String             @unique
+  user                       User               @relation(fields: [userId], references: [id])
+  referralCode               String             @unique
+  verificationStatus         VerificationStatus @default(unverified)
+  status                     String             @default("active") // active | suspended
   /// Agents pay a subscription to use the rewards programme. Null until the first payment.
-  subscriptionPaidUntil DateTime?
-  createdAt             DateTime           @default(now())
+  subscriptionPaidUntil      DateTime?
+  /// The subscriptionPaidUntil an "ending soon" reminder was sent for, so each period gets one.
+  subscriptionReminderFor    DateTime?
+  /// The subscriptionPaidUntil an "ended" notice was sent for.
+  subscriptionEndedNoticeFor DateTime?
+  createdAt                  DateTime           @default(now())
 
   referrals Referral[]
   payments  Payment[]

@@ -51,4 +51,23 @@ describe('notificationRoute', () => {
       expect(notificationRoute(value)).toBeNull();
     }
   });
+
+  it('opens the stylist Jobs screen for booking news meant for the stylist', () => {
+    expect(notificationRoute({ type: 'booking.requested', bookingId: 'b-1' })).toBe(
+      '/(provider)/jobs',
+    );
+    expect(
+      notificationRoute({ type: 'booking.updated', bookingId: 'b-1', audience: 'provider' }),
+    ).toBe('/(provider)/jobs');
+  });
+
+  it('routes vendor, agent subscription and cash-out news', () => {
+    expect(notificationRoute({ type: 'vendor.reviewed', status: 'approved' })).toBe('/vendor/shop');
+    expect(notificationRoute({ type: 'agent.subscription' })).toBe('/agent-subscription');
+    expect(notificationRoute({ type: 'wallet.cashout.paid' })).toBe('/(tabs)/wallet');
+  });
+
+  it('just opens the app for a test notification', () => {
+    expect(notificationRoute({ type: 'test' })).toBeNull();
+  });
 });

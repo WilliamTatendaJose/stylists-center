@@ -8,6 +8,7 @@ import { AdminFeesController } from './admin-fees.controller';
 import { AdminFeesService } from './admin-fees.service';
 import { FeeLedgerService } from './fee-ledger.service';
 import { FeeReminderService } from './fee-reminder.service';
+import { AgentSubscriptionReminderService } from './agent-subscription-reminder.service';
 import { FeeStandingService } from './fee-standing.service';
 import { FeeStatementService } from './fee-statement.service';
 import { FeesController } from './fees.controller';
@@ -24,6 +25,7 @@ import { FeesService } from './fees.service';
     FeeStandingService,
     FeeStatementService,
     FeeReminderService,
+    AgentSubscriptionReminderService,
     FeesService,
     AdminFeesService,
     FeesProcessor,

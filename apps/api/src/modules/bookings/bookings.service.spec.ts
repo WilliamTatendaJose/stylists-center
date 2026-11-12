@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import type { Queue } from 'bullmq';
-import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { TrustService } from '../trust/trust.service';
@@ -374,6 +374,33 @@ describe('BookingsService', () => {
     });
     return booking;
   }
+
+  it('notifies the stylist of a new booking request, opening their Jobs screen', async () => {
+    const spy = vi.spyOn(PushService.prototype, 'sendToUser').mockResolvedValue(undefined);
+    try {
+      const created = await bookings.create(clientId, {
+        providerId: providerAId,
+        serviceId: serviceAId,
+        startsAt: futureSlot(2, 9),
+      });
+      createdBookingIds.push(created.id);
+      const stylist = await prisma.providerProfile.findUniqueOrThrow({
+        where: { id: providerAId },
+        select: { userId: true },
+      });
+      await vi.waitFor(() => {
+        expect(spy).toHaveBeenCalledWith(
+          stylist.userId,
+          expect.objectContaining({
+            title: 'New booking request',
+            data: { type: 'booking.requested', bookingId: created.id, audience: 'provider' },
+          }),
+        );
+      });
+    } finally {
+      spy.mockRestore();
+    }
+  });
 
   it('creates a cash booking with a reference and no payment row', async () => {
     const startsAt = futureSlot(1);

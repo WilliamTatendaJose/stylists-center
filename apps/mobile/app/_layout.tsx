@@ -136,8 +136,12 @@ function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
     pendingReferralCode,
   ]);
 
+  // Registers once signed in, and again after a sign-in on this phone: the
+  // registration call needs the session, so running it only at launch left
+  // anyone who signed in afterwards without notifications until a restart.
+  const signedIn = accessToken !== null;
   useEffect(() => {
-    if (!isAuthHydrated) return;
+    if (!isAuthHydrated || !signedIn) return;
     void registerPushToken().catch((error: unknown) => {
       // Push must never block sign-in or rendering; the next launch retries.
       // It is logged rather than swallowed because the common failure —
@@ -147,7 +151,7 @@ function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
       // anywhere saying why.
       console.warn('[push] could not register this device for notifications:', error);
     });
-  }, [isAuthHydrated]);
+  }, [isAuthHydrated, signedIn]);
 
   // Gated on the same condition as the navigator below, since routing to a
   // screen before <Stack> exists throws — and a cold start from a notification

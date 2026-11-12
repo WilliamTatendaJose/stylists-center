@@ -24,6 +24,15 @@ export interface PushMessage {
   data?: Record<string, string>;
 }
 
+export interface PushTestResult {
+  /** Devices registered for this user. 0 means the app never registered a token. */
+  devices: number;
+  /** Devices Expo accepted the test for. */
+  delivered: number;
+  /** Expo's error codes for the rest, e.g. InvalidCredentials, DeviceNotRegistered. */
+  errors: string[];
+}
+
 interface ExpoTicket {
   status: 'ok' | 'error';
   id?: string;
@@ -76,7 +85,34 @@ export class PushService {
     }
   }
 
-  private async send(tokens: string[], message: PushMessage): Promise<void> {
+  /**
+   * Sends a test notification to every device of a user and reports exactly
+   * what Expo said for each one. Unlike normal sends this surfaces failures,
+   * so a person can check from the app that notifications reach them, and the
+   * reason when they don't (for example Android push credentials not set up).
+   */
+  async sendTest(userId: string): Promise<PushTestResult> {
+    const tokens = await this.prisma.devicePushToken.findMany({
+      where: { userId },
+      select: { expoPushToken: true },
+    });
+    if (tokens.length === 0) return { devices: 0, delivered: 0, errors: [] };
+    const tickets = await this.send(
+      tokens.map((t) => t.expoPushToken),
+      {
+        title: 'Notifications are working',
+        body: 'This is a test from StylistsCenter. You will get booking, message and payment updates like this.',
+        data: { type: 'test' },
+      },
+    );
+    const errors = tickets
+      .filter((ticket) => ticket.status === 'error')
+      .map((ticket) => ticket.details?.error ?? ticket.message ?? 'Unknown error');
+    return { devices: tokens.length, delivered: tickets.length - errors.length, errors };
+  }
+
+  private async send(tokens: string[], message: PushMessage): Promise<ExpoTicket[]> {
+    const all: ExpoTicket[] = [];
     const url = this.config.get('EXPO_PUSH_API_URL', { infer: true });
     const accessToken = this.config.get('EXPO_ACCESS_TOKEN', { infer: true });
 
@@ -105,12 +141,33 @@ export class PushService {
 
       if (!res.ok) {
         this.logger.warn(`Expo push rejected the batch: ${String(res.status)}`);
+        all.push(
+          ...chunk.map((): ExpoTicket => ({
+            status: 'error',
+            message: `HTTP ${String(res.status)}`,
+          })),
+        );
         continue;
       }
 
       const parsed = (await res.json()) as { data?: ExpoTicket[] };
-      await this.pruneDeadTokens(chunk, parsed.data ?? []);
+      const tickets = parsed.data ?? [];
+      all.push(...tickets);
+      await this.pruneDeadTokens(chunk, tickets);
+      // Anything other than an uninstalled app is a setup problem worth seeing
+      // in the logs, e.g. InvalidCredentials when Android (FCM) credentials
+      // are missing, which would otherwise make every Android push vanish.
+      const problems = tickets.filter(
+        (t) => t.status === 'error' && t.details?.error !== DEVICE_NOT_REGISTERED,
+      );
+      if (problems.length > 0) {
+        const reasons = [
+          ...new Set(problems.map((t) => t.details?.error ?? t.message ?? 'unknown')),
+        ];
+        this.logger.warn(`Expo refused ${String(problems.length)} push(es): ${reasons.join(', ')}`);
+      }
     }
+    return all;
   }
 
   /**

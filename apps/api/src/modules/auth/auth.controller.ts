@@ -9,6 +9,8 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Throttle } from '@nestjs/throttler';
+import { PushService } from '../notifications/push.service';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './current-user.decorator';
@@ -48,6 +50,7 @@ export class MeController {
   constructor(
     private readonly auth: AuthService,
     private readonly images: ImageStorageService,
+    private readonly push: PushService,
   ) {}
 
   @UseGuards(JwtAuthGuard)
@@ -94,6 +97,14 @@ export class MeController {
   @Post('push-token')
   registerPushToken(@CurrentUser() user: { id: string }, @Body() dto: RegisterPushTokenDto) {
     return this.auth.registerPushToken(user.id, dto);
+  }
+
+  /** Sends a test notification to the signed-in user's devices and reports the outcome. */
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('push-test')
+  pushTest(@CurrentUser() user: { id: string }) {
+    return this.push.sendTest(user.id);
   }
 
   @UseGuards(JwtAuthGuard)
