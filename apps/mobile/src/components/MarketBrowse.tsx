@@ -1,7 +1,14 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { formatUsd, type ProductCategory, type ProductRowDto, type ProductSort } from '@sc/shared';
+import {
+  formatCoinPrice,
+  formatUsd,
+  type ProductCategory,
+  type ProductRowDto,
+  type ProductSort,
+} from '@sc/shared';
+import { useAppConfig } from '../api/hooks/useAppConfig.js';
 import { space } from '@sc/tokens';
 import {
   type ScreenListProps,
@@ -57,6 +64,7 @@ const openProduct = (product: ProductRowDto) => {
 };
 
 const ProductRow = memo(function ProductRow({ product }: { product: ProductRowDto }) {
+  const { coinUsdCents } = useAppConfig();
   return (
     <ListRow
       avatar={{
@@ -73,7 +81,7 @@ const ProductRow = memo(function ProductRow({ product }: { product: ProductRowDt
         product.stockQty <= 3
           ? `Only ${String(product.stockQty)} left`
           : `${String(product.stockQty)} available`
-      }${product.delivers ? ' · Delivers' : ''}`}
+      }${product.delivers ? ' · Delivers' : ''} · ${formatCoinPrice(product.priceUsdCents, coinUsdCents)}`}
       rightPrimary={formatUsd(product.priceUsdCents)}
       rightCaption={`${product.distanceKm.toFixed(1)} km`}
       onPress={() => {

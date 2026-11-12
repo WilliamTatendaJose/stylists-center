@@ -110,7 +110,8 @@ export default function Cart() {
 
   // Coins are spent shop by shop, up to what each order is worth, until the
   // balance runs out. The server enforces the same cap and rejects any more.
-  const coinsAvailable = wallet?.coins ?? 0;
+  // Only spendable coins (not expired, not agent earnings) can pay for an order.
+  const coinsAvailable = wallet?.spendableCoins ?? 0;
   const coinUsdCents = wallet?.coinUsdCents ?? 0;
   let coinsLeft = useCoins ? coinsAvailable : 0;
   const plan = groups.map((group) => {

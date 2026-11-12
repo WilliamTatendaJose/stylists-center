@@ -1,5 +1,9 @@
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import type { ErrorBoundaryProps } from 'expo-router';
+import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
+import { usePathname, type ErrorBoundaryProps } from 'expo-router';
+import { apiFetch } from '../api/client.js';
 import { color, space } from '@sc/tokens';
 import { Text, Button } from '@sc/ui';
 
@@ -30,7 +34,38 @@ const styles = StyleSheet.create({
  * the realistic causes here (a transient render over half-loaded data)
  * without forcing the user to kill and relaunch the app.
  */
+/** A short code the person can quote; the same code is in the server log. */
+function referenceCode(): string {
+  return Math.random().toString(36).slice(2, 8).toUpperCase();
+}
+
+/**
+ * Tells the server what failed, so a crash in a release build (where the
+ * message is hidden from the person) can be found in the API logs by its
+ * reference code. Best effort: reporting must never break the error screen.
+ */
+function useReportCrash(error: Error, ref: string): void {
+  // Rendered by expo-router inside the failed route, so the router context exists.
+  const route = usePathname();
+  useEffect(() => {
+    void apiFetch<void>('/v1/client-errors', {
+      method: 'POST',
+      body: {
+        ref,
+        message: String(error.message || error.name || 'Unknown error').slice(0, 500),
+        ...(error.stack ? { stack: error.stack.slice(0, 4000) } : {}),
+        ...(route ? { route } : {}),
+        ...(Constants.expoConfig?.version ? { appVersion: Constants.expoConfig.version } : {}),
+        ...(Updates.updateId ? { updateId: Updates.updateId } : {}),
+      },
+    }).catch(() => undefined);
+  }, [error, ref, route]);
+}
+
 export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+  // One code per failure; "Try again" remounts this screen for a new one.
+  const [ref] = useState(referenceCode);
+  useReportCrash(error, ref);
   return (
     <View style={styles.root}>
       <Text variant="h2" style={styles.title}>
@@ -50,6 +85,10 @@ export function AppErrorBoundary({ error, retry }: ErrorBoundaryProps) {
           void retry();
         }}
       />
+
+      <Text variant="meta" color="neutral600" style={styles.detail}>
+        Reference: {ref}
+      </Text>
 
       {/* The message is shown only in development: in a release build it is
           noise at best, and at worst leaks internals to the user. Production

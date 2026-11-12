@@ -43,6 +43,7 @@ import { SettingsModule } from './modules/settings/settings.module';
 import { FeesModule } from './modules/fees/fees.module';
 import { RewardsModule } from './modules/rewards/rewards.module';
 import { TermsModule } from './modules/terms/terms.module';
+import { ClientErrorsModule } from './modules/client-errors/client-errors.module';
 
 @Module({
   imports: [
@@ -97,6 +98,7 @@ import { TermsModule } from './modules/terms/terms.module';
     AdminUsersModule,
     AdminExportsModule,
     TermsModule,
+    ClientErrorsModule,
   ],
   providers: [
     /**

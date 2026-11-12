@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Redirect, router } from 'expo-router';
 import { space } from '@sc/tokens';
-import { formatUsd } from '@sc/shared';
+import { coinsToCover, formatUsd } from '@sc/shared';
 import { Screen, ScreenHeader, Text, RadioCard, RuleList, Button, useTheme } from '@sc/ui';
 import { useProvider } from '../../src/api/hooks/useProviders.js';
 import { useCreateBooking } from '../../src/api/hooks/useBookings.js';
@@ -86,10 +86,14 @@ export default function Payment() {
     serviceFeePaidBy,
   );
   const coinUsdCents = wallet?.coinUsdCents ?? 0;
-  const coins = useCoins ? coinsToApply(wallet?.coins ?? 0, totalUsdCents, coinUsdCents) : 0;
+  // Only coins that can be spent count: expired coins and agent earnings can't pay for a booking.
+  const spendable = wallet?.spendableCoins ?? 0;
+  const coins = useCoins ? coinsToApply(spendable, totalUsdCents, coinUsdCents) : 0;
   const coinsValueUsdCents = coins * coinUsdCents;
   const dueUsdCents = totalUsdCents - coinsValueUsdCents;
-  const offerableCoins = coinsToApply(wallet?.coins ?? 0, totalUsdCents, coinUsdCents);
+  const offerableCoins = coinsToApply(spendable, totalUsdCents, coinUsdCents);
+  const coinsForAll = coinsToCover(totalUsdCents, coinUsdCents);
+  const coversAll = offerableCoins > 0 && offerableCoins * coinUsdCents >= totalUsdCents;
 
   const confirmBooking = () => {
     setBookingError(null);
@@ -225,8 +229,18 @@ export default function Payment() {
             />
           </View>
           <RadioCard
-            title={`Use ${String(offerableCoins)} coins`}
-            description={`Takes ${formatUsd(offerableCoins * coinUsdCents)} off what you pay. The coins go to your stylist.`}
+            title={
+              coversAll
+                ? `Pay with ${String(offerableCoins)} coins`
+                : `Use my ${String(offerableCoins)} coins`
+            }
+            description={
+              coversAll
+                ? 'Covers the whole booking, so there is nothing to pay. The coins go to your stylist.'
+                : `Takes ${formatUsd(offerableCoins * coinUsdCents)} off what you pay. The coins go to your stylist. ${String(
+                    coinsForAll - offerableCoins,
+                  )} more coins and you could pay for this with coins alone.`
+            }
             dot
             selected={useCoins}
             onPress={() => {

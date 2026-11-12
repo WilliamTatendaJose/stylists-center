@@ -59,3 +59,13 @@ describe('nextCashOutAt', () => {
     );
   });
 });
+
+describe('coin prices', () => {
+  it('rounds up so the coins always cover the amount', async () => {
+    const { coinsToCover, formatCoinPrice } = await import('./money.js');
+    expect(coinsToCover(500, 10)).toBe(50);
+    expect(coinsToCover(505, 10)).toBe(51);
+    expect(coinsToCover(0, 10)).toBe(0);
+    expect(formatCoinPrice(500, 10)).toBe('or 50 coins');
+  });
+});
