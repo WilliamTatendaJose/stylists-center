@@ -1,6 +1,6 @@
-import { StyleSheet, Switch, View } from 'react-native';
+import { Linking, Platform, StyleSheet, Switch, View } from 'react-native';
 import { space } from '@sc/tokens';
-import { Card, Text, useTheme } from '@sc/ui';
+import { Button, Card, Text, useTheme } from '@sc/ui';
 import { useMe, useUpdateNotificationPreferences } from '../api/hooks/useMe.js';
 import { describeError } from '../api/errorMessage.js';
 
@@ -59,6 +59,25 @@ export function NotificationPreferences() {
           thumbColor={colors.bg}
         />
       </View>
+      {Platform.OS === 'android' ? (
+        <View style={styles.copy}>
+          <Text variant="bodyStrong">Notifications arriving late?</Text>
+          <Text variant="meta" color="neutral700">
+            Many phones hold back notifications to save battery. In Style Center's settings, open
+            Battery and choose Unrestricted (or turn off battery optimisation).
+          </Text>
+        </View>
+      ) : null}
+      {Platform.OS === 'android' ? (
+        <Button
+          label="Open Style Center settings"
+          variant="secondary"
+          block
+          onPress={() => {
+            void Linking.openSettings();
+          }}
+        />
+      ) : null}
       {update.isError ? (
         <Text variant="meta" color="accent700" accessibilityRole="alert">
           {describeError(update.error, "Couldn't save notification settings.")}

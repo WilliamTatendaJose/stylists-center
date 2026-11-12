@@ -200,4 +200,40 @@ describe('PushService', () => {
       });
     });
   });
+
+  describe('receipts', () => {
+    const receipts = (data: Record<string, unknown>) =>
+      ({ ok: true, json: () => Promise.resolve({ data }) }) as unknown as Response;
+
+    it('asks the receipts endpoint for the accepted tickets', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(receipts({}));
+      await push.checkReceipts(new Map([['t1', 'ExponentPushToken[aaa]']]));
+      expect(fetchSpy.mock.calls[0]?.[0]).toBe('https://push.invalid/getReceipts');
+      expect(fetchSpy.mock.calls[0]?.[1]?.body).toBe(JSON.stringify({ ids: ['t1'] }));
+    });
+
+    it('removes a token Firebase reports as uninstalled, and keeps the rest', async () => {
+      await addToken('ExponentPushToken[gone]');
+      await addToken('ExponentPushToken[live]');
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+        receipts({
+          t1: { status: 'error', message: 'gone', details: { error: 'DeviceNotRegistered' } },
+          t2: { status: 'ok' },
+        }),
+      );
+      await push.checkReceipts(
+        new Map([
+          ['t1', 'ExponentPushToken[gone]'],
+          ['t2', 'ExponentPushToken[live]'],
+        ]),
+      );
+      const left = await prisma.devicePushToken.findMany({ where: { userId } });
+      expect(left.map((t) => t.expoPushToken)).toEqual(['ExponentPushToken[live]']);
+    });
+
+    it('never throws when Expo is unreachable', async () => {
+      vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'));
+      await expect(push.checkReceipts(new Map([['t1', 'x']]))).resolves.toBeUndefined();
+    });
+  });
 });
