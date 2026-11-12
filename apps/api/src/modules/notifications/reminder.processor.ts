@@ -50,7 +50,7 @@ export class ReminderProcessor extends WorkerHost {
         await this.push.sendToUser(booking.provider.userId, {
           title: 'Appointment reminder',
           body: `You have an appointment ${when}.`,
-          data: { type: 'booking.updated', bookingId: booking.id },
+          data: { type: 'booking.updated', bookingId: booking.id, audience: 'provider' },
         });
       }
       return;

@@ -184,7 +184,17 @@ const config: ExpoConfig = {
     ],
     '@react-native-google-signin/google-signin',
     'expo-secure-store',
-    'expo-notifications',
+    [
+      'expo-notifications',
+      {
+        // Android status-bar icon: white on transparent, the "C" badge from the
+        // logo (assets/notification-icon.png). Without it Android shows a grey
+        // square. The colour tints the icon and app name in the shade.
+        icon: './assets/notification-icon.png',
+        color: '#ec3013',
+        defaultChannel: 'default',
+      },
+    ],
     'expo-web-browser',
     [
       'expo-image-picker',

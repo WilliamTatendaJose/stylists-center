@@ -22,6 +22,7 @@ import {
   FREE_CANCELLATION_WINDOW_HOURS,
 } from '@sc/shared';
 import { Optional } from '@nestjs/common';
+import { formatInHarare } from '@sc/shared';
 import { SettingsService, settingsFor } from '../settings/settings.service';
 import { FeeStandingService } from '../fees/fee-standing.service';
 import { RewardsHooksService } from '../rewards/rewards-hooks.service';
@@ -192,6 +193,9 @@ export class BookingsService {
 
     const row = await this.toRowById(booking.id);
     this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
+    // The stylist has a limited time to accept, so a request they don't see
+    // until they next open the app usually expires unanswered.
+    void this.notifyStylistOfRequest(booking.id);
 
     return {
       id: booking.id,
@@ -301,7 +305,7 @@ export class BookingsService {
     void this.push.sendToUser(booking.provider.userId, {
       title: 'Booking time changed',
       body: `Booking ${booking.reference} moved to ${row.whenLabel}. Please confirm the new time.`,
-      data: { type: 'booking.updated', bookingId },
+      data: { type: 'booking.updated', bookingId, audience: 'provider' },
     });
     return row;
   }
@@ -348,7 +352,7 @@ export class BookingsService {
       void this.push.sendToUser(booking.provider.userId, {
         title: 'Client confirmed completion',
         body: `Booking ${booking.reference}`,
-        data: { type: 'booking.updated', bookingId },
+        data: { type: 'booking.updated', bookingId, audience: 'provider' },
       });
     }
 
@@ -357,6 +361,29 @@ export class BookingsService {
       confirmedByProvider: updated.confirmedByProvider,
       status: updated.status,
     };
+  }
+
+  private async notifyStylistOfRequest(bookingId: string): Promise<void> {
+    try {
+      const booking = await this.prisma.booking.findUniqueOrThrow({
+        where: { id: bookingId },
+        include: {
+          provider: { select: { userId: true } },
+          service: { select: { name: true } },
+          client: { select: { displayName: true } },
+        },
+      });
+      await this.push.sendToUser(booking.provider.userId, {
+        title: 'New booking request',
+        body: `${booking.client.displayName} · ${booking.service.name} · ${formatInHarare(
+          booking.startsAt.toISOString(),
+          'EEE d MMM, HH:mm',
+        )}. Accept it in Jobs.`,
+        data: { type: 'booking.requested', bookingId: booking.id, audience: 'provider' },
+      });
+    } catch {
+      // Best effort: the booking itself is already saved.
+    }
   }
 
   async createReview(bookingId: string, clientId: string, input: CreateReviewInput): Promise<void> {
@@ -470,7 +497,7 @@ export class BookingsService {
     void this.push.sendToUser(booking.provider.userId, {
       title: 'Booking cancelled',
       body: `Booking ${booking.reference} was cancelled by the client`,
-      data: { type: 'booking.updated', bookingId },
+      data: { type: 'booking.updated', bookingId, audience: 'provider' },
     });
     return row;
   }

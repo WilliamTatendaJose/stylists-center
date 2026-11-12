@@ -1,9 +1,10 @@
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
-import { Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
+import { Injectable, Logger, Optional, type OnApplicationBootstrap } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { FEES_QUEUE } from '../jobs/jobs.module';
 import { harareDayStart } from './fee-periods';
 import { FeeReminderService } from './fee-reminder.service';
+import { AgentSubscriptionReminderService } from './agent-subscription-reminder.service';
 import { FeeStatementService } from './fee-statement.service';
 
 const DAILY_JOB = 'daily';
@@ -22,6 +23,7 @@ export class FeesProcessor extends WorkerHost implements OnApplicationBootstrap 
     @InjectQueue(FEES_QUEUE) private readonly queue: Queue,
     private readonly statements: FeeStatementService,
     private readonly reminders: FeeReminderService,
+    @Optional() private readonly agentReminders?: AgentSubscriptionReminderService,
   ) {
     super();
   }
@@ -63,6 +65,8 @@ export class FeesProcessor extends WorkerHost implements OnApplicationBootstrap 
   async run(now: Date = new Date()): Promise<{ statements: number; reminders: number }> {
     const statements = await this.statements.generateMissing(now);
     const reminders = await this.reminders.sendDue(now);
+    // Agents' subscription reminders ride the same daily run.
+    await this.agentReminders?.sendDue(now);
     return { statements, reminders };
   }
 }

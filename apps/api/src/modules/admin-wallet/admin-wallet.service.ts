@@ -1,11 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import {
+  formatUsd,
   isSubscriptionActive,
   type AdminAgentRowDto,
   type AdminCashOutRowDto,
   type RecordCashOutSettlementInput,
 } from '@sc/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { PushService } from '../notifications/push.service';
 import type { Paged } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { toPage, type PageRequest } from '../../common/paging';
@@ -20,7 +22,10 @@ import { toPage, type PageRequest } from '../../common/paging';
  */
 @Injectable()
 export class AdminWalletService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly push?: PushService,
+  ) {}
 
   async listCashOuts(input: {
     q?: string | undefined;
@@ -136,6 +141,11 @@ export class AdminWalletService {
 
     const settlement = await this.prisma.cashOutSettlement.create({
       data: { walletTransactionId: transactionId, note: input.note ?? null },
+    });
+    void this.push?.sendToUser(transaction.userId, {
+      title: 'Cash-out paid',
+      body: `${formatUsd(-transaction.usdCents)} has been sent to your EcoCash number.`,
+      data: { type: 'wallet.cashout.paid' },
     });
     return toCashOutRow({ ...transaction, cashOutSettlement: settlement });
   }

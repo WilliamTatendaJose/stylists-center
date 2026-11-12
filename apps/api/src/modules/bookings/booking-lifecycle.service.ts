@@ -251,7 +251,7 @@ export class BookingLifecycleService {
     void this.push.sendToUser(booking.provider.userId, {
       title: 'Booking marked incomplete',
       body: `Booking ${booking.reference}: nobody confirmed it was done`,
-      data,
+      data: { ...data, audience: 'provider' },
     });
   }
 
@@ -343,7 +343,7 @@ export class BookingLifecycleService {
     void this.push.sendToUser(booking.provider.userId, {
       title: 'Booking completed',
       body: `Booking ${booking.reference} was completed automatically`,
-      data,
+      data: { ...data, audience: 'provider' },
     });
   }
 

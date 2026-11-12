@@ -276,6 +276,17 @@ export const SETTING_DEFINITIONS = {
     min: 0,
     max: 10_000,
   },
+  agentSubscriptionReminderDays: {
+    kind: 'days',
+    label: 'Agent subscription reminder',
+    help: "Days before an agent's subscription ends that they get a reminder to renew. They are also told on the day it ends.",
+    group: 'Subscriptions',
+    env: 'AGENT_SUBSCRIPTION_REMINDER_DAYS',
+    public: false,
+    default: 3,
+    min: 1,
+    max: 30,
+  },
   cashOutPayoutDays: {
     kind: 'days',
     label: 'Cash-outs paid within',
