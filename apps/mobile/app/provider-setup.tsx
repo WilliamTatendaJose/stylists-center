@@ -132,7 +132,8 @@ export default function ProviderSetup() {
   // mounted underneath it) — see useLocationPickerStore for why this goes
   // through a store rather than route params.
   useEffect(() => {
-    if (!pickedLocation) return;
+    // A pick made for another screen (e.g. the vendor shop pin) isn't ours.
+    if (!pickedLocation || pickedLocation.purpose) return;
     setLat(pickedLocation.lat);
     setLng(pickedLocation.lng);
     if (pickedLocation.areaName) setAreaName(pickedLocation.areaName);
