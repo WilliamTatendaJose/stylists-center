@@ -78,6 +78,8 @@ export class RewardsHooksService {
         expiresAt: addMonths(now, s.coinExpiryMonths),
       });
     }
+    // Agents only start earning from a minimum purchase (setting).
+    if (input.productTotalUsdCents < s.agentMinPurchaseUsd * 100) return;
     const agentCoins = rewardCoinsForSpend(
       input.productTotalUsdCents,
       s.agentRewardSpendUsdPerCoin,

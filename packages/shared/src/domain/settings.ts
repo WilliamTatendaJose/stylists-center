@@ -249,6 +249,17 @@ export const SETTING_DEFINITIONS = {
     min: 1,
     max: 10_000,
   },
+  agentMinPurchaseUsd: {
+    kind: 'usd',
+    label: 'Agent: minimum purchase to earn',
+    help: "A referred customer's marketplace purchase must be at least this much (product total) before the agent earns anything on it.",
+    group: 'Wallet and rewards',
+    env: 'AGENT_MIN_PURCHASE_USD',
+    public: true,
+    default: 10,
+    min: 0,
+    max: 10_000,
+  },
   cashOutPayoutDays: {
     kind: 'days',
     label: 'Cash-outs paid within',

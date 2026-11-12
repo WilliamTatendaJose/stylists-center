@@ -23,6 +23,7 @@ export const appConfigSchema = z.object({
   nonPaymentReportHours: z.number().int(),
   rewardSpendUsdPerCoin: z.number().int(),
   agentRewardSpendUsdPerCoin: z.number().int(),
+  agentMinPurchaseUsd: z.number().int(),
   cashOutPayoutDays: z.number().int(),
   coinExpiryMonths: z.number().int(),
   referralAttributionMonths: z.number().int(),

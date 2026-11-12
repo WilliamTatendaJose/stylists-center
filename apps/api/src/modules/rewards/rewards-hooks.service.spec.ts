@@ -241,6 +241,7 @@ describe('RewardsHooksService', () => {
         new SettingsService(undefined, {
           REWARD_SPEND_USD_PER_COIN: '20',
           AGENT_REWARD_SPEND_USD_PER_COIN: '5',
+          AGENT_MIN_PURCHASE_USD: '0',
         }),
       );
       const agent = await makeAgent('Agent Rates');
@@ -265,6 +266,39 @@ describe('RewardsHooksService', () => {
       expect(await rows(agent.userId)).toMatchObject([
         { type: 'referral_purchase', pool: 'agent', coins: 2 },
       ]);
+    });
+
+    it('pays the agent nothing below the minimum purchase, and from it upwards', async () => {
+      const custom = new RewardsHooksService(
+        prisma,
+        new SettingsService(undefined, { AGENT_MIN_PURCHASE_USD: '25' }),
+      );
+      const agent = await makeAgent('Agent Min');
+      const buyer = await makeUser('Buyer Min');
+      await prisma.referral.create({
+        data: {
+          agentId: agent.agentId,
+          referredUserId: buyer,
+          referredName: 'Buyer Min',
+          coinsAwarded: 6,
+        },
+      });
+      const order = (cents: number) =>
+        inTx((tx) =>
+          custom.onOrderCompleted(tx, {
+            orderId: `o-${uid()}`,
+            buyerId: buyer,
+            productTotalUsdCents: cents,
+          }),
+        );
+      await order(2499); // $24.99: under the $25 minimum
+      expect(await rows(agent.userId)).toHaveLength(0);
+      await order(2500); // exactly $25: earns 2 coins at $10 per coin
+      expect(await rows(agent.userId)).toMatchObject([
+        { type: 'referral_purchase', pool: 'agent', coins: 2 },
+      ]);
+      // The buyer earns on both purchases regardless of the agent minimum.
+      expect((await rows(buyer)).map((r) => r.coins)).toEqual([2, 2]);
     });
 
     it('pays the buyer but not an agent whose subscription has lapsed', async () => {
