@@ -127,10 +127,10 @@ export class BookingLifecycleService {
   }
 
   /**
-   * Completes bookings where only one side confirmed and the window passed.
-   * Safe to run twice or from two instances at once: each booking is
-   * re-checked under its lock and completes only once. Returns how many it
-   * completed.
+   * Completes bookings where only one side confirmed and the window passed,
+   * and marks incomplete those neither side confirmed. Safe to run twice or
+   * from two instances at once: each booking is re-checked under its lock and
+   * changes only once. Returns how many it changed.
    */
   async autoCompleteDue(now: Date = new Date()): Promise<number> {
     const hours = await this.setting('completionAutoConfirmHours');
@@ -189,14 +189,78 @@ export class BookingLifecycleService {
         this.logger.error(`Couldn't notify about auto-completed booking ${id}`, error);
       });
     }
-    return completed;
+    return completed + (await this.markUnconfirmedIncomplete(cutoff));
+  }
+
+  /**
+   * Bookings neither side confirmed within the window after the appointment
+   * ended become `incomplete`: nothing shows the job happened, so no fee is
+   * charged, no coins are earned, and coins the client used are returned.
+   * Re-checked under each booking's lock, so running twice changes nothing.
+   */
+  private async markUnconfirmedIncomplete(cutoff: Date): Promise<number> {
+    const candidates = await this.prisma.booking.findMany({
+      where: {
+        status: 'confirmed',
+        paymentMethod: 'cash',
+        nonPaymentReportedAt: null,
+        confirmedByClient: false,
+        confirmedByProvider: false,
+        endsAt: { lte: cutoff },
+      },
+      select: { id: true },
+      take: 200,
+    });
+    let marked = 0;
+    for (const { id } of candidates) {
+      const changed = await this.prisma.$transaction(async (tx) => {
+        await this.lock(tx, id);
+        const current = await tx.booking.findUniqueOrThrow({ where: { id } });
+        if (
+          current.status !== 'confirmed' ||
+          current.confirmedByClient ||
+          current.confirmedByProvider ||
+          current.endsAt > cutoff
+        ) {
+          return false;
+        }
+        await tx.booking.update({ where: { id }, data: { status: 'incomplete' } });
+        if (current.coinsUsed > 0) await this.rewards.refundRedemption(tx, { bookingId: id });
+        return true;
+      });
+      if (!changed) continue;
+      marked += 1;
+      await this.notifyIncomplete(id).catch((error: unknown) => {
+        this.logger.error(`Couldn't notify about incomplete booking ${id}`, error);
+      });
+    }
+    return marked;
+  }
+
+  private async notifyIncomplete(bookingId: string): Promise<void> {
+    const booking = await this.prisma.booking.findUniqueOrThrow({
+      where: { id: bookingId },
+      include: { provider: true, service: true },
+    });
+    const row = toBookingRowDto(booking, false);
+    this.socketEmitter.emitToUser(booking.clientId, 'booking.updated', row);
+    this.socketEmitter.emitToUser(booking.provider.userId, 'booking.updated', row);
+    const data = { type: 'booking.updated', bookingId };
+    const body = `${booking.provider.displayName} · ${booking.service.name}: nobody confirmed it was done`;
+    void this.push.sendToUser(booking.clientId, { title: 'Booking marked incomplete', body, data });
+    void this.push.sendToUser(booking.provider.userId, {
+      title: 'Booking marked incomplete',
+      body: `Booking ${booking.reference}: nobody confirmed it was done`,
+      data,
+    });
   }
 
   /**
    * The stylist says the client did not pay. Allowed from the appointment
-   * start until `nonPaymentReportHours` after it. No fee is ever charged for
-   * the booking: one already charged is waived, one not yet charged is
-   * completed without a fee so it can never be charged later.
+   * start until `nonPaymentReportHours` after it. The booking becomes
+   * `incomplete`, not completed: no fee is owed (one already charged is
+   * waived), the coins the client earned on it are taken back, and it no
+   * longer counts towards the stylist's completed jobs.
    */
   async reportNonPayment(bookingId: string, providerId: string, note?: string): Promise<Booking> {
     const hours = await this.setting('nonPaymentReportHours');
@@ -226,18 +290,34 @@ export class BookingLifecycleService {
         );
       }
 
+      const wasCompleted = current.status === 'completed';
       const reported = await tx.booking.update({
         where: { id: bookingId },
         data: {
+          status: 'incomplete',
           nonPaymentReportedAt: new Date(),
           nonPaymentNote: note?.trim() ? note.trim() : null,
         },
       });
-      if (reported.status === 'completed') {
+      if (wasCompleted) {
         await this.fees.waive(tx, { bookingId }, 'Stylist reported the client did not pay');
-        return reported;
+        await this.rewards.reverseBookingReward(tx, { bookingId });
+        await tx.providerProfile.update({
+          where: { id: current.providerId },
+          data: { completedCount: { decrement: 1 } },
+        });
+        // The cash "released" row written on completion is reversed, so
+        // earnings and exports don't count money the stylist never received.
+        await tx.payment.create({
+          data: {
+            bookingId,
+            provider: 'cash',
+            status: 'refunded',
+            amountUsdCents: current.priceUsdCents,
+          },
+        });
       }
-      return this.complete(tx, reported, { auto: false });
+      return reported;
     });
   }
 

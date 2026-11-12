@@ -18,11 +18,27 @@ const HOUR = 60 * 60_000;
 /** Records what completing a booking tells the rewards programme. */
 class FakeRewards extends RewardsHooksService {
   completed: { bookingId: string; clientId: string; amountPaidUsdCents: number }[] = [];
+  reversed: string[] = [];
+  refunded: string[] = [];
   override onBookingCompleted(
     _tx: Prisma.TransactionClient,
     input: { bookingId: string; clientId: string; amountPaidUsdCents: number },
   ): Promise<void> {
     this.completed.push(input);
+    return Promise.resolve();
+  }
+  override reverseBookingReward(
+    _tx: Prisma.TransactionClient,
+    input: { bookingId: string },
+  ): Promise<number> {
+    this.reversed.push(input.bookingId);
+    return Promise.resolve(0);
+  }
+  override refundRedemption(
+    _tx: Prisma.TransactionClient,
+    ref: { bookingId: string } | { orderId: string },
+  ): Promise<void> {
+    if ('bookingId' in ref) this.refunded.push(ref.bookingId);
     return Promise.resolve();
   }
 }
@@ -317,24 +333,39 @@ describe('BookingLifecycleService', () => {
       expect(rewards.completed.filter((c) => c.bookingId === booking.id)).toHaveLength(1);
     });
 
-    it('leaves a booking neither side confirmed, and one the stylist reported as unpaid', async () => {
-      const neither = await confirmedBooking(100);
+    it('marks a booking neither side confirmed in time as incomplete: no fee, no coins, coins used returned', async () => {
+      const neither = await confirmedBooking(100, { coinsUsed: 5, coinsUsdCents: 50 });
+      const tooSoon = await confirmedBooking(10);
+      await lifecycle.autoCompleteDue();
+      await lifecycle.autoCompleteDue(); // a second run changes nothing
+
+      const after = await prisma.booking.findUniqueOrThrow({ where: { id: neither.id } });
+      expect(after.status).toBe('incomplete');
+      expect(await feeEntries(neither.id)).toHaveLength(0);
+      expect(rewards.completed.map((c) => c.bookingId)).not.toContain(neither.id);
+      expect(rewards.refunded.filter((id) => id === neither.id)).toHaveLength(1);
+      // Still inside the 48-hour window: left alone.
+      expect((await prisma.booking.findUniqueOrThrow({ where: { id: tooSoon.id } })).status).toBe(
+        'confirmed',
+      );
+      // An incomplete booking can't be confirmed afterwards.
+      await expect(lifecycle.confirm(neither.id, 'client')).rejects.toThrow('incomplete');
+    });
+
+    it('leaves a booking the stylist already reported as unpaid', async () => {
       const reported = await confirmedBooking(100, {
         confirmedByClient: true,
         confirmedByClientAt: new Date(Date.now() - 60 * HOUR),
         nonPaymentReportedAt: new Date(),
       });
       await lifecycle.autoCompleteDue();
-      for (const { id } of [neither, reported]) {
-        expect((await prisma.booking.findUniqueOrThrow({ where: { id } })).status).toBe(
-          'confirmed',
-        );
-      }
+      expect(await feeEntries(reported.id)).toHaveLength(0);
+      expect(rewards.completed.map((c) => c.bookingId)).not.toContain(reported.id);
     });
   });
 
   describe('non-payment reports', () => {
-    it('completes a not-yet-charged booking with no fee and no coins earned, and never charges it later', async () => {
+    it('marks a not-yet-charged booking incomplete with no fee and no coins earned, and never charges it later', async () => {
       const booking = await confirmedBooking(2, {
         confirmedByClient: true,
         confirmedByClientAt: new Date(),
@@ -345,7 +376,7 @@ describe('BookingLifecycleService', () => {
         '  Left without paying ',
       );
       expect(reported).toMatchObject({
-        status: 'completed',
+        status: 'incomplete',
         nonPaymentNote: 'Left without paying',
       });
       expect(reported.nonPaymentReportedAt).not.toBeNull();
@@ -353,18 +384,32 @@ describe('BookingLifecycleService', () => {
       expect(rewards.completed.map((c) => c.bookingId)).not.toContain(booking.id);
 
       // Neither confirmation path nor the sweep can charge it afterwards.
-      await lifecycle.confirm(booking.id, 'provider');
+      await expect(lifecycle.confirm(booking.id, 'provider')).rejects.toThrow('incomplete');
       await lifecycle.autoCompleteDue(new Date(Date.now() + 100 * HOUR));
       expect(await feeEntries(booking.id)).toHaveLength(0);
     });
 
-    it('waives a fee that was already charged', async () => {
+    it('turns a completed booking back to incomplete: fee waived, coins taken back, not counted as done', async () => {
       const booking = await confirmedBooking(2);
       await lifecycle.confirm(booking.id, 'client');
       await lifecycle.confirm(booking.id, 'provider');
       const before = await fees.balance(providerId);
+      const doneBefore = (
+        await prisma.providerProfile.findUniqueOrThrow({ where: { id: providerId } })
+      ).completedCount;
 
-      await lifecycle.reportNonPayment(booking.id, providerId);
+      const reported = await lifecycle.reportNonPayment(booking.id, providerId);
+      expect(reported.status).toBe('incomplete');
+      expect(rewards.reversed).toContain(booking.id);
+      expect(
+        (await prisma.providerProfile.findUniqueOrThrow({ where: { id: providerId } }))
+          .completedCount,
+      ).toBe(doneBefore - 1);
+      const cash = await prisma.payment.findMany({
+        where: { bookingId: booking.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(cash.map((p) => p.status)).toEqual(['released', 'refunded']);
       const entries = await feeEntries(booking.id);
       expect(entries.map((e) => [e.kind, e.amountUsdCents])).toEqual([
         ['booking_fee', 60],

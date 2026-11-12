@@ -310,6 +310,7 @@ export default function Bookings() {
     const isPast = (b: BookingRowDto) =>
       new Date(b.startsAt).getTime() < now ||
       b.status === 'completed' ||
+      b.status === 'incomplete' ||
       b.status === 'cancelled' ||
       b.status === 'declined';
 

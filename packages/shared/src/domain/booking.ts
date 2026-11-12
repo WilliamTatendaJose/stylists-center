@@ -12,7 +12,13 @@
  * hour.
  */
 export type BookingStatus =
-  'awaiting_provider' | 'confirmed' | 'completed' | 'declined' | 'cancelled';
+  | 'awaiting_provider'
+  | 'confirmed'
+  | 'completed'
+  | 'declined'
+  | 'cancelled'
+  /** Reported unpaid by the stylist, or neither side confirmed in time. No fee, no coins. */
+  | 'incomplete';
 
 export type PaymentMethod = 'ecocash' | 'cash';
 
@@ -22,6 +28,7 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   completed: 'Completed',
   declined: 'Declined',
   cancelled: 'Cancelled',
+  incomplete: 'Incomplete',
 };
 
 /**

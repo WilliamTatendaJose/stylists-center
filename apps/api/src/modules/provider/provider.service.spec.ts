@@ -398,7 +398,7 @@ describe('ProviderService management', () => {
       await service.reportNonPayment(booking.id, providerId, 'Said they would pay tomorrow');
       const reported = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
       expect(reported).toMatchObject({
-        status: 'completed',
+        status: 'incomplete',
         nonPaymentNote: 'Said they would pay tomorrow',
       });
       expect(await prisma.feeLedgerEntry.count({ where: { bookingId: booking.id } })).toBe(0);

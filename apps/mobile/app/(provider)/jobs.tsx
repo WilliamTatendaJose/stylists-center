@@ -381,7 +381,9 @@ export default function Jobs() {
   const bookings = data?.bookings ?? [];
   const requests = bookings.filter((b) => b.status === 'awaiting_provider');
   const upcoming = bookings.filter((b) => b.status === 'confirmed');
-  const completed = bookings.filter((b) => b.status === 'completed');
+  // Jobs that did not complete (reported unpaid, or nobody confirmed) are
+  // history too, shown with their own status label.
+  const completed = bookings.filter((b) => b.status === 'completed' || b.status === 'incomplete');
   const visibleCompleted = showAllCompletedHistory
     ? completed
     : completed.slice(0, COMPLETED_HISTORY_PREVIEW_COUNT);
@@ -415,7 +417,7 @@ export default function Jobs() {
       }));
     add('requests', 'Waiting on you', requests.length, bookingItems('requests', requests));
     add('upcoming', 'Booked in', upcoming.length, bookingItems('upcoming', upcoming));
-    add('completed', 'Completed', completed.length, bookingItems('completed', visibleCompleted));
+    add('completed', 'Past jobs', completed.length, bookingItems('completed', visibleCompleted));
     return result;
     // offers/bookings are derived from `data`; the history toggle changes visibleCompleted.
     // eslint-disable-next-line react-hooks/exhaustive-deps

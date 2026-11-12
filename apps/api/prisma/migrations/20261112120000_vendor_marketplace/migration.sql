@@ -61,10 +61,6 @@ CREATE INDEX "VendorApplication_status_submittedAt_idx" ON "VendorApplication"("
 -- AddForeignKey
 ALTER TABLE "VendorApplication" ADD CONSTRAINT "VendorApplication_providerId_fkey" FOREIGN KEY ("providerId") REFERENCES "ProviderProfile"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- Sellers who already have products before this change keep selling: they are
--- grandfathered in as approved vendors, so the launch does not hide live stock.
-INSERT INTO "VendorApplication" ("id", "providerId", "businessName", "shopAddress", "contactName", "contactPhone", "status", "reviewNote", "reviewedAt", "updatedAt")
-SELECT gen_random_uuid()::text, pr."id", pr."displayName", pr."areaName", u."displayName", COALESCE(u."phone", ''), 'approved', 'Existing seller before vendor verification', now(), now()
-FROM "ProviderProfile" pr
-JOIN "User" u ON u."id" = pr."userId"
-WHERE EXISTS (SELECT 1 FROM "Product" p WHERE p."providerId" = pr."id");
+-- Existing sellers are NOT approved automatically: every shop, including
+-- those already listing products, applies and is approved by StylistsCenter
+-- staff. Their products stay in the database and reappear once approved.

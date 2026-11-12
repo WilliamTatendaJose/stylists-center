@@ -179,6 +179,44 @@ export class RewardsHooksService {
     });
   }
 
+  /**
+   * A booking that had earned the client coins turned out not to be
+   * completed (the stylist reported the client did not pay): take back the
+   * coins it earned. Only coins still unspent and unexpired can be taken
+   * back; any the client already spent stay spent. Once only. Returns the
+   * coins taken back.
+   */
+  async reverseBookingReward(
+    tx: Prisma.TransactionClient,
+    input: { bookingId: string },
+  ): Promise<number> {
+    const key = `booking_reward:${input.bookingId}`;
+    const earned = await tx.walletTransaction.findUnique({ where: { dedupeKey: key } });
+    if (!earned) return 0;
+    await lockWallet(tx, earned.userId);
+    // Re-read under the lock: a spend may have used some of these coins.
+    const lot = await tx.walletTransaction.findUniqueOrThrow({ where: { id: earned.id } });
+    const now = new Date();
+    const unspent = lot.expiresAt && lot.expiresAt > now ? (lot.remainingCoins ?? 0) : 0;
+    if (unspent <= 0) return 0;
+    const s = await this.rates();
+    const wrote = await insertOnce(tx, {
+      userId: lot.userId,
+      type: 'refund',
+      pool: 'spend',
+      coins: -unspent,
+      coinUsdCents: s.coinUsdCents,
+      dedupeKey: `reversal:${key}`,
+      reference: 'Coins taken back: booking not completed',
+    });
+    if (!wrote) return 0;
+    await tx.walletTransaction.update({
+      where: { id: lot.id },
+      data: { remainingCoins: { decrement: unspent } },
+    });
+    return unspent;
+  }
+
   private async redeem(
     tx: Prisma.TransactionClient,
     input: { key: string; reference: string; payerId: string; receiverId: string; coins: number },

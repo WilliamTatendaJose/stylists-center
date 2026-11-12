@@ -20,6 +20,8 @@ export const bookingStatusSchema = z.enum([
   'completed',
   'declined',
   'cancelled',
+  // Reported unpaid by the stylist, or neither side confirmed in time.
+  'incomplete',
 ]);
 
 /**

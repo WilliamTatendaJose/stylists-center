@@ -168,6 +168,48 @@ describe('RewardsHooksService', () => {
     });
   });
 
+  describe('reverseBookingReward', () => {
+    it('takes back the coins a booking earned, once', async () => {
+      const client = await makeUser('Client Rev1');
+      const bookingId = `b-${uid()}`;
+      await inTx((tx) =>
+        hooks.onBookingCompleted(tx, { bookingId, clientId: client, amountPaidUsdCents: 3000 }),
+      );
+      expect((await balance(client)).spendable).toBe(3);
+
+      expect(await inTx((tx) => hooks.reverseBookingReward(tx, { bookingId }))).toBe(3);
+      expect(await inTx((tx) => hooks.reverseBookingReward(tx, { bookingId }))).toBe(0);
+      expect((await balance(client)).spendable).toBe(0);
+    });
+
+    it('takes back only what is unspent: coins already spent stay spent', async () => {
+      const client = await makeUser('Client Rev2');
+      const stylist = await makeUser('Stylist Rev2');
+      const bookingId = `b-${uid()}`;
+      await inTx((tx) =>
+        hooks.onBookingCompleted(tx, { bookingId, clientId: client, amountPaidUsdCents: 5000 }),
+      );
+      await inTx((tx) =>
+        hooks.redeemForBooking(tx, {
+          bookingId: `b-${uid()}`,
+          clientId: client,
+          providerUserId: stylist,
+          coins: 2,
+        }),
+      );
+      expect(await inTx((tx) => hooks.reverseBookingReward(tx, { bookingId }))).toBe(3);
+      expect((await balance(client)).spendable).toBe(0);
+      // The stylist keeps the 2 coins they were paid.
+      expect((await balance(stylist)).cashOutable).toBe(2);
+    });
+
+    it('does nothing for a booking that earned no coins', async () => {
+      expect(await inTx((tx) => hooks.reverseBookingReward(tx, { bookingId: `b-${uid()}` }))).toBe(
+        0,
+      );
+    });
+  });
+
   describe('onOrderCompleted', () => {
     it('pays the buyer, and the referring agent while subscribed and within the window', async () => {
       const agent = await makeAgent('Agent A');

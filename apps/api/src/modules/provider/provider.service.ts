@@ -46,8 +46,8 @@ import { BookingLifecycleService } from '../bookings/booking-lifecycle.service';
 import { isWithinWeeklyHours, readWeeklyHours } from '../providers/calendar-policy';
 import { ReminderService } from '../notifications/reminder.service';
 
-/** Statuses a stylist still has something to do about, plus recent history for context. */
-const VISIBLE_STATUSES = ['awaiting_provider', 'confirmed', 'completed'] as const;
+/** Statuses a stylist still has something to do about, plus recent history (including jobs that did not complete) for context. */
+const VISIBLE_STATUSES = ['awaiting_provider', 'confirmed', 'completed', 'incomplete'] as const;
 
 /**
  * What a client is told when a stylist moves their booking.
