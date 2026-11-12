@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import {
   formatUsd,
-  maxCoinsForOrder,
+  coinsToPayInFull,
   orderAmountDueUsdCents,
   orderServiceFeeUsdCents,
   type CreateOrderResponse,
@@ -110,44 +110,49 @@ export default function Cart() {
     group.delivers && methods[group.providerId] === 'delivery' ? 'delivery' : 'collection';
   const needsAddress = groups.some((g) => methodFor(g) === 'delivery');
 
-  // Coins are spent shop by shop, up to what each order is worth, until the
-  // balance runs out. The server enforces the same cap and rejects any more.
+  // Coins pay for whole orders only, never part of one: shop by shop, an
+  // order is paid with coins if the balance left covers all of it. The
+  // server enforces the same rule.
   // Only spendable coins (not expired, not agent earnings) can pay for an order.
   const coinsAvailable = wallet?.spendableCoins ?? 0;
   const coinUsdCents = wallet?.coinUsdCents ?? 0;
   // The marketplace commission, shown as a service fee when the buyer pays
   // it (console setting). The server works it out the same way.
   const { marketplaceFeeBps, marketplaceFeePaidBy } = useAppConfig();
-  let coinsLeft = useCoins ? coinsAvailable : 0;
-  const plan = groups.map((group) => {
-    const fulfilment = methodFor(group);
-    const products = group.lines.reduce((n, l) => n + l.priceUsdCents * l.quantity, 0);
-    const delivery = fulfilment === 'delivery' ? group.deliveryChargeUsdCents : 0;
-    const serviceFee = orderServiceFeeUsdCents(products, marketplaceFeeBps, marketplaceFeePaidBy);
-    const coins = Math.min(
-      coinsLeft,
-      maxCoinsForOrder(products, delivery, coinUsdCents, serviceFee),
-    );
-    coinsLeft -= coins;
-    const coinsValue = coins * coinUsdCents;
-    return {
-      group,
-      fulfilment,
-      delivery,
-      serviceFee,
-      coins,
-      due: orderAmountDueUsdCents({
-        productTotalUsdCents: products,
-        deliveryChargeUsdCents: delivery,
-        coinsValueUsdCents: coinsValue,
-        serviceFeeUsdCents: serviceFee,
-      }),
-    };
-  });
+  const planWith = (startingCoins: number) => {
+    let coinsLeft = startingCoins;
+    return groups.map((group) => {
+      const fulfilment = methodFor(group);
+      const products = group.lines.reduce((n, l) => n + l.priceUsdCents * l.quantity, 0);
+      const delivery = fulfilment === 'delivery' ? group.deliveryChargeUsdCents : 0;
+      const serviceFee = orderServiceFeeUsdCents(products, marketplaceFeeBps, marketplaceFeePaidBy);
+      const orderAmount = products + delivery + serviceFee;
+      const coins = coinsToPayInFull(orderAmount, coinUsdCents, coinsLeft);
+      coinsLeft -= coins;
+      const coinsValue = coins > 0 ? orderAmount : 0;
+      return {
+        group,
+        fulfilment,
+        delivery,
+        serviceFee,
+        coins,
+        coinsValue,
+        due: orderAmountDueUsdCents({
+          productTotalUsdCents: products,
+          deliveryChargeUsdCents: delivery,
+          coinsValueUsdCents: coinsValue,
+          serviceFeeUsdCents: serviceFee,
+        }),
+      };
+    });
+  };
+  const plan = planWith(useCoins ? coinsAvailable : 0);
+  // Whether the coins could pay for at least one whole order.
+  const coinsCoverAnOrder = planWith(coinsAvailable).some((p) => p.coins > 0);
   const totalDue = plan.reduce((n, p) => n + p.due, 0);
   const totalDelivery = plan.reduce((n, p) => n + p.delivery, 0);
   const totalServiceFee = plan.reduce((n, p) => n + p.serviceFee, 0);
-  const totalCoinsValue = plan.reduce((n, p) => n + p.coins * coinUsdCents, 0);
+  const totalCoinsValue = plan.reduce((n, p) => n + p.coinsValue, 0);
 
   if (groups.length === 0) {
     return (
@@ -410,10 +415,14 @@ export default function Cart() {
           You pay each shop directly, in cash or from your own mobile money, when you collect or
           receive your order. Nothing is charged in the app.
         </Text>
-        {coinsAvailable > 0 && coinUsdCents > 0 ? (
+        {coinsCoverAnOrder ? (
           <RadioCard
-            title={`Use my coins (${String(coinsAvailable)} available)`}
-            description={`Each coin takes ${formatUsd(coinUsdCents)} off. The shop is credited the coins.`}
+            title={`Pay with coins (${String(coinsAvailable)} available)`}
+            description={
+              groups.length > 1
+                ? 'Coins pay for whole orders only: each order your coins fully cover is paid with coins, the rest in cash. The shop is credited the coins.'
+                : 'Pays for the whole order, so there is nothing to pay the shop. The shop is credited the coins.'
+            }
             dot
             selected={useCoins}
             onPress={() => {

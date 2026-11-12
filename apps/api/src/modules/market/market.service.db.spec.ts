@@ -354,7 +354,7 @@ describe('MarketService against the database', () => {
         market.createOrder(buyerId, {
           providerId,
           checkoutKey: key,
-          coins: 10,
+          coins: 103,
           items: [{ productId, quantity: 1 }],
         }),
       ).rejects.toThrow(/Not enough coins/);
@@ -362,12 +362,13 @@ describe('MarketService against the database', () => {
       expect(await prisma.order.count({ where: { buyerId, checkoutKey: key } })).toBe(0);
     });
 
-    it('redeems in the checkout transaction and stores coins and their value', async () => {
-      const redeem = vi.spyOn(rewards, 'redeemForOrder').mockResolvedValue({ usdCents: 200 });
+    it('pays for the whole order with coins in the checkout transaction', async () => {
+      // $10.00 + $0.30 service fee at 10c a coin is 103 coins.
+      const redeem = vi.spyOn(rewards, 'redeemForOrder').mockResolvedValue({ usdCents: 1030 });
       const created = await market.createOrder(buyerId, {
         providerId,
         checkoutKey: checkoutKey('coins'),
-        coins: 20,
+        coins: 103,
         items: [{ productId, quantity: 1 }],
       });
 
@@ -375,37 +376,39 @@ describe('MarketService against the database', () => {
         orderId: created.id,
         buyerId,
         vendorUserId: sellerUserId,
-        coins: 20,
+        coins: 103,
       });
       expect(created).toMatchObject({
         totalUsdCents: 1000,
-        coinsValueUsdCents: 200,
-        amountDueUsdCents: 830,
+        coinsValueUsdCents: 1030,
+        amountDueUsdCents: 0,
       });
       const order = await prisma.order.findUniqueOrThrow({ where: { id: created.id } });
-      expect(order).toMatchObject({ coinsUsed: 20, coinsValueUsdCents: 200 });
+      expect(order).toMatchObject({ coinsUsed: 103, coinsValueUsdCents: 1030 });
     });
 
-    it('refuses more coins than the order is worth, without calling the hook', async () => {
+    it('refuses coins that pay only part of the order, or more than it, without calling the hook', async () => {
       const redeem = vi.spyOn(rewards, 'redeemForOrder').mockResolvedValue({ usdCents: 0 });
-      await expect(
-        market.createOrder(buyerId, {
-          providerId,
-          checkoutKey: checkoutKey('coins-max'),
-          coins: 104, // 1000 cents + 30 fee at 10 cents a coin is 103 coins at most
-          items: [{ productId, quantity: 1 }],
-        }),
-      ).rejects.toThrow('at most 103 coins');
+      for (const coins of [20, 104]) {
+        await expect(
+          market.createOrder(buyerId, {
+            providerId,
+            checkoutKey: checkoutKey(`coins-part-${String(coins)}`),
+            coins,
+            items: [{ productId, quantity: 1 }],
+          }),
+        ).rejects.toThrow('Coins pay for the whole order: it takes 103 coins');
+      }
       expect(redeem).not.toHaveBeenCalled();
     });
 
     it('gives the coins back when the order is cancelled', async () => {
-      vi.spyOn(rewards, 'redeemForOrder').mockResolvedValue({ usdCents: 100 });
+      vi.spyOn(rewards, 'redeemForOrder').mockResolvedValue({ usdCents: 1030 });
       const refund = vi.spyOn(rewards, 'refundRedemption').mockResolvedValue();
       const created = await market.createOrder(buyerId, {
         providerId,
         checkoutKey: checkoutKey('coins-refund'),
-        coins: 10,
+        coins: 103,
         items: [{ productId, quantity: 1 }],
       });
       await market.cancelOrder(created.id, buyerId);

@@ -18,7 +18,7 @@ import {
   feeCents,
   formatBookingReference,
   isLateCancellation,
-  maxCoinsForBooking,
+  coinsToCover,
   FREE_CANCELLATION_WINDOW_HOURS,
 } from '@sc/shared';
 import { Optional } from '@nestjs/common';
@@ -104,12 +104,13 @@ export class BookingsService {
       clientPaysFee ? 'client' : 'stylist',
     );
     const coins = input.coins ?? 0;
-    const maxCoins = maxCoinsForBooking(clientTotal, coinUsdCents);
-    if (coins > maxCoins) {
+    // Coins pay for the whole booking or not at all: no part-payment.
+    const coinsForWhole = coinsToCover(clientTotal, coinUsdCents);
+    if (coins > 0 && coins !== coinsForWhole) {
       throw new BadRequestException(
-        maxCoins === 0
+        coinsForWhole === 0
           ? "Coins can't be used on this booking"
-          : `You can use at most ${String(maxCoins)} coins on this booking`,
+          : `Coins pay for the whole booking: it takes ${String(coinsForWhole)} coins`,
       );
     }
 
@@ -179,12 +180,14 @@ export class BookingsService {
           providerUserId: service.provider.userId,
           coins,
         });
-        if (usdCents < 0 || usdCents > clientTotal) {
+        if (usdCents < clientTotal) {
           throw new BadRequestException("Coins can't be used on this booking");
         }
         await tx.booking.update({
           where: { id: created.id },
-          data: { coinsUsed: coins, coinsUsdCents: usdCents },
+          // Rounding up can make the coins worth a few cents more than the
+          // booking; it is recorded as paid in full, nothing more.
+          data: { coinsUsed: coins, coinsUsdCents: clientTotal },
         });
       }
 

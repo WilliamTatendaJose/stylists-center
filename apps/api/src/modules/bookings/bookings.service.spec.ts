@@ -542,50 +542,40 @@ describe('BookingsService', () => {
   });
 
   describe('paying with coins', () => {
-    it('redeems inside the booking, stores coins and their value, and lowers what is due', async () => {
+    it('pays for the whole booking with coins, inside the booking, leaving nothing due', async () => {
+      // $20.60 at 10c a coin is 206 coins.
       const created = await bookings.create(clientId, {
         providerId: providerAId,
         serviceId: serviceAId,
         startsAt: futureSlot(2, 4),
-        coins: 5,
+        coins: 206,
       });
       createdBookingIds.push(created.id);
 
       expect(rewards.redeemed).toEqual([
-        { bookingId: created.id, clientId, providerUserId: providerAUserId, coins: 5 },
+        { bookingId: created.id, clientId, providerUserId: providerAUserId, coins: 206 },
       ]);
       const row = (await bookings.listForClient(clientId)).find((r) => r.id === created.id);
       expect(row).toMatchObject({
-        coinsUsed: 5,
-        coinsUsdCents: 50,
+        coinsUsed: 206,
+        coinsUsdCents: 2060,
         clientTotalUsdCents: 2060,
-        amountDueUsdCents: 2010,
+        amountDueUsdCents: 0,
       });
     });
 
-    it('refuses more coins than the booking is worth, before touching the wallet', async () => {
-      // $20.60 at 10c a coin is 206 coins at most.
-      await expect(
-        bookings.create(clientId, {
-          providerId: providerAId,
-          serviceId: serviceAId,
-          startsAt: futureSlot(3, 4),
-          coins: 207,
-        }),
-      ).rejects.toThrow('at most 206 coins');
+    it('refuses coins that would pay only part of the booking, or more than it, before touching the wallet', async () => {
+      for (const coins of [5, 207]) {
+        await expect(
+          bookings.create(clientId, {
+            providerId: providerAId,
+            serviceId: serviceAId,
+            startsAt: futureSlot(3, 4),
+            coins,
+          }),
+        ).rejects.toThrow('Coins pay for the whole booking: it takes 206 coins');
+      }
       expect(rewards.redeemed).toHaveLength(0);
-    });
-
-    it('can cover the whole amount', async () => {
-      const created = await bookings.create(clientId, {
-        providerId: providerAId,
-        serviceId: serviceAId,
-        startsAt: futureSlot(4, 4),
-        coins: 206,
-      });
-      createdBookingIds.push(created.id);
-      const row = (await bookings.listForClient(clientId)).find((r) => r.id === created.id);
-      expect(row?.amountDueUsdCents).toBe(0);
     });
 
     it('gives the coins back when the client cancels', async () => {
@@ -593,7 +583,7 @@ describe('BookingsService', () => {
         providerId: providerAId,
         serviceId: serviceAId,
         startsAt: futureSlot(5, 4),
-        coins: 3,
+        coins: 206,
       });
       createdBookingIds.push(created.id);
       await bookings.cancel(created.id, clientId);
@@ -606,13 +596,13 @@ describe('BookingsService', () => {
         providerId: providerAId,
         serviceId: serviceAId,
         startsAt: futureSlot(6, 4),
-        coins: 2,
+        coins: 206,
       });
       const expired = await bookings.create(clientId, {
         providerId: providerAId,
         serviceId: serviceAId,
         startsAt: futureSlot(7, 4),
-        coins: 4,
+        coins: 206,
       });
       createdBookingIds.push(declined.id, expired.id);
 
@@ -632,7 +622,7 @@ describe('BookingsService', () => {
           providerId: providerAId,
           serviceId: serviceAId,
           startsAt: futureSlot(8, 4),
-          coins: 5,
+          coins: 206,
         }),
       ).rejects.toThrow('Not enough coins');
       expect(

@@ -75,3 +75,18 @@ export function formatCoinPrice(amountCents: UsdCents, coinUsdCents: number): st
   const coins = coinsToCover(amountCents, coinUsdCents);
   return coins > 0 ? `or ${String(coins)} coins` : '';
 }
+
+/**
+ * Coins pay for a whole service or product, never part of it: the coins
+ * the client must spend to use coins at all, or 0 when they don't have
+ * enough (they pay in cash instead). Rounded up, so the coins always cover
+ * the amount.
+ */
+export function coinsToPayInFull(
+  amountCents: UsdCents,
+  coinUsdCents: number,
+  availableCoins: number,
+): number {
+  const needed = coinsToCover(amountCents, coinUsdCents);
+  return needed > 0 && availableCoins >= needed ? needed : 0;
+}

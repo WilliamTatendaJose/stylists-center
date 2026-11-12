@@ -13,7 +13,7 @@ import {
   dispatchedStatusFor,
   formatOrderReference,
   isOrderCompleted,
-  maxCoinsForOrder,
+  coinsToCover,
   orderServiceFeeUsdCents,
   orderTotalUsdCents,
   type CreateOrderInput,
@@ -338,18 +338,15 @@ export class MarketService {
         marketplaceFeeBps,
         marketplaceFeePaidBy === 'vendor' ? 'vendor' : 'client',
       );
+      const orderAmount = totalUsdCents + deliveryChargeUsdCents + serviceFeeUsdCents;
       if (coins > 0) {
-        const maxCoins = maxCoinsForOrder(
-          totalUsdCents,
-          deliveryChargeUsdCents,
-          coinUsdCents,
-          serviceFeeUsdCents,
-        );
-        if (coins > maxCoins) {
+        // Coins pay for the whole order or not at all: no part-payment.
+        const coinsForWhole = coinsToCover(orderAmount, coinUsdCents);
+        if (coins !== coinsForWhole) {
           throw new BadRequestException(
-            maxCoins === 0
+            coinsForWhole === 0
               ? "Coins can't be used on this order"
-              : `You can use at most ${String(maxCoins)} coins on this order`,
+              : `Coins pay for the whole order: it takes ${String(coinsForWhole)} coins`,
           );
         }
       }
@@ -411,10 +408,11 @@ export class MarketService {
           vendorUserId: seller.userId,
           coins,
         });
-        if (usdCents > totalUsdCents + deliveryChargeUsdCents + serviceFeeUsdCents) {
-          throw new BadRequestException("Coins can't be worth more than the order");
+        if (usdCents < orderAmount) {
+          throw new BadRequestException("Coins can't be used on this order");
         }
-        coinsValueUsdCents = usdCents;
+        // Paid in full; rounding up never records more than the order.
+        coinsValueUsdCents = orderAmount;
         await tx.order.update({
           where: { id: order.id },
           data: { coinsUsed: coins, coinsValueUsdCents },

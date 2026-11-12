@@ -2,7 +2,7 @@ import {
   clientTotalCents,
   feeCents,
   formatUsd,
-  maxCoinsForBooking,
+  coinsToPayInFull,
   type ServiceFeePayer,
 } from '@sc/shared';
 
@@ -36,13 +36,13 @@ export function formatClientPrice(
 }
 
 /**
- * Coins a client can put towards a booking: everything they have, but never
- * more than the booking is worth. The server enforces the same cap.
+ * Coins that pay for the whole booking, or 0 when the client doesn't have
+ * enough: coins are never a part-payment. The server enforces the same rule.
  */
 export function coinsToApply(
   walletCoins: number,
   totalUsdCents: number,
   coinUsdCents: number,
 ): number {
-  return Math.max(0, Math.min(walletCoins, maxCoinsForBooking(totalUsdCents, coinUsdCents)));
+  return coinsToPayInFull(totalUsdCents, coinUsdCents, walletCoins);
 }
