@@ -166,7 +166,13 @@ export class AdminPaymentsService {
    */
   private async currentEscrowPayments(): Promise<CurrentEscrowEntry[]> {
     const payments: EscrowPayment[] = await this.prisma.payment.findMany({
-      where: { OR: [{ bookingId: { not: null } }, { orderId: { not: null } }] },
+      // Only money that went through the app can be owed to a provider.
+      // Jobs paid to the stylist directly also write a 'cash' row for the
+      // audit trail; counting those showed them as owed payouts.
+      where: {
+        OR: [{ bookingId: { not: null } }, { orderId: { not: null } }],
+        provider: { not: 'cash' },
+      },
       select: ESCROW_PAYMENT_SELECT,
       orderBy: { createdAt: 'desc' },
     });

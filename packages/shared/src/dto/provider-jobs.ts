@@ -97,7 +97,47 @@ export type ProviderEarningsEntryDto = z.infer<typeof providerEarningsEntrySchem
  * escrow — a booking or order in progress, not yet collected/completed.
  * Neither total counts a refunded or failed entry.
  */
+/**
+ * One completed (or incomplete) job or order under the pay-directly model:
+ * the client paid the stylist or vendor, and StylistsCenter's fee is billed
+ * monthly on the Fees screen.
+ */
+export const providerEarningsJobSchema = z.object({
+  id: z.uuid(),
+  kind: z.enum(['booking', 'order']),
+  reference: z.string(),
+  counterpartyName: z.string(),
+  /** When it completed (or was marked incomplete). */
+  at: z.iso.datetime(),
+  /** The stylist's price, or the product total of an order (no fee, no delivery). */
+  priceUsdCents: z.number().int(),
+  /** Cash the stylist or vendor received directly; 0 when the client did not pay. */
+  receivedUsdCents: z.number().int(),
+  /** Value of coins the client paid with (credited to the wallet as coins). */
+  coinsUsdCents: z.number().int(),
+  /** StylistsCenter's fee for it, after any waiver. Billed monthly. */
+  feeUsdCents: z.number().int(),
+  /**
+   * received: completed and paid directly. not_paid: the stylist reported
+   * the client did not pay. not_confirmed: nobody confirmed it in time.
+   */
+  status: z.enum(['received', 'not_paid', 'not_confirmed']),
+});
+export type ProviderEarningsJobDto = z.infer<typeof providerEarningsJobSchema>;
+
 export const providerEarningsSchema = z.object({
+  /** Cash received directly from clients and buyers, all time. */
+  receivedUsdCents: z.number().int(),
+  /** Cash received directly this calendar month (Harare). */
+  receivedThisMonthUsdCents: z.number().int(),
+  /** Still to collect from confirmed bookings that have not happened or completed yet. */
+  toCollectUsdCents: z.number().int(),
+  /** What the stylist or vendor owes StylistsCenter in fees now (Fees screen). */
+  feesOwedUsdCents: z.number().int(),
+  /** Completed and incomplete jobs and orders, newest first (up to 100). */
+  jobs: z.array(providerEarningsJobSchema),
+  // Older fields: payments made in the app before clients paid directly.
+  // StylistsCenter still owes payouts on those; everything else is zero.
   /** Released from escrow into the provider's balance — earned, but not necessarily paid out yet. */
   releasedUsdCents: z.number().int(),
   pendingUsdCents: z.number().int(),

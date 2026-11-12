@@ -33,6 +33,8 @@ import {
   type ProviderCalendarDto,
   type UpdateWeeklyHoursInput,
   type CreateProviderTimeOffInput,
+  orderAmountDueUsdCents,
+  type ProviderEarningsJobDto,
 } from '@sc/shared';
 import { Optional } from '@nestjs/common';
 import { SettingsService, settingsFor } from '../settings/settings.service';
@@ -43,6 +45,8 @@ import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
 import { toBookingRowDto } from '../bookings/mappers';
 import { BookingLifecycleService } from '../bookings/booking-lifecycle.service';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
+import { harareMonthKey, harareMonthStart } from '../fees/fee-periods';
 import { isWithinWeeklyHours, readWeeklyHours } from '../providers/calendar-policy';
 import { ReminderService } from '../notifications/reminder.service';
 
@@ -74,6 +78,7 @@ export class ProviderService {
     private readonly lifecycle: BookingLifecycleService,
     @Optional() private readonly settings?: SettingsService,
     @Optional() private readonly reminders?: ReminderService,
+    @Optional() private readonly fees?: FeeLedgerService,
   ) {}
 
   /** One request for the whole Jobs screen — availability, live offers, and the work itself. */
@@ -634,14 +639,19 @@ export class ProviderService {
       WITH latest AS (
         SELECT DISTINCT ON (${subjectKey}) p.*
         FROM "Payment" p
-        WHERE EXISTS (
+        -- Only money that went through the app is StylistsCenter's to pay
+        -- out. Jobs paid to the stylist directly also write a 'cash' row
+        -- for the audit trail; counting those made them read "Awaiting
+        -- payout" although the stylist already had the money.
+        WHERE p.provider <> 'cash'
+          AND (EXISTS (
                 SELECT 1 FROM "Booking" b
                 WHERE b.id = p."bookingId" AND b."providerId" = ${providerProfileId}
               )
            OR EXISTS (
                 SELECT 1 FROM "Order" o
                 WHERE o.id = p."orderId" AND o."providerId" = ${providerProfileId}
-              )
+              ))
         ORDER BY ${subjectKey}, p."createdAt" DESC, p.id DESC
       )`;
 
@@ -719,11 +729,174 @@ export class ProviderService {
     }));
 
     return {
+      ...(await this.directEarnings(providerProfileId)),
       releasedUsdCents,
       pendingUsdCents: Number(totals?.pending ?? 0),
       paidOutUsdCents,
       awaitingPayoutUsdCents: Math.max(0, releasedUsdCents - paidOutUsdCents),
       entries,
+    };
+  }
+
+  /**
+   * Earnings under the pay-directly model, from the bookings and orders
+   * themselves: what the client handed over (price + fee - coins for a
+   * booking; products + delivery - coins for an order), and the fee each one
+   * put on the stylist's monthly bill.
+   */
+  private async directEarnings(providerId: string): Promise<{
+    receivedUsdCents: number;
+    receivedThisMonthUsdCents: number;
+    toCollectUsdCents: number;
+    feesOwedUsdCents: number;
+    jobs: ProviderEarningsJobDto[];
+  }> {
+    const monthStart = harareMonthStart(harareMonthKey(new Date()));
+    const doneBooking = {
+      providerId,
+      paymentMethod: 'cash' as const,
+      status: 'completed' as const,
+    };
+    const doneOrder = {
+      providerId,
+      paymentMethod: 'cash' as const,
+      status: { in: ['collected' as const, 'delivered' as const] },
+    };
+    const bookingSums = {
+      priceUsdCents: true,
+      serviceFeeUsdCents: true,
+      coinsUsdCents: true,
+    } as const;
+    const orderSums = {
+      totalUsdCents: true,
+      deliveryChargeUsdCents: true,
+      coinsValueUsdCents: true,
+    } as const;
+
+    const [
+      bookingsAll,
+      bookingsMonth,
+      ordersAll,
+      ordersMonth,
+      upcoming,
+      feesOwedUsdCents,
+      bookings,
+      orders,
+    ] = await Promise.all([
+      this.prisma.booking.aggregate({ where: doneBooking, _sum: bookingSums }),
+      this.prisma.booking.aggregate({
+        where: { ...doneBooking, completedAt: { gte: monthStart } },
+        _sum: bookingSums,
+      }),
+      this.prisma.order.aggregate({ where: doneOrder, _sum: orderSums }),
+      this.prisma.order.aggregate({
+        where: { ...doneOrder, completedAt: { gte: monthStart } },
+        _sum: orderSums,
+      }),
+      this.prisma.booking.aggregate({
+        where: { providerId, paymentMethod: 'cash', status: 'confirmed' },
+        _sum: bookingSums,
+      }),
+      this.fees
+        ? this.fees.balance(providerId)
+        : new FeeLedgerService(this.prisma).balance(providerId),
+      this.prisma.booking.findMany({
+        where: { providerId, paymentMethod: 'cash', status: { in: ['completed', 'incomplete'] } },
+        include: { client: { select: { displayName: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.order.findMany({
+        where: doneOrder,
+        include: { buyer: { select: { displayName: true } } },
+        orderBy: { updatedAt: 'desc' },
+        take: 100,
+      }),
+    ]);
+
+    interface BookingSum {
+      priceUsdCents: number | null;
+      serviceFeeUsdCents: number | null;
+      coinsUsdCents: number | null;
+    }
+    interface OrderSum {
+      totalUsdCents: number | null;
+      deliveryChargeUsdCents: number | null;
+      coinsValueUsdCents: number | null;
+    }
+    const bookingCash = (s: BookingSum) =>
+      Math.max(0, (s.priceUsdCents ?? 0) + (s.serviceFeeUsdCents ?? 0) - (s.coinsUsdCents ?? 0));
+    const orderCash = (s: OrderSum) =>
+      Math.max(
+        0,
+        (s.totalUsdCents ?? 0) + (s.deliveryChargeUsdCents ?? 0) - (s.coinsValueUsdCents ?? 0),
+      );
+
+    // Each job's fee after waivers, from the fee ledger.
+    const feeRows = await this.prisma.feeLedgerEntry.groupBy({
+      by: ['bookingId', 'orderId'],
+      where: {
+        providerId,
+        OR: [
+          { bookingId: { in: bookings.map((b) => b.id) } },
+          { orderId: { in: orders.map((o) => o.id) } },
+        ],
+      },
+      _sum: { amountUsdCents: true },
+    });
+    const feeFor = (ref: { bookingId?: string; orderId?: string }) =>
+      feeRows
+        .filter((r) => (ref.bookingId ? r.bookingId === ref.bookingId : r.orderId === ref.orderId))
+        .reduce((sum, r) => sum + (r._sum.amountUsdCents ?? 0), 0);
+
+    const jobs: ProviderEarningsJobDto[] = [
+      ...bookings.map((b): ProviderEarningsJobDto => {
+        const { amountDueUsdCents } = bookingAmounts(b);
+        const status: ProviderEarningsJobDto['status'] =
+          b.status === 'completed'
+            ? 'received'
+            : b.nonPaymentReportedAt
+              ? 'not_paid'
+              : 'not_confirmed';
+        return {
+          id: b.id,
+          kind: 'booking',
+          reference: b.reference,
+          counterpartyName: b.client.displayName,
+          at: (b.completedAt ?? b.updatedAt).toISOString(),
+          priceUsdCents: b.priceUsdCents,
+          receivedUsdCents: status === 'received' ? amountDueUsdCents : 0,
+          coinsUsdCents: b.coinsUsdCents,
+          feeUsdCents: feeFor({ bookingId: b.id }),
+          status,
+        };
+      }),
+      ...orders.map((o): ProviderEarningsJobDto => ({
+        id: o.id,
+        kind: 'order',
+        reference: o.reference,
+        counterpartyName: o.buyer.displayName,
+        at: (o.completedAt ?? o.updatedAt).toISOString(),
+        priceUsdCents: o.totalUsdCents,
+        receivedUsdCents: orderAmountDueUsdCents({
+          productTotalUsdCents: o.totalUsdCents,
+          deliveryChargeUsdCents: o.deliveryChargeUsdCents,
+          coinsValueUsdCents: o.coinsValueUsdCents,
+        }),
+        coinsUsdCents: o.coinsValueUsdCents,
+        feeUsdCents: feeFor({ orderId: o.id }),
+        status: 'received',
+      })),
+    ]
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, 100);
+
+    return {
+      receivedUsdCents: bookingCash(bookingsAll._sum) + orderCash(ordersAll._sum),
+      receivedThisMonthUsdCents: bookingCash(bookingsMonth._sum) + orderCash(ordersMonth._sum),
+      toCollectUsdCents: bookingCash(upcoming._sum),
+      feesOwedUsdCents,
+      jobs,
     };
   }
 

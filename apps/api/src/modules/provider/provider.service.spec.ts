@@ -131,6 +131,13 @@ describe('ProviderService management', () => {
     await prisma.vendorApplication.deleteMany({ where: { providerId } });
     await prisma.payout.deleteMany({ where: { providerId } });
     await prisma.providerProfile.delete({ where: { id: providerId } });
+    // Completed bookings earn the client coins through the real rewards hooks.
+    await prisma.walletCoinSpend.deleteMany({
+      where: { debit: { userId: { in: [providerUserId, buyerId] } } },
+    });
+    await prisma.walletTransaction.deleteMany({
+      where: { userId: { in: [providerUserId, buyerId] } },
+    });
     await prisma.user.deleteMany({ where: { id: { in: [providerUserId, buyerId] } } });
     await prisma.category.delete({ where: { id: categoryId } });
     await prisma.city.delete({ where: { id: cityId } });
@@ -354,6 +361,84 @@ describe('ProviderService management', () => {
       await prisma.feeLedgerEntry.deleteMany({ where: { providerId } });
       await prisma.payment.deleteMany({ where: { bookingId: { in: bookingIds } } });
       await prisma.booking.deleteMany({ where: { id: { in: bookingIds } } });
+    });
+
+    it('earnings: direct payments are received, never awaiting payout', async () => {
+      const service = jobs();
+      const before = await service.getEarnings(providerId);
+      const stamp = String(Date.now());
+      const base = (minsAgo: number) => {
+        const startsAt = new Date(Date.now() - 30 * HOUR - minsAgo * 60_000);
+        return {
+          clientId: buyerId,
+          providerId,
+          serviceId,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 60_000),
+          paymentMethod: 'cash' as const,
+          priceUsdCents: 2000,
+          serviceFeeUsdCents: 60,
+          serviceFeeBps: 300,
+        };
+      };
+      // Completed, client used 10 coins ($1): received $20.60 - $1 = $19.60.
+      const done = await prisma.booking.create({
+        data: {
+          ...base(1),
+          reference: `SC-E${stamp}A`,
+          status: 'confirmed',
+          coinsUsed: 10,
+          coinsUsdCents: 100,
+        },
+      });
+      // Reported unpaid: listed, received nothing.
+      const unpaid = await prisma.booking.create({
+        data: {
+          ...base(3),
+          reference: `SC-E${stamp}B`,
+          status: 'incomplete',
+          nonPaymentReportedAt: new Date(),
+        },
+      });
+      // Confirmed for later: still to collect $20.60.
+      const later = await prisma.booking.create({
+        data: {
+          ...base(5),
+          startsAt: new Date(Date.now() + 48 * HOUR),
+          endsAt: new Date(Date.now() + 48 * HOUR + 60_000),
+          reference: `SC-E${stamp}C`,
+          status: 'confirmed',
+        },
+      });
+      bookingIds.push(done.id, unpaid.id, later.id);
+      // Both sides confirm: completes, writes the cash audit row and the fee.
+      await service.confirmCompletion(done.id, providerId);
+      const lifecycle = (service as unknown as { lifecycle: BookingLifecycleService }).lifecycle;
+      await lifecycle.confirm(done.id, 'client');
+
+      const after = await service.getEarnings(providerId);
+      expect(after.receivedUsdCents - before.receivedUsdCents).toBe(1960);
+      expect(after.receivedThisMonthUsdCents - before.receivedThisMonthUsdCents).toBe(1960);
+      expect(after.toCollectUsdCents - before.toCollectUsdCents).toBe(2060);
+      expect(after.feesOwedUsdCents - before.feesOwedUsdCents).toBe(60);
+      // The cash audit row is not money StylistsCenter owes.
+      expect(after.awaitingPayoutUsdCents).toBe(before.awaitingPayoutUsdCents);
+      expect(after.releasedUsdCents).toBe(before.releasedUsdCents);
+
+      const mine = after.jobs.filter((job) => job.reference.startsWith(`SC-E${stamp}`));
+      expect(mine.find((j) => j.id === done.id)).toMatchObject({
+        status: 'received',
+        priceUsdCents: 2000,
+        receivedUsdCents: 1960,
+        coinsUsdCents: 100,
+        feeUsdCents: 60,
+      });
+      expect(mine.find((j) => j.id === unpaid.id)).toMatchObject({
+        status: 'not_paid',
+        receivedUsdCents: 0,
+        feeUsdCents: 0,
+      });
+      expect(mine.some((j) => j.id === later.id)).toBe(false);
     });
 
     it('shows what to collect and the fee, then closes on both confirmations and reports non-payment', async () => {
