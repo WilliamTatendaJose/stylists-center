@@ -407,6 +407,8 @@ model Booking {
   /// Service fee added to `priceUsdCents` for the client, frozen at booking time so a later settings change never rewrites what this client was shown or what the stylist owes. Both 0 on bookings made before the pay-the-stylist model (those were paid in the app, fee-free).
   serviceFeeUsdCents    Int             @default(0)
   serviceFeeBps         Int             @default(0)
+  /// Frozen from the serviceFeePaidBy setting: true when the fee was added to the client's price, false when the stylist carried it (client paid the listed price). The fee owed is the same either way.
+  clientPaysFee         Boolean         @default(true)
   /// Coins the client spent on this booking and their cash value when spent. The client pays the stylist price + fee - coinsUsdCents directly.
   coinsUsed             Int             @default(0)
   coinsUsdCents         Int             @default(0)

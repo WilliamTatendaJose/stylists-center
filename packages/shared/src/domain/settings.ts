@@ -42,6 +42,8 @@ export interface NumberSettingDefinition extends SettingBase {
 
 export interface TextSettingDefinition extends SettingBase {
   kind: 'text';
+  /** When set, the value must be one of these (shown as a choice in the console). */
+  options?: readonly { value: string; label: string }[];
   default: string;
   maxLength: number;
 }
@@ -138,6 +140,20 @@ export const SETTING_DEFINITIONS = {
     default: BUDGET_STEP_USD,
     min: 1,
     max: 1_000,
+  },
+  serviceFeePaidBy: {
+    kind: 'text',
+    label: 'Service fee paid by',
+    help: "Client: the fee is added to the price the client sees ($20 job shows $20.60). Stylist: the client pays the listed price and the fee comes out of the stylist's side. Either way the stylist collects the money and the fee is on their monthly bill. Applies to new bookings.",
+    group: 'Fees and billing',
+    env: 'SERVICE_FEE_PAID_BY',
+    public: true,
+    default: 'client',
+    maxLength: 20,
+    options: [
+      { value: 'client', label: 'Client (added to the price)' },
+      { value: 'stylist', label: 'Stylist (client pays the listed price)' },
+    ],
   },
   serviceFeeBps: {
     kind: 'bps',
@@ -376,6 +392,12 @@ export function parseSettingValue(
   if (def.kind === 'text') {
     if (typeof raw !== 'string') return { ok: false, error: `${def.label} must be text` };
     const value = raw.trim();
+    if (def.options && !def.options.some((option) => option.value === value)) {
+      return {
+        ok: false,
+        error: `${def.label} must be one of: ${def.options.map((o) => o.value).join(', ')}`,
+      };
+    }
     if (value.length > def.maxLength) {
       return {
         ok: false,

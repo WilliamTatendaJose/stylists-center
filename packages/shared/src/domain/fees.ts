@@ -16,9 +16,20 @@ export function feeCents(amountCents: number, bps: number): number {
   return Math.floor((amountCents * bps + 5_000) / 10_000);
 }
 
-/** What the client sees and pays the stylist for a booking: price plus the service fee. */
-export function clientTotalCents(priceCents: number, serviceFeeBps: number): number {
-  return priceCents + feeCents(priceCents, serviceFeeBps);
+/** Who carries the booking service fee (setting serviceFeePaidBy). */
+export type ServiceFeePayer = 'client' | 'stylist';
+
+/**
+ * What the client sees and pays the stylist for a booking: the price plus
+ * the service fee when the client pays it, or just the price when the
+ * stylist does. The fee itself is the same either way.
+ */
+export function clientTotalCents(
+  priceCents: number,
+  serviceFeeBps: number,
+  paidBy: ServiceFeePayer = 'client',
+): number {
+  return priceCents + (paidBy === 'client' ? feeCents(priceCents, serviceFeeBps) : 0);
 }
 
 /** Whole reward coins for an amount spent: $10 per coin by default, rounded down. */

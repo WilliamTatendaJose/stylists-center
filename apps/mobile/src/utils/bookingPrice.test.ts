@@ -31,3 +31,10 @@ describe('coinsToApply', () => {
     expect(coinsToApply(5, 2060, 0)).toBe(0);
   });
 });
+
+describe('when the stylist carries the service fee', () => {
+  it('shows the client the listed price with no fee added', () => {
+    expect(clientPrice(2000, 300, 'stylist')).toEqual({ feeUsdCents: 0, totalUsdCents: 2000 });
+    expect(formatClientPrice(2000, 300, 'stylist')).toBe('$20.00');
+  });
+});

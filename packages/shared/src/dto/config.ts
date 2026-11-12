@@ -16,6 +16,8 @@ export const appConfigSchema = z.object({
   budgetMaxUsd: z.number().int(),
   budgetStepUsd: z.number().int(),
   serviceFeeBps: z.number().int(),
+  /** 'client' adds the fee to the client's price; 'stylist' leaves the listed price. */
+  serviceFeePaidBy: z.enum(['client', 'stylist']),
   marketplaceFeeBps: z.number().int(),
   billingDueDay: z.number().int(),
   feeRestrictAfterDays: z.number().int(),
@@ -77,6 +79,7 @@ export const adminSettingSchema = z.object({
   min: z.number().optional(),
   max: z.number().optional(),
   maxLength: z.number().optional(),
+  options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
   updatedAt: z.iso.datetime().nullable(),
 });
 export type AdminSettingDto = z.infer<typeof adminSettingSchema>;

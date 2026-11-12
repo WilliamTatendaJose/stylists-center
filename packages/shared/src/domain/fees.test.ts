@@ -19,4 +19,9 @@ describe('fees', () => {
     expect(rewardCoinsForSpend(1000, 10)).toBe(1);
     expect(rewardCoinsForSpend(2599, 10)).toBe(2);
   });
+
+  it('leaves the client total at the listed price when the stylist carries the fee', () => {
+    expect(clientTotalCents(2000, 300, 'stylist')).toBe(2000);
+    expect(clientTotalCents(2000, 300, 'client')).toBe(2060);
+  });
 });

@@ -51,7 +51,7 @@ export default function ChooseSlot() {
   const reschedule = useRescheduleBooking();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const { serviceFeeBps } = useAppConfig();
+  const { serviceFeeBps, serviceFeePaidBy } = useAppConfig();
   const { data: provider } = useProvider(providerId ?? undefined);
   const dates = useMemo(buildDateStrip, []);
   const [date, setDate] = useState(dates[0]?.value ?? '');
@@ -147,7 +147,10 @@ export default function ChooseSlot() {
             </Text>
             <Text variant="h3">
               {selectedService
-                ? formatUsd(clientPrice(selectedService.priceUsdCents, serviceFeeBps).totalUsdCents)
+                ? formatUsd(
+                    clientPrice(selectedService.priceUsdCents, serviceFeeBps, serviceFeePaidBy)
+                      .totalUsdCents,
+                  )
                 : '—'}
             </Text>
           </View>
@@ -177,7 +180,7 @@ export default function ChooseSlot() {
             <RadioCard
               key={service.id}
               title={service.name}
-              description={`${String(service.durationMinutes)} min · ${formatClientPrice(service.priceUsdCents, serviceFeeBps)}`}
+              description={`${String(service.durationMinutes)} min · ${formatClientPrice(service.priceUsdCents, serviceFeeBps, serviceFeePaidBy)}`}
               selected={service.id === serviceId}
               onPress={() => {
                 if (rescheduleBookingId) return;

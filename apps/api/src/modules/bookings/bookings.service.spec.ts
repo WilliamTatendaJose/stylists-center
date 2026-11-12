@@ -418,6 +418,58 @@ describe('BookingsService', () => {
     });
   });
 
+  it('when the stylist carries the fee, the client pays the listed price and the fee is still billed', async () => {
+    const stylistPays = new SettingsService(undefined, { SERVICE_FEE_PAID_BY: 'stylist' });
+    const stylistFees = new FeeLedgerService(prisma, stylistPays);
+    const stylistLifecycle = new BookingLifecycleService(
+      prisma,
+      stylistFees,
+      rewards,
+      standing,
+      new SocketEmitterService(),
+      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+      stylistPays,
+    );
+    const service = new BookingsService(
+      prisma,
+      new SocketEmitterService(),
+      null as unknown as MatchingService,
+      new TrustService(prisma),
+      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+      new PaymentStatusService(prisma, new FakeEcoCashAdapter()),
+      standing,
+      rewards,
+      stylistLifecycle,
+      stylistPays,
+    );
+    const created = await service.create(clientId, {
+      providerId: providerAId,
+      serviceId: serviceAId,
+      startsAt: futureSlot(2, 7),
+    });
+    createdBookingIds.push(created.id);
+
+    expect(await prisma.booking.findUniqueOrThrow({ where: { id: created.id } })).toMatchObject({
+      priceUsdCents: 2000,
+      serviceFeeUsdCents: 60,
+      serviceFeeBps: 300,
+      clientPaysFee: false,
+    });
+    const row = (await service.listForClient(clientId)).find((r) => r.id === created.id);
+    expect(row).toMatchObject({ clientTotalUsdCents: 2000, amountDueUsdCents: 2000 });
+
+    // On completion the stylist still owes the 3% on their price.
+    await prisma.booking.update({
+      where: { id: created.id },
+      data: { status: 'confirmed', confirmedByProvider: true, confirmedByProviderAt: new Date() },
+    });
+    await stylistLifecycle.confirm(created.id, 'client');
+    const charged = await prisma.feeLedgerEntry.findFirstOrThrow({
+      where: { bookingId: created.id, kind: 'booking_fee' },
+    });
+    expect(charged.amountUsdCents).toBe(60);
+  });
+
   it('shows the stylist payment number to the client once the booking is confirmed', async () => {
     await prisma.providerProfile.update({
       where: { id: providerAId },

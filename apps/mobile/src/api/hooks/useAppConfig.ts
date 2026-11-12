@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import {
+  appConfigSchema,
   defaultSettings,
   type AppConfigDto,
   type ContentDocumentDto,
@@ -7,8 +8,12 @@ import {
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 
-/** Built-in values, shown until the first `/v1/config` response arrives. */
-const DEFAULTS: AppConfigDto = defaultSettings();
+/**
+ * Built-in values, shown until the first `/v1/config` response arrives.
+ * Parsed through the public schema, which keeps only the public settings and
+ * narrows choice settings (e.g. who pays the fee) to their allowed values.
+ */
+const DEFAULTS: AppConfigDto = appConfigSchema.parse(defaultSettings());
 
 /**
  * `GET /v1/config` — prices, rewards, budget range and support contacts as
