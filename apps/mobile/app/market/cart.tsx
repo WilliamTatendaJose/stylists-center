@@ -6,6 +6,7 @@ import {
   formatUsd,
   maxCoinsForOrder,
   orderAmountDueUsdCents,
+  orderServiceFeeUsdCents,
   type CreateOrderResponse,
   type FulfilmentMethod,
 } from '@sc/shared';
@@ -24,6 +25,7 @@ import {
   useTheme,
 } from '@sc/ui';
 import { useCreateOrder } from '../../src/api/hooks/useMarket.js';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { useWallet } from '../../src/api/hooks/useWallet.js';
 import {
   cartTotalUsdCents,
@@ -113,28 +115,38 @@ export default function Cart() {
   // Only spendable coins (not expired, not agent earnings) can pay for an order.
   const coinsAvailable = wallet?.spendableCoins ?? 0;
   const coinUsdCents = wallet?.coinUsdCents ?? 0;
+  // The marketplace commission, shown as a service fee when the buyer pays
+  // it (console setting). The server works it out the same way.
+  const { marketplaceFeeBps, marketplaceFeePaidBy } = useAppConfig();
   let coinsLeft = useCoins ? coinsAvailable : 0;
   const plan = groups.map((group) => {
     const fulfilment = methodFor(group);
     const products = group.lines.reduce((n, l) => n + l.priceUsdCents * l.quantity, 0);
     const delivery = fulfilment === 'delivery' ? group.deliveryChargeUsdCents : 0;
-    const coins = Math.min(coinsLeft, maxCoinsForOrder(products, delivery, coinUsdCents));
+    const serviceFee = orderServiceFeeUsdCents(products, marketplaceFeeBps, marketplaceFeePaidBy);
+    const coins = Math.min(
+      coinsLeft,
+      maxCoinsForOrder(products, delivery, coinUsdCents, serviceFee),
+    );
     coinsLeft -= coins;
     const coinsValue = coins * coinUsdCents;
     return {
       group,
       fulfilment,
       delivery,
+      serviceFee,
       coins,
       due: orderAmountDueUsdCents({
         productTotalUsdCents: products,
         deliveryChargeUsdCents: delivery,
         coinsValueUsdCents: coinsValue,
+        serviceFeeUsdCents: serviceFee,
       }),
     };
   });
   const totalDue = plan.reduce((n, p) => n + p.due, 0);
   const totalDelivery = plan.reduce((n, p) => n + p.delivery, 0);
+  const totalServiceFee = plan.reduce((n, p) => n + p.serviceFee, 0);
   const totalCoinsValue = plan.reduce((n, p) => n + p.coins * coinUsdCents, 0);
 
   if (groups.length === 0) {
@@ -225,6 +237,7 @@ export default function Cart() {
             reference: created.reference,
             providerName: group.providerName,
             amountDueUsdCents: created.amountDueUsdCents,
+            serviceFeeUsdCents: created.serviceFeeUsdCents,
             fulfilment,
           })),
         ),
@@ -257,7 +270,7 @@ export default function Cart() {
         </View>
       }
     >
-      {plan.map(({ group, fulfilment, delivery, coins, due }) => (
+      {plan.map(({ group, fulfilment, delivery, serviceFee, coins, due }) => (
         <View key={group.providerId} style={styles.sellerBlock}>
           <Text variant="meta" color="neutral700" style={styles.sellerLabel}>
             From {group.providerName}
@@ -358,6 +371,7 @@ export default function Cart() {
           </View>
           <Text variant="meta" color="neutral700" style={styles.fulfilment}>
             {delivery > 0 ? `Delivery ${formatUsd(delivery)} · ` : ''}
+            {serviceFee > 0 ? `Service fee ${formatUsd(serviceFee)} · ` : ''}
             {coins > 0 ? `${String(coins)} coins used · ` : ''}
             Pay {group.providerName} {formatUsd(due)}
           </Text>
@@ -418,6 +432,9 @@ export default function Cart() {
           },
           { label: 'Products', value: formatUsd(productTotal) },
           ...(totalDelivery > 0 ? [{ label: 'Delivery', value: formatUsd(totalDelivery) }] : []),
+          ...(totalServiceFee > 0
+            ? [{ label: 'Service fee', value: formatUsd(totalServiceFee) }]
+            : []),
           ...(totalCoinsValue > 0
             ? [{ label: 'Coins', value: `-${formatUsd(totalCoinsValue)}` }]
             : []),

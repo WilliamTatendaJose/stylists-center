@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import {
   clampBrowseRadiusKm,
@@ -36,20 +36,33 @@ export function DistanceFilter() {
     : DEFAULT_BROWSE_RADIUS_KM;
 
   const [liveKm, setLiveKm] = useState(safeStoreValue);
-  // Stays in sync if the store's value changes for a reason other than this
-  // slider's own drag — e.g. Market's slider moving while Find is mounted in
-  // the background, since React Navigation tabs are kept alive, not remounted.
+  // True between the user moving THIS slider and its value being saved.
+  // Find and Market each keep a slider mounted (tabs stay alive). Before this
+  // flag, an idle slider still holding the old distance wrote it back the
+  // moment the other slider saved a new one, the other wrote its value back,
+  // and the two looped until React stopped with "Maximum update depth
+  // exceeded" — the crash on changing the radius. Only a slider the user
+  // actually moved may write to the store.
+  const userMoved = useRef(false);
+
+  // Follows the store when the distance changes for another reason (the
+  // other tab's slider), unless the user is mid-drag on this one.
   useEffect(() => {
-    setLiveKm((current) => (current === safeStoreValue ? current : safeStoreValue));
+    if (!userMoved.current) setLiveKm(safeStoreValue);
   }, [safeStoreValue]);
 
   const debouncedKm = useDebouncedValue(liveKm, 400);
   useEffect(() => {
+    if (!userMoved.current || debouncedKm !== liveKm) return;
+    userMoved.current = false;
     const nextValue = Number.isFinite(debouncedKm)
-      ? clampBrowseRadiusKm(debouncedKm)
+      ? clampBrowseRadiusKm(Math.round(debouncedKm))
       : DEFAULT_BROWSE_RADIUS_KM;
-    if (nextValue !== safeStoreValue) setMaxDistanceKm(nextValue);
-  }, [debouncedKm, safeStoreValue, setMaxDistanceKm]);
+    if (nextValue !== useSessionStore.getState().maxDistanceKm) setMaxDistanceKm(nextValue);
+    // Reads the store directly rather than depending on it, so a store change
+    // can never re-run this and write an old value back.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedKm, liveKm]);
 
   return (
     <View style={styles.wrap}>
@@ -67,7 +80,9 @@ export function DistanceFilter() {
         step={1}
         value={liveKm}
         onChange={(value) => {
-          if (Number.isFinite(value)) setLiveKm(clampBrowseRadiusKm(value));
+          if (!Number.isFinite(value)) return;
+          userMoved.current = true;
+          setLiveKm(clampBrowseRadiusKm(Math.round(value)));
         }}
         accessibilityLabel="Maximum distance to search"
       />

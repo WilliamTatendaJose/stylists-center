@@ -118,3 +118,22 @@ describe('order lifecycle', () => {
     }
   });
 });
+
+describe('marketplace service fee', () => {
+  it('adds the commission for the buyer only when they pay it, never on delivery', async () => {
+    const { orderServiceFeeUsdCents, orderAmountDueUsdCents, maxCoinsForOrder } =
+      await import('./order.js');
+    expect(orderServiceFeeUsdCents(1000, 300, 'client')).toBe(30);
+    expect(orderServiceFeeUsdCents(1000, 300, 'vendor')).toBe(0);
+    expect(
+      orderAmountDueUsdCents({
+        productTotalUsdCents: 1000,
+        deliveryChargeUsdCents: 200,
+        coinsValueUsdCents: 0,
+        serviceFeeUsdCents: 30,
+      }),
+    ).toBe(1230);
+    // Coins can cover the fee too, like a booking's total.
+    expect(maxCoinsForOrder(1000, 200, 10, 30)).toBe(123);
+  });
+});

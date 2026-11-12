@@ -210,7 +210,9 @@ describe('MarketService against the database', () => {
       expect(created).toMatchObject({
         totalUsdCents: 2000,
         deliveryChargeUsdCents: 0,
-        amountDueUsdCents: 2000,
+        // The buyer pays the 3% commission as a service fee by default.
+        serviceFeeUsdCents: 60,
+        amountDueUsdCents: 2060,
       });
       expect(await stock(productId)).toBe(before - 2);
       const order = await prisma.order.findUniqueOrThrow({ where: { id: created.id } });
@@ -222,6 +224,31 @@ describe('MarketService against the database', () => {
         pickupHours: 'Mon-Sat 9-5',
       });
       expect(await prisma.payment.count({ where: { orderId: created.id } })).toBe(0);
+    });
+
+    it('adds no service fee when the vendor carries the commission', async () => {
+      const vendorPays = new MarketService(
+        prisma,
+        new PaymentStatusService(prisma, new FakeEcoCashAdapter()),
+        { sendToUser: () => Promise.resolve() } as unknown as PushService,
+        fees,
+        standing,
+        rewards,
+        new SettingsService(undefined, {
+          MARKETPLACE_FEE_BPS: '300',
+          MARKETPLACE_FEE_PAID_BY: 'vendor',
+        }),
+      );
+      const created = await vendorPays.createOrder(buyerId, {
+        providerId,
+        checkoutKey: checkoutKey('vendor-pays'),
+        items: [{ productId, quantity: 1 }],
+      });
+      expect(created).toMatchObject({
+        totalUsdCents: 1000,
+        serviceFeeUsdCents: 0,
+        amountDueUsdCents: 1000,
+      });
     });
 
     it('keeps the delivery charge apart from the product total', async () => {
@@ -236,7 +263,9 @@ describe('MarketService against the database', () => {
       expect(created).toMatchObject({
         totalUsdCents: 1000,
         deliveryChargeUsdCents: 300,
-        amountDueUsdCents: 1300,
+        // The fee is on the products only, not on delivery.
+        serviceFeeUsdCents: 30,
+        amountDueUsdCents: 1330,
       });
       const order = await prisma.order.findUniqueOrThrow({ where: { id: created.id } });
       expect(order).toMatchObject({
@@ -351,7 +380,7 @@ describe('MarketService against the database', () => {
       expect(created).toMatchObject({
         totalUsdCents: 1000,
         coinsValueUsdCents: 200,
-        amountDueUsdCents: 800,
+        amountDueUsdCents: 830,
       });
       const order = await prisma.order.findUniqueOrThrow({ where: { id: created.id } });
       expect(order).toMatchObject({ coinsUsed: 20, coinsValueUsdCents: 200 });
@@ -363,10 +392,10 @@ describe('MarketService against the database', () => {
         market.createOrder(buyerId, {
           providerId,
           checkoutKey: checkoutKey('coins-max'),
-          coins: 101, // 1000 cents at 10 cents a coin is 100 coins at most
+          coins: 104, // 1000 cents + 30 fee at 10 cents a coin is 103 coins at most
           items: [{ productId, quantity: 1 }],
         }),
-      ).rejects.toThrow('at most 100 coins');
+      ).rejects.toThrow('at most 103 coins');
       expect(redeem).not.toHaveBeenCalled();
     });
 
@@ -531,7 +560,8 @@ describe('MarketService against the database', () => {
       expect(rows.find((r) => r.id === created.id)).toMatchObject({
         fulfilment: 'delivery',
         deliveryAddress: '12 Samora Machel Ave',
-        amountDueUsdCents: 1300,
+        serviceFeeUsdCents: 30,
+        amountDueUsdCents: 1330,
         buyerName: 'Buyer',
         canMarkReady: true,
         canComplete: true,

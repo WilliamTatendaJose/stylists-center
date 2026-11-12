@@ -90,6 +90,8 @@ export const orderRowSchema = z.object({
   deliveryChargeUsdCents: z.number().int(),
   coinsUsed: z.number().int(),
   coinsValueUsdCents: z.number().int(),
+  /** Service fee the buyer pays on top (0 when the vendor carries the commission). */
+  serviceFeeUsdCents: z.number().int(),
   /** What the buyer pays the vendor on delivery or collection. */
   amountDueUsdCents: z.number().int(),
   createdAt: z.iso.datetime(),
@@ -147,6 +149,8 @@ export const createOrderResponseSchema = z.object({
   totalUsdCents: z.number().int(),
   deliveryChargeUsdCents: z.number().int(),
   coinsValueUsdCents: z.number().int(),
+  /** Service fee the buyer pays on top (0 when the vendor carries the commission). */
+  serviceFeeUsdCents: z.number().int(),
   /** What the buyer pays the vendor on delivery or collection. */
   amountDueUsdCents: z.number().int(),
   /** Present when the gateway returned a hosted checkout page rather than a phone prompt. */
@@ -215,6 +219,8 @@ export const providerOrderSchema = z.object({
   deliveryChargeUsdCents: z.number().int(),
   coinsUsed: z.number().int(),
   coinsValueUsdCents: z.number().int(),
+  /** Service fee the buyer pays on top (0 when the vendor carries the commission). */
+  serviceFeeUsdCents: z.number().int(),
   /** What the vendor collects from the buyer. */
   amountDueUsdCents: z.number().int(),
   createdAt: z.iso.datetime(),

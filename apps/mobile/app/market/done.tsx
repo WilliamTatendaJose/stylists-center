@@ -28,6 +28,8 @@ interface PlacedOrder {
   providerName: string;
   /** What the buyer pays the shop on receipt. */
   amountDueUsdCents: number;
+  /** Included in amountDueUsdCents; absent on links from before the fee was shown. */
+  serviceFeeUsdCents?: number;
   fulfilment: 'collection' | 'delivery';
 }
 
@@ -93,6 +95,9 @@ export default function OrderDone() {
                 label: order.fulfilment === 'delivery' ? 'Delivered by' : 'Collect from',
                 value: order.providerName,
               },
+              ...(order.serviceFeeUsdCents
+                ? [{ label: 'Service fee', value: formatUsd(order.serviceFeeUsdCents) }]
+                : []),
               { label: 'Pay on receipt', value: formatUsd(order.amountDueUsdCents) },
             ]}
           />

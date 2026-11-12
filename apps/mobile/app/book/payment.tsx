@@ -201,17 +201,6 @@ export default function Payment() {
         />
       </View>
 
-      <View style={styles.section}>
-        <Text variant="sectionLabel" style={styles.sectionLabel}>
-          How you pay
-        </Text>
-        <Text variant="body" color="neutral700">
-          You pay {provider.displayName} directly, in cash or to their mobile money number, after
-          your appointment. Nothing is taken in the app. Once the stylist accepts, their number is
-          shown on your booking.
-        </Text>
-      </View>
-
       {offerableCoins > 0 ? (
         <View style={styles.section}>
           <Text variant="sectionLabel" style={styles.sectionLabel}>

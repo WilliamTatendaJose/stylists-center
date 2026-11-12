@@ -227,6 +227,9 @@ function amountBreakdown(order: ProviderOrderDto): string {
   if (order.deliveryChargeUsdCents > 0) {
     parts.push(`delivery ${formatUsd(order.deliveryChargeUsdCents)}`);
   }
+  if (order.serviceFeeUsdCents > 0) {
+    parts.push(`service fee ${formatUsd(order.serviceFeeUsdCents)}`);
+  }
   if (order.coinsValueUsdCents > 0) parts.push(`coins -${formatUsd(order.coinsValueUsdCents)}`);
   return parts.join(' · ');
 }

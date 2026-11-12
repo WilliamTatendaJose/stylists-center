@@ -1,3 +1,4 @@
+import { feeCents } from './fees.js';
 /**
  * Marketplace orders (handoff screens 15-18).
  *
@@ -89,6 +90,23 @@ export interface OrderAmounts {
   productTotalUsdCents: number;
   deliveryChargeUsdCents: number;
   coinsValueUsdCents: number;
+  /** Marketplace service fee the buyer pays on top, when they carry the commission. */
+  serviceFeeUsdCents?: number;
+}
+
+/** Who carries the marketplace commission (setting marketplaceFeePaidBy). */
+export type MarketplaceFeePayer = 'client' | 'vendor';
+
+/**
+ * The service fee added to the buyer's order: the commission on the product
+ * total (never on delivery) when the buyer pays it, otherwise nothing.
+ */
+export function orderServiceFeeUsdCents(
+  productTotalUsdCents: number,
+  marketplaceFeeBps: number,
+  paidBy: MarketplaceFeePayer = 'client',
+): number {
+  return paidBy === 'client' ? feeCents(productTotalUsdCents, marketplaceFeeBps) : 0;
 }
 
 /**
@@ -99,7 +117,10 @@ export interface OrderAmounts {
 export function orderAmountDueUsdCents(amounts: OrderAmounts): number {
   return Math.max(
     0,
-    amounts.productTotalUsdCents + amounts.deliveryChargeUsdCents - amounts.coinsValueUsdCents,
+    amounts.productTotalUsdCents +
+      amounts.deliveryChargeUsdCents +
+      (amounts.serviceFeeUsdCents ?? 0) -
+      amounts.coinsValueUsdCents,
   );
 }
 
@@ -108,7 +129,10 @@ export function maxCoinsForOrder(
   productTotalUsdCents: number,
   deliveryChargeUsdCents: number,
   coinUsdCents: number,
+  serviceFeeUsdCents = 0,
 ): number {
   if (coinUsdCents <= 0) return 0;
-  return Math.floor((productTotalUsdCents + deliveryChargeUsdCents) / coinUsdCents);
+  return Math.floor(
+    (productTotalUsdCents + deliveryChargeUsdCents + serviceFeeUsdCents) / coinUsdCents,
+  );
 }

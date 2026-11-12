@@ -565,6 +565,10 @@ model Order {
   /// Coins the buyer spent on this order and what they were worth at the time.
   coinsUsed              Int              @default(0)
   coinsValueUsdCents     Int              @default(0)
+  /// Marketplace service fee added to what the buyer pays, frozen at checkout
+  /// from marketplaceFeeBps / marketplaceFeePaidBy. 0 when the vendor carries
+  /// the commission (and on orders placed before the fee was shown).
+  serviceFeeUsdCents     Int              @default(0)
   /// When the order was delivered or collected.
   completedAt            DateTime?
   /// Sum of the item snapshots (products only, no delivery), stored so a later price change cannot rewrite history.

@@ -218,7 +218,9 @@ export default function NewRequest() {
           max={MAX_MATCH_RADIUS_KM}
           step={1}
           value={liveRadius}
-          onChange={setLiveRadius}
+          onChange={(value) => {
+            if (Number.isFinite(value)) setLiveRadius(Math.round(value));
+          }}
           accessibilityLabel="Search radius"
         />
       </View>
