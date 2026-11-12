@@ -13,6 +13,16 @@ const MAX_MESSAGES_PER_REQUEST = 100;
 /** Expo's own tag for "this token belongs to an app that is no longer installed". */
 const DEVICE_NOT_REGISTERED = 'DeviceNotRegistered';
 
+/**
+ * How long after a send to ask Expo what Firebase/Apple did with it. A ticket
+ * only means Expo queued the push; whether it reached Google or Apple, and why
+ * not, is in the receipt, which is usually ready within seconds.
+ */
+const RECEIPT_DELAY_MS = 30_000;
+
+/** Expo accepts at most 1000 receipt ids per request. */
+const MAX_RECEIPTS_PER_REQUEST = 1000;
+
 export interface PushMessage {
   title: string;
   body: string;
@@ -31,6 +41,12 @@ export interface PushTestResult {
   delivered: number;
   /** Expo's error codes for the rest, e.g. InvalidCredentials, DeviceNotRegistered. */
   errors: string[];
+}
+
+interface ExpoReceipt {
+  status: 'ok' | 'error';
+  message?: string;
+  details?: { error?: string };
 }
 
 interface ExpoTicket {
@@ -113,6 +129,7 @@ export class PushService {
 
   private async send(tokens: string[], message: PushMessage): Promise<ExpoTicket[]> {
     const all: ExpoTicket[] = [];
+    const pending = new Map<string, string>();
     const url = this.config.get('EXPO_PUSH_API_URL', { infer: true });
     const accessToken = this.config.get('EXPO_ACCESS_TOKEN', { infer: true });
 
@@ -153,6 +170,10 @@ export class PushService {
       const parsed = (await res.json()) as { data?: ExpoTicket[] };
       const tickets = parsed.data ?? [];
       all.push(...tickets);
+      tickets.forEach((ticket, index) => {
+        const token = chunk[index];
+        if (ticket.status === 'ok' && ticket.id && token) pending.set(ticket.id, token);
+      });
       await this.pruneDeadTokens(chunk, tickets);
       // Anything other than an uninstalled app is a setup problem worth seeing
       // in the logs, e.g. InvalidCredentials when Android (FCM) credentials
@@ -167,7 +188,65 @@ export class PushService {
         this.logger.warn(`Expo refused ${String(problems.length)} push(es): ${reasons.join(', ')}`);
       }
     }
+    if (pending.size > 0) {
+      setTimeout(() => void this.checkReceipts(pending), RECEIPT_DELAY_MS).unref();
+    }
     return all;
+  }
+
+  /**
+   * Asks Expo what happened to pushes it accepted. This is where "the send
+   * worked but nothing arrived" shows up: Firebase refusing the message
+   * (credentials, sender mismatch, size), or the app being uninstalled, which
+   * Firebase mostly reports here rather than on the ticket. Dead tokens are
+   * removed and every other failure is logged with its reason.
+   *
+   * Never throws, like the rest of this class. Public for tests.
+   */
+  async checkReceipts(ticketToToken: Map<string, string>): Promise<void> {
+    try {
+      const url = this.config
+        .get('EXPO_PUSH_API_URL', { infer: true })
+        .replace(/\/send$/, '/getReceipts');
+      const accessToken = this.config.get('EXPO_ACCESS_TOKEN', { infer: true });
+      const ids = [...ticketToToken.keys()];
+      const dead: string[] = [];
+      const reasons: string[] = [];
+      for (let i = 0; i < ids.length; i += MAX_RECEIPTS_PER_REQUEST) {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({ ids: ids.slice(i, i + MAX_RECEIPTS_PER_REQUEST) }),
+        });
+        if (!res.ok) {
+          this.logger.warn(`Expo receipts request failed: ${String(res.status)}`);
+          continue;
+        }
+        const parsed = (await res.json()) as { data?: Record<string, ExpoReceipt> };
+        for (const [id, receipt] of Object.entries(parsed.data ?? {})) {
+          if (receipt.status !== 'error') continue;
+          const reason = receipt.details?.error ?? receipt.message ?? 'unknown';
+          const token = ticketToToken.get(id);
+          if (reason === DEVICE_NOT_REGISTERED && token) dead.push(token);
+          else reasons.push(reason);
+        }
+      }
+      if (dead.length > 0) {
+        await this.prisma.devicePushToken.deleteMany({ where: { expoPushToken: { in: dead } } });
+        this.logger.log(`Removed ${String(dead.length)} unregistered push token(s)`);
+      }
+      if (reasons.length > 0) {
+        this.logger.warn(
+          `${String(reasons.length)} push(es) not delivered by Firebase/Apple: ${[...new Set(reasons)].join(', ')}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error('Failed to check push receipts', error);
+    }
   }
 
   /**
