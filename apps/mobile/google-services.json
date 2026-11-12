@@ -1,0 +1,63 @@
+{
+  "project_info": {
+    "project_number": "742235961910",
+    "project_id": "style-center-5162a",
+    "storage_bucket": "style-center-5162a.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:742235961910:android:e8dcedb158cd78d0f5f697",
+        "android_client_info": {
+          "package_name": "zw.co.stylistscenter.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "742235961910-e4j7g3307h2fakam2s3al55re2e1r5ce.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "zw.co.stylistscenter.app",
+            "certificate_hash": "e9bbd4960ddf2a1ddef6e1a7b5454e3071d1a402"
+          }
+        },
+        {
+          "client_id": "742235961910-evqeaivnl1rlfikhbbrhe0lejo8f9ogp.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "zw.co.stylistscenter.app",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "742235961910-i05jkf96l0ssmcv83lqt6sgqllcn2n2o.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "zw.co.stylistscenter.app",
+            "certificate_hash": "ba33cfc0e51ca93654d61ba9f2abf92518ca72e0"
+          }
+        },
+        {
+          "client_id": "742235961910-r1b5lhshh7jus4dajhaeq1i842qucotp.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAWokbreFpZdZ5lr7qfpzZQ6jGeUDMjst0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "742235961910-r1b5lhshh7jus4dajhaeq1i842qucotp.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

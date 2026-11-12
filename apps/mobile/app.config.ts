@@ -35,9 +35,11 @@ if (isReleaseProfile && !process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim()) {
  * device; without it expo-notifications cannot mint a token at all, so the
  * server never learns where to send anything.
  *
- * The file is a credential, so it is gitignored and supplied per build: EAS
- * file environment variables expose the uploaded file's path in
- * GOOGLE_SERVICES_JSON, and a local checkout can just drop the file in place.
+ * The file is committed (apps/mobile/google-services.json): it is Firebase
+ * client configuration that ships inside every APK anyway, not a secret. It
+ * is used first; an EAS file variable GOOGLE_SERVICES_JSON is only a
+ * fallback. Builds before it was committed had no Firebase config, so
+ * phones could never get a push token.
  *
  * Deliberately omitted rather than defaulted when neither exists. Pointing
  * `googleServicesFile` at a path that is not there fails the build outright,
@@ -46,9 +48,9 @@ if (isReleaseProfile && !process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID?.trim()) {
  * everything else keeps shipping. See RAILWAY.md for the setup steps.
  */
 const googleServicesFile = (() => {
+  if (existsSync('./google-services.json')) return './google-services.json';
   const fromEas = process.env.GOOGLE_SERVICES_JSON?.trim();
-  if (fromEas && existsSync(fromEas)) return fromEas;
-  return existsSync('./google-services.json') ? './google-services.json' : undefined;
+  return fromEas && existsSync(fromEas) ? fromEas : undefined;
 })();
 
 /**
