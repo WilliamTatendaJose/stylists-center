@@ -4,7 +4,7 @@ import { useMutation } from '@tanstack/react-query';
 import { space } from '@sc/tokens';
 import { Button, Card, Text, useTheme } from '@sc/ui';
 import { apiFetch } from '../api/client.js';
-import { registerPushToken } from '../notifications/registerPushToken.js';
+import { registerPushToken, type PushRegistration } from '../notifications/registerPushToken.js';
 import { useMe, useUpdateNotificationPreferences } from '../api/hooks/useMe.js';
 import { describeError } from '../api/errorMessage.js';
 
@@ -21,8 +21,17 @@ interface PushTestResult {
 }
 
 /** Plain-language outcome of a test notification. */
-export function describePushTest(result: PushTestResult): string {
+export function describePushTest(
+  result: PushTestResult,
+  registration: PushRegistration = 'registered',
+): string {
   if (result.devices === 0) {
+    if (registration === 'unavailable') {
+      return "This version of the app can't receive notifications yet. They will start working after the next app update from the store.";
+    }
+    if (registration === 'failed') {
+      return "This phone couldn't sign up for notifications. Check your connection, then try again.";
+    }
     return "This phone isn't set up for notifications yet. Allow notifications for Style Center in your phone's settings, then try again.";
   }
   if (result.delivered > 0) {
@@ -46,11 +55,12 @@ export function NotificationPreferences() {
     mutationFn: async () => {
       // Register first: this asks for permission if needed and refreshes the
       // phone's token, so the test checks the current setup.
-      await registerPushToken().catch(() => undefined);
-      return apiFetch<PushTestResult>('/v1/me/push-test', { method: 'POST' });
+      const registration = await registerPushToken().catch((): PushRegistration => 'failed');
+      const result = await apiFetch<PushTestResult>('/v1/me/push-test', { method: 'POST' });
+      return { result, registration };
     },
-    onSuccess: (result) => {
-      setTestMessage(describePushTest(result));
+    onSuccess: ({ result, registration }) => {
+      setTestMessage(describePushTest(result, registration));
     },
     onError: (error) => {
       setTestMessage(describeError(error, "Couldn't send a test notification."));

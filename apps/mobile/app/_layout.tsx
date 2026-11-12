@@ -142,15 +142,21 @@ function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
   const signedIn = accessToken !== null;
   useEffect(() => {
     if (!isAuthHydrated || !signedIn) return;
-    void registerPushToken().catch((error: unknown) => {
-      // Push must never block sign-in or rendering; the next launch retries.
-      // It is logged rather than swallowed because the common failure —
-      // Firebase not configured for this build, so getExpoPushTokenAsync
-      // cannot mint a token — is otherwise completely invisible: the app
-      // behaves normally and notifications simply never arrive, with nothing
-      // anywhere saying why.
-      console.warn('[push] could not register this device for notifications:', error);
-    });
+    void registerPushToken()
+      .then((outcome) => {
+        if (outcome === 'unavailable' || outcome === 'failed') {
+          console.warn(`[push] could not register this device for notifications: ${outcome}`);
+        }
+      })
+      .catch((error: unknown) => {
+        // Push must never block sign-in or rendering; the next launch retries.
+        // It is logged rather than swallowed because the common failure —
+        // Firebase not configured for this build, so getExpoPushTokenAsync
+        // cannot mint a token — is otherwise completely invisible: the app
+        // behaves normally and notifications simply never arrive, with nothing
+        // anywhere saying why.
+        console.warn('[push] could not register this device for notifications:', error);
+      });
   }, [isAuthHydrated, signedIn]);
 
   // Gated on the same condition as the navigator below, since routing to a

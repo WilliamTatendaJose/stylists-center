@@ -22,12 +22,23 @@ function projectIdFromExtra(extra: unknown): string | undefined {
 }
 
 /**
+ * Why a phone could or couldn't sign up for notifications:
+ * - `registered`: the server knows where to send.
+ * - `denied`: the user hasn't allowed notifications.
+ * - `unavailable`: this app build can't get a push token. On Android that
+ *   means the build has no Firebase config (google-services.json); only a
+ *   new native build fixes it, not an over-the-air update.
+ * - `failed`: anything else (offline, server error).
+ */
+export type PushRegistration = 'registered' | 'denied' | 'unavailable' | 'failed' | 'unsupported';
+
+/**
  * Registers a physical device with Expo and tells the API where to send a
  * notification. Permission denial, simulators, and incomplete EAS setup are
  * normal states, so callers can treat this as best-effort.
  */
-export async function registerPushToken(): Promise<void> {
-  if (Platform.OS !== 'android' && Platform.OS !== 'ios') return;
+export async function registerPushToken(): Promise<PushRegistration> {
+  if (Platform.OS !== 'android' && Platform.OS !== 'ios') return 'unsupported';
 
   // The server sends every notification on channel "default". Creating it
   // ourselves (rather than letting Android invent "Miscellaneous") gives it
@@ -49,15 +60,26 @@ export async function registerPushToken(): Promise<void> {
     existing.status === Notifications.PermissionStatus.GRANTED
       ? existing
       : await Notifications.requestPermissionsAsync();
-  if (permission.status !== Notifications.PermissionStatus.GRANTED) return;
+  if (permission.status !== Notifications.PermissionStatus.GRANTED) return 'denied';
 
   const extra: unknown = Constants.expoConfig?.extra;
   const projectId = projectIdFromExtra(extra);
-  if (!projectId) return;
+  if (!projectId) return 'unavailable';
 
-  const expoPushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
-  await apiFetch<void>('/v1/me/push-token', {
-    method: 'POST',
-    body: { expoPushToken, platform: Platform.OS },
-  });
+  let expoPushToken: string;
+  try {
+    expoPushToken = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  } catch {
+    // On Android this throws when the build has no Firebase config.
+    return 'unavailable';
+  }
+  try {
+    await apiFetch<void>('/v1/me/push-token', {
+      method: 'POST',
+      body: { expoPushToken, platform: Platform.OS },
+    });
+  } catch {
+    return 'failed';
+  }
+  return 'registered';
 }
