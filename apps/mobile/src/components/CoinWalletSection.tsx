@@ -38,11 +38,11 @@ export function CoinWalletSection({ hideWhenEmpty = false }: CoinWalletSectionPr
   const cashOutNote = error
     ? error
     : cashOut.isSuccess
-      ? 'Submitted. Paid to your EcoCash number after staff approve it.'
+      ? `Submitted. Paid to your EcoCash number within ${String(wallet.cashOutPayoutDays)} days of staff approving it.`
       : wallet.nextCashOutAt
         ? `You can cash out again on ${formatInHarare(wallet.nextCashOutAt, 'd MMM yyyy')}.`
         : wallet.cashOutableCoins > 0
-          ? `Cash-out needs more than ${formatUsd(wallet.cashOutMinUsdCents)}, once every ${String(wallet.cashOutIntervalDays)} days. Paid to your EcoCash number.`
+          ? `Cash-out needs more than ${formatUsd(wallet.cashOutMinUsdCents)}, once every ${String(wallet.cashOutIntervalDays)} days. Paid to your EcoCash number within ${String(wallet.cashOutPayoutDays)} days of approval.`
           : 'Coins you earn from bookings and purchases can be spent but not cashed out.';
 
   return (

@@ -33,6 +33,8 @@ export const walletSchema = z.object({
   /** When the next cash-out is allowed; null when one can be requested now. */
   nextCashOutAt: z.iso.datetime().nullable(),
   cashOutIntervalDays: z.number().int(),
+  /** Days after staff approval within which a cash-out is paid (setting cashOutPayoutDays). */
+  cashOutPayoutDays: z.number().int(),
   coinUsdCents: z.number().int(),
   referralRewardCoins: z.number().int().positive(),
   referralCode: z.string(),

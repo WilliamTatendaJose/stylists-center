@@ -14,6 +14,7 @@ export async function walletRates(settings?: SettingsService) {
     referralRewardCoins: s.referralRewardCoins,
     cashOutMinUsdCents: s.cashOutMinUsdCents,
     cashOutIntervalDays: s.cashOutIntervalDays,
+    cashOutPayoutDays: s.cashOutPayoutDays,
     subscriptionPriceUsdCents: s.subscriptionPriceUsdCents,
     subscriptionCycleDays: s.subscriptionCycleDays,
   };

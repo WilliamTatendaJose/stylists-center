@@ -234,6 +234,39 @@ describe('RewardsHooksService', () => {
       ]);
     });
 
+    it('uses the separate client and agent rates, rounding each down', async () => {
+      // Clients: 1 coin per $20. Agents: 1 coin per $5.
+      const custom = new RewardsHooksService(
+        prisma,
+        new SettingsService(undefined, {
+          REWARD_SPEND_USD_PER_COIN: '20',
+          AGENT_REWARD_SPEND_USD_PER_COIN: '5',
+        }),
+      );
+      const agent = await makeAgent('Agent Rates');
+      const buyer = await makeUser('Buyer Rates');
+      await prisma.referral.create({
+        data: {
+          agentId: agent.agentId,
+          referredUserId: buyer,
+          referredName: 'Buyer Rates',
+          coinsAwarded: 6,
+        },
+      });
+      // $14.99: under one client coin, two agent coins.
+      await inTx((tx) =>
+        custom.onOrderCompleted(tx, {
+          orderId: `o-${uid()}`,
+          buyerId: buyer,
+          productTotalUsdCents: 1499,
+        }),
+      );
+      expect(await rows(buyer)).toHaveLength(0);
+      expect(await rows(agent.userId)).toMatchObject([
+        { type: 'referral_purchase', pool: 'agent', coins: 2 },
+      ]);
+    });
+
     it('pays the buyer but not an agent whose subscription has lapsed', async () => {
       const agent = await makeAgent('Agent B', new Date(Date.now() - DAY));
       const buyer = await makeUser('Buyer B');
