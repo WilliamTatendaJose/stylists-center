@@ -69,3 +69,13 @@ describe('coin prices', () => {
     expect(formatCoinPrice(500, 10)).toBe('or 50 coins');
   });
 });
+
+describe('coinsToPayInFull', () => {
+  it('uses coins only when they cover the whole amount', async () => {
+    const { coinsToPayInFull } = await import('./money.js');
+    expect(coinsToPayInFull(500, 10, 60)).toBe(50);
+    expect(coinsToPayInFull(515, 10, 60)).toBe(52);
+    expect(coinsToPayInFull(500, 10, 6)).toBe(0);
+    expect(coinsToPayInFull(500, 0, 60)).toBe(0);
+  });
+});

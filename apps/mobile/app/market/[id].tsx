@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { BadgeCheck } from 'lucide-react-native';
-import { formatCoinPrice, formatUsd, MAX_ORDER_ITEM_QUANTITY } from '@sc/shared';
+import {
+  formatCoinPrice,
+  formatUsd,
+  MAX_ORDER_ITEM_QUANTITY,
+  orderServiceFeeUsdCents,
+} from '@sc/shared';
 import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { color, space } from '@sc/tokens';
 import {
@@ -38,12 +43,18 @@ const styles = StyleSheet.create({
 });
 
 /** Product detail (handoff screen 16). */
+/** "+ $0.30 service fee · " when the buyer pays the marketplace commission. */
+function serviceFeeNote(priceUsdCents: number, bps: number, paidBy: 'client' | 'vendor'): string {
+  const fee = orderServiceFeeUsdCents(priceUsdCents, bps, paidBy);
+  return fee > 0 ? `+ ${formatUsd(fee)} service fee · ` : '';
+}
+
 export default function ProductDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const marketHome = useMarketHome();
   const onBack = useBack(marketHome);
   const { data: product, isError } = useProduct(id);
-  const { coinUsdCents } = useAppConfig();
+  const { coinUsdCents, marketplaceFeeBps, marketplaceFeePaidBy } = useAppConfig();
   const { data: reviews } = useProductReviews(id);
   const { data: me } = useMe();
 
@@ -130,6 +141,7 @@ export default function ProductDetail() {
         {formatUsd(product.priceUsdCents)}
       </Text>
       <Text variant="meta" color="neutral600">
+        {serviceFeeNote(product.priceUsdCents, marketplaceFeeBps, marketplaceFeePaidBy)}
         {formatCoinPrice(product.priceUsdCents, coinUsdCents)}
       </Text>
 

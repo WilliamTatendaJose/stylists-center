@@ -18,12 +18,13 @@ describe('clientPrice', () => {
 });
 
 describe('coinsToApply', () => {
-  it('uses all coins when the booking is worth more', () => {
-    expect(coinsToApply(5, 2060, 10)).toBe(5);
+  it('uses no coins when they would only pay part of the booking', () => {
+    expect(coinsToApply(5, 2060, 10)).toBe(0);
   });
 
-  it('never uses more than the booking is worth', () => {
+  it('uses exactly the coins that pay for the whole booking', () => {
     expect(coinsToApply(500, 2060, 10)).toBe(206);
+    expect(coinsToApply(206, 2060, 10)).toBe(206);
   });
 
   it('is zero with no coins or no coin value', () => {

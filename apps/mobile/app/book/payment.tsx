@@ -89,11 +89,12 @@ export default function Payment() {
   // Only coins that can be spent count: expired coins and agent earnings can't pay for a booking.
   const spendable = wallet?.spendableCoins ?? 0;
   const coins = useCoins ? coinsToApply(spendable, totalUsdCents, coinUsdCents) : 0;
-  const coinsValueUsdCents = coins * coinUsdCents;
+  // Coins pay for the whole booking or not at all, so using them leaves
+  // nothing to pay (a few cents of rounding is never charged back).
+  const coinsValueUsdCents = coins > 0 ? totalUsdCents : 0;
   const dueUsdCents = totalUsdCents - coinsValueUsdCents;
   const offerableCoins = coinsToApply(spendable, totalUsdCents, coinUsdCents);
   const coinsForAll = coinsToCover(totalUsdCents, coinUsdCents);
-  const coversAll = offerableCoins > 0 && offerableCoins * coinUsdCents >= totalUsdCents;
 
   const confirmBooking = () => {
     setBookingError(null);
@@ -201,17 +202,6 @@ export default function Payment() {
         />
       </View>
 
-      <View style={styles.section}>
-        <Text variant="sectionLabel" style={styles.sectionLabel}>
-          How you pay
-        </Text>
-        <Text variant="body" color="neutral700">
-          You pay {provider.displayName} directly, in cash or to their mobile money number, after
-          your appointment. Nothing is taken in the app. Once the stylist accepts, their number is
-          shown on your booking.
-        </Text>
-      </View>
-
       {offerableCoins > 0 ? (
         <View style={styles.section}>
           <Text variant="sectionLabel" style={styles.sectionLabel}>
@@ -229,24 +219,24 @@ export default function Payment() {
             />
           </View>
           <RadioCard
-            title={
-              coversAll
-                ? `Pay with ${String(offerableCoins)} coins`
-                : `Use my ${String(offerableCoins)} coins`
-            }
-            description={
-              coversAll
-                ? 'Covers the whole booking, so there is nothing to pay. The coins go to your stylist.'
-                : `Takes ${formatUsd(offerableCoins * coinUsdCents)} off what you pay. The coins go to your stylist. ${String(
-                    coinsForAll - offerableCoins,
-                  )} more coins and you could pay for this with coins alone.`
-            }
+            title={`Pay with ${String(offerableCoins)} coins`}
+            description="Pays for the whole booking, so there is nothing to pay the stylist. The coins go to your stylist."
             dot
             selected={useCoins}
             onPress={() => {
               setUseCoins(true);
             }}
           />
+        </View>
+      ) : spendable > 0 && coinsForAll > 0 ? (
+        // Coins only pay for a whole booking, so say how far off they are.
+        <View style={styles.section}>
+          <Text variant="sectionLabel" style={styles.sectionLabel}>
+            Coins
+          </Text>
+          <Text variant="body" color="neutral700">
+            You have {spendable} coins. This booking takes {coinsForAll} coins to pay with coins.
+          </Text>
         </View>
       ) : null}
     </Screen>

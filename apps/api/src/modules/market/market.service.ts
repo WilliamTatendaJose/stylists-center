@@ -13,7 +13,8 @@ import {
   dispatchedStatusFor,
   formatOrderReference,
   isOrderCompleted,
-  maxCoinsForOrder,
+  coinsToCover,
+  orderServiceFeeUsdCents,
   orderTotalUsdCents,
   type CreateOrderInput,
   type CreateOrderResponse,
@@ -227,6 +228,11 @@ export class MarketService {
       throw new BadRequestException('Enter where to deliver');
     }
     const coinUsdCents = coins > 0 ? await this.setting('coinUsdCents') : 0;
+    const settings = this.settings ?? settingsFor(this.prisma);
+    const [marketplaceFeeBps, marketplaceFeePaidBy] = await Promise.all([
+      settings.get('marketplaceFeeBps'),
+      settings.get('marketplaceFeePaidBy'),
+    ]);
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Serialize retries for this buyer/request before touching stock. A
@@ -327,13 +333,20 @@ export class MarketService {
       );
       const deliveryChargeUsdCents =
         fulfilment === 'delivery' ? seller.vendor.deliveryChargeUsdCents : 0;
+      const serviceFeeUsdCents = orderServiceFeeUsdCents(
+        totalUsdCents,
+        marketplaceFeeBps,
+        marketplaceFeePaidBy === 'vendor' ? 'vendor' : 'client',
+      );
+      const orderAmount = totalUsdCents + deliveryChargeUsdCents + serviceFeeUsdCents;
       if (coins > 0) {
-        const maxCoins = maxCoinsForOrder(totalUsdCents, deliveryChargeUsdCents, coinUsdCents);
-        if (coins > maxCoins) {
+        // Coins pay for the whole order or not at all: no part-payment.
+        const coinsForWhole = coinsToCover(orderAmount, coinUsdCents);
+        if (coins !== coinsForWhole) {
           throw new BadRequestException(
-            maxCoins === 0
+            coinsForWhole === 0
               ? "Coins can't be used on this order"
-              : `You can use at most ${String(maxCoins)} coins on this order`,
+              : `Coins pay for the whole order: it takes ${String(coinsForWhole)} coins`,
           );
         }
       }
@@ -364,6 +377,7 @@ export class MarketService {
           fulfilment,
           deliveryAddress,
           deliveryChargeUsdCents,
+          serviceFeeUsdCents,
           checkoutKey: input.checkoutKey,
           checkoutFingerprint: fingerprint,
           // Collection details are snapshotted so a later edit by the vendor
@@ -394,10 +408,11 @@ export class MarketService {
           vendorUserId: seller.userId,
           coins,
         });
-        if (usdCents > totalUsdCents + deliveryChargeUsdCents) {
-          throw new BadRequestException("Coins can't be worth more than the order");
+        if (usdCents < orderAmount) {
+          throw new BadRequestException("Coins can't be used on this order");
         }
-        coinsValueUsdCents = usdCents;
+        // Paid in full; rounding up never records more than the order.
+        coinsValueUsdCents = orderAmount;
         await tx.order.update({
           where: { id: order.id },
           data: { coinsUsed: coins, coinsValueUsdCents },
@@ -786,6 +801,7 @@ function toCreateResponse(order: {
   totalUsdCents: number;
   deliveryChargeUsdCents: number;
   coinsValueUsdCents: number;
+  serviceFeeUsdCents: number;
 }): CreateOrderResponse {
   return {
     id: order.id,
@@ -793,6 +809,7 @@ function toCreateResponse(order: {
     totalUsdCents: order.totalUsdCents,
     deliveryChargeUsdCents: order.deliveryChargeUsdCents,
     coinsValueUsdCents: order.coinsValueUsdCents,
+    serviceFeeUsdCents: order.serviceFeeUsdCents,
     amountDueUsdCents: amountDue(order),
   };
 }

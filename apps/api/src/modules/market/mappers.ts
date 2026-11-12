@@ -87,6 +87,7 @@ export function toOrderRow(order: OrderWithRelations): OrderRowDto {
     deliveryChargeUsdCents: order.deliveryChargeUsdCents,
     coinsUsed: order.coinsUsed,
     coinsValueUsdCents: order.coinsValueUsdCents,
+    serviceFeeUsdCents: order.serviceFeeUsdCents,
     amountDueUsdCents: amountDue(order),
     createdAt: order.createdAt.toISOString(),
     providerId: order.providerId,
@@ -118,11 +119,13 @@ export function amountDue(order: {
   totalUsdCents: number;
   deliveryChargeUsdCents: number;
   coinsValueUsdCents: number;
+  serviceFeeUsdCents: number;
 }): number {
   return orderAmountDueUsdCents({
     productTotalUsdCents: order.totalUsdCents,
     deliveryChargeUsdCents: order.deliveryChargeUsdCents,
     coinsValueUsdCents: order.coinsValueUsdCents,
+    serviceFeeUsdCents: order.serviceFeeUsdCents,
   });
 }
 
@@ -144,6 +147,7 @@ export function toProviderOrder(order: VendorOrderWithRelations): ProviderOrderD
     deliveryChargeUsdCents: order.deliveryChargeUsdCents,
     coinsUsed: order.coinsUsed,
     coinsValueUsdCents: order.coinsValueUsdCents,
+    serviceFeeUsdCents: order.serviceFeeUsdCents,
     amountDueUsdCents: amountDue(order),
     createdAt: order.createdAt.toISOString(),
     pickupNote: order.pickupNote,

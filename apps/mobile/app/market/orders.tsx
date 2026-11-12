@@ -110,9 +110,7 @@ const OrderCard = memo(function OrderCard({
                 : `Pay the shop ${formatUsd(order.amountDueUsdCents)} on ${
                     order.fulfilment === 'delivery' ? 'delivery' : 'collection'
                   }`}
-              {order.deliveryChargeUsdCents > 0
-                ? ` (includes ${formatUsd(order.deliveryChargeUsdCents)} delivery)`
-                : ''}
+              {includedExtras(order)}
             </Text>
           </View>
           <Badge
@@ -230,6 +228,18 @@ interface OrderListItem {
 const keyExtractor = (item: OrderListItem) => item.order.id;
 
 /** My orders — where to collect, and the two things a buyer can still do about it. */
+/** " (includes $2.00 delivery and $0.30 service fee)" — what the amount to pay is made of. */
+function includedExtras(order: OrderRowDto): string {
+  const parts: string[] = [];
+  if (order.deliveryChargeUsdCents > 0) {
+    parts.push(`${formatUsd(order.deliveryChargeUsdCents)} delivery`);
+  }
+  if (order.serviceFeeUsdCents > 0) {
+    parts.push(`${formatUsd(order.serviceFeeUsdCents)} service fee`);
+  }
+  return parts.length > 0 ? ` (includes ${parts.join(' and ')})` : '';
+}
+
 export default function Orders() {
   const { colors } = useTheme();
   const onBack = useBack(useMarketHome());

@@ -5,6 +5,7 @@ import type { PushService } from '../notifications/push.service';
 import type { FeeLedgerService } from '../fees/fee-ledger.service';
 import { FeeStandingService } from '../fees/fee-standing.service';
 import { RewardsHooksService } from '../rewards/rewards-hooks.service';
+import { SettingsService } from '../settings/settings.service';
 import { MarketService } from './market.service';
 
 /** Builds the service with inert collaborators unless a test overrides one. */
@@ -27,6 +28,7 @@ function buildService(
       redeemForOrder: vi.fn().mockRejectedValue(new Error('No coins in unit tests')),
       refundRedemption: vi.fn().mockResolvedValue(undefined),
     }) as unknown as RewardsHooksService,
+    new SettingsService(undefined, {}),
   );
 }
 
