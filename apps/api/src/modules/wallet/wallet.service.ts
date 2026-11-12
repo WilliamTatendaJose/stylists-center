@@ -71,6 +71,7 @@ export class WalletService {
       agentSubscription: subscription,
       nextCashOutAt: nextCashOut?.toISOString() ?? null,
       cashOutIntervalDays: rates.cashOutIntervalDays,
+      cashOutPayoutDays: rates.cashOutPayoutDays,
       coinUsdCents: rates.coinUsdCents,
       referralRewardCoins: rates.referralRewardCoins,
       referralCode: agent?.referralCode ?? '',

@@ -62,19 +62,29 @@ export class RewardsHooksService {
     input: { orderId: string; buyerId: string; productTotalUsdCents: number },
   ): Promise<void> {
     const s = await this.rates();
-    const coins = rewardCoinsForSpend(input.productTotalUsdCents, s.rewardSpendUsdPerCoin);
-    if (coins <= 0) return;
     const now = new Date();
-    await insertOnce(tx, {
-      userId: input.buyerId,
-      type: 'purchase_reward',
-      pool: 'spend',
-      coins,
-      coinUsdCents: s.coinUsdCents,
-      dedupeKey: `purchase_reward:${input.orderId}`,
-      reference: 'Marketplace purchase',
-      expiresAt: addMonths(now, s.coinExpiryMonths),
-    });
+    // Clients and agents have separate rates (settings), so each is worked
+    // out on its own; rounding down means a small purchase can earn nothing.
+    const coins = rewardCoinsForSpend(input.productTotalUsdCents, s.rewardSpendUsdPerCoin);
+    if (coins > 0) {
+      await insertOnce(tx, {
+        userId: input.buyerId,
+        type: 'purchase_reward',
+        pool: 'spend',
+        coins,
+        coinUsdCents: s.coinUsdCents,
+        dedupeKey: `purchase_reward:${input.orderId}`,
+        reference: 'Marketplace purchase',
+        expiresAt: addMonths(now, s.coinExpiryMonths),
+      });
+    }
+    // Agents only start earning from a minimum purchase (setting).
+    if (input.productTotalUsdCents < s.agentMinPurchaseUsd * 100) return;
+    const agentCoins = rewardCoinsForSpend(
+      input.productTotalUsdCents,
+      s.agentRewardSpendUsdPerCoin,
+    );
+    if (agentCoins <= 0) return;
 
     const referral = await tx.referral.findUnique({
       where: { referredUserId: input.buyerId },
@@ -98,7 +108,7 @@ export class RewardsHooksService {
       userId: agent.userId,
       type: 'referral_purchase',
       pool: 'agent',
-      coins,
+      coins: agentCoins,
       coinUsdCents: s.coinUsdCents,
       dedupeKey: `referral_purchase:${input.orderId}`,
       reference: `Purchase by ${referral.referredName}`,
