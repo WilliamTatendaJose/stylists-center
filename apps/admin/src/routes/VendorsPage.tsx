@@ -48,10 +48,16 @@ function VendorCard({ row }: { row: AdminVendorRowDto }) {
     );
   };
 
-  const mapUrl =
+  // Google Maps rather than openstreetmap.org: the OSM website rate-limits
+  // visitors and answered staff with HTTP 429. The coordinates are shown as
+  // text too, so the location is visible even if the map site is down.
+  const coords =
     row.shopLat !== null && row.shopLng !== null
-      ? `https://www.openstreetmap.org/?mlat=${String(row.shopLat)}&mlon=${String(row.shopLng)}#map=17/${String(row.shopLat)}/${String(row.shopLng)}`
+      ? `${row.shopLat.toFixed(6)},${row.shopLng.toFixed(6)}`
       : null;
+  const mapUrl = coords
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(coords)}`
+    : null;
 
   return (
     <article className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-dark-border dark:bg-dark-surface">
@@ -78,10 +84,15 @@ function VendorCard({ row }: { row: AdminVendorRowDto }) {
         <div>
           <dt className="text-xs text-neutral-600 dark:text-dark-muted">Map location</dt>
           <dd className="text-sm font-medium text-neutral-900 dark:text-dark-text">
-            {mapUrl ? (
-              <a href={mapUrl} target="_blank" rel="noreferrer" className="underline">
-                Open on map
-              </a>
+            {mapUrl && coords ? (
+              <>
+                <a href={mapUrl} target="_blank" rel="noreferrer" className="underline">
+                  Open in Google Maps
+                </a>
+                <span className="ml-2 font-mono text-xs text-neutral-600 dark:text-dark-muted">
+                  {coords}
+                </span>
+              </>
             ) : (
               '—'
             )}
