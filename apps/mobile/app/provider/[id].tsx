@@ -3,7 +3,9 @@ import { Share, StyleSheet, View, type ViewStyle } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { MapPin, ChevronRight, Share2, Wallet } from 'lucide-react-native';
 import { space } from '@sc/tokens';
-import { deriveInitials, formatLocalPhone, type ReportReason } from '@sc/shared';
+import { deriveInitials, formatCoinPrice, formatLocalPhone, type ReportReason } from '@sc/shared';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
+import { clientPrice } from '../../src/utils/bookingPrice.js';
 import {
   Screen,
   ScreenHeader,
@@ -28,6 +30,7 @@ import { FullScreenImageViewer } from '../../src/components/FullScreenImageViewe
 import { providerShareLink } from '../../src/sharing/shareLinks.js';
 
 const styles = StyleSheet.create({
+  servicePrice: { alignItems: 'flex-end' },
   paymentRow: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginTop: space.m },
   reportedNote: { marginBottom: space.m },
   identity: { alignItems: 'flex-start', marginBottom: space.l },
@@ -83,6 +86,9 @@ const styles = StyleSheet.create({
  */
 export default function ProviderProfile() {
   const { colors } = useTheme();
+  // Each service also shows its price in coins, so clients see what their
+  // coins can pay for.
+  const { serviceFeeBps, serviceFeePaidBy, coinUsdCents } = useAppConfig();
   const { id, matchId } = useLocalSearchParams<{ id: string; matchId?: string }>();
   const onBack = useBack('/(tabs)');
   const { data: provider, isError: providerError, refetch: refetchProvider } = useProvider(id);
@@ -336,7 +342,16 @@ export default function ProviderProfile() {
                     {service.durationMinutes} min
                   </Text>
                 </View>
-                <Text variant="bodyStrong">${(service.priceUsdCents / 100).toFixed(0)}</Text>
+                <View style={styles.servicePrice}>
+                  <Text variant="bodyStrong">${(service.priceUsdCents / 100).toFixed(0)}</Text>
+                  <Text variant="metaSmall" color="neutral600">
+                    {formatCoinPrice(
+                      clientPrice(service.priceUsdCents, serviceFeeBps, serviceFeePaidBy)
+                        .totalUsdCents,
+                      coinUsdCents,
+                    )}
+                  </Text>
+                </View>
               </View>
             ))
           ) : (

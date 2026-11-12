@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { BadgeCheck } from 'lucide-react-native';
-import { formatUsd, MAX_ORDER_ITEM_QUANTITY } from '@sc/shared';
+import { formatCoinPrice, formatUsd, MAX_ORDER_ITEM_QUANTITY } from '@sc/shared';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { color, space } from '@sc/tokens';
 import {
   Screen,
@@ -42,6 +43,7 @@ export default function ProductDetail() {
   const marketHome = useMarketHome();
   const onBack = useBack(marketHome);
   const { data: product, isError } = useProduct(id);
+  const { coinUsdCents } = useAppConfig();
   const { data: reviews } = useProductReviews(id);
   const { data: me } = useMe();
 
@@ -126,6 +128,9 @@ export default function ProductDetail() {
       </Text>
       <Text variant="h3" color={color.accent} style={styles.price}>
         {formatUsd(product.priceUsdCents)}
+      </Text>
+      <Text variant="meta" color="neutral600">
+        {formatCoinPrice(product.priceUsdCents, coinUsdCents)}
       </Text>
 
       <View style={styles.sellerRow}>

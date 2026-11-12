@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { space } from '@sc/tokens';
-import { formatInHarare, formatUsd } from '@sc/shared';
+import { formatCoinPrice, formatInHarare, formatUsd } from '@sc/shared';
 import { Screen, ScreenHeader, Text, RadioCard, DateStrip, TimeGrid, Button } from '@sc/ui';
 import type { DateStripItem } from '@sc/ui';
 import { useProvider, useProviderSlots } from '../../src/api/hooks/useProviders.js';
@@ -51,7 +51,7 @@ export default function ChooseSlot() {
   const reschedule = useRescheduleBooking();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const { serviceFeeBps, serviceFeePaidBy } = useAppConfig();
+  const { serviceFeeBps, serviceFeePaidBy, coinUsdCents } = useAppConfig();
   const { data: provider } = useProvider(providerId ?? undefined);
   const dates = useMemo(buildDateStrip, []);
   const [date, setDate] = useState(dates[0]?.value ?? '');
@@ -180,7 +180,10 @@ export default function ChooseSlot() {
             <RadioCard
               key={service.id}
               title={service.name}
-              description={`${String(service.durationMinutes)} min · ${formatClientPrice(service.priceUsdCents, serviceFeeBps, serviceFeePaidBy)}`}
+              description={`${String(service.durationMinutes)} min · ${formatClientPrice(service.priceUsdCents, serviceFeeBps, serviceFeePaidBy)} · ${formatCoinPrice(
+                clientPrice(service.priceUsdCents, serviceFeeBps, serviceFeePaidBy).totalUsdCents,
+                coinUsdCents,
+              )}`}
               selected={service.id === serviceId}
               onPress={() => {
                 if (rescheduleBookingId) return;

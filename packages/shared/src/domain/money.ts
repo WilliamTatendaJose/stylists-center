@@ -60,3 +60,18 @@ export function nextCashOutAt(
   const next = new Date(lastRequestedAt.getTime() + intervalDays * 24 * 60 * 60 * 1000);
   return next.getTime() > now.getTime() ? next : null;
 }
+
+/**
+ * Coins that pay for an amount outright, rounded up so the coins always
+ * cover it: a $5.00 haircut at 10c a coin is 50 coins, $5.05 is 51.
+ */
+export function coinsToCover(amountCents: UsdCents, coinUsdCents: number): number {
+  if (amountCents <= 0 || coinUsdCents <= 0) return 0;
+  return Math.ceil(amountCents / coinUsdCents);
+}
+
+/** "or 50 coins" — the coin price shown next to a cash price. */
+export function formatCoinPrice(amountCents: UsdCents, coinUsdCents: number): string {
+  const coins = coinsToCover(amountCents, coinUsdCents);
+  return coins > 0 ? `or ${String(coins)} coins` : '';
+}
