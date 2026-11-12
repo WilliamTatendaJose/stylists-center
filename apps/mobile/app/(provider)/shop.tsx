@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Package, ShoppingBag } from 'lucide-react-native';
-import { formatUsd, ORDER_STATUS_LABELS, type ProductCategory } from '@sc/shared';
+import {
+  formatUsd,
+  isOrderCompleted,
+  ORDER_STATUS_LABELS,
+  VENDOR_STATUS_LABELS,
+  type ProductCategory,
+  type ProviderOrderDto,
+} from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
   Badge,
@@ -21,11 +28,14 @@ import {
 import {
   useCreateProviderProduct,
   useDeleteProviderProduct,
-  useProviderMarkOrderReady,
-  useProviderOrders,
   useProviderProducts,
   useRestockProviderProduct,
   useUpdateProviderProduct,
+  useVendorCancelOrder,
+  useVendorCompleteOrder,
+  useVendorMarkOrderReady,
+  useVendorMe,
+  useVendorOrders,
 } from '../../src/api/hooks/useMarket.js';
 import { useStartOrderConversation } from '../../src/api/hooks/useChat.js';
 import { describeError } from '../../src/api/errorMessage.js';
@@ -34,6 +44,7 @@ import { cartItemCount, useCartStore } from '../../src/state/index.js';
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
+import { useBack } from '../../src/navigation/useBack.js';
 
 const styles = StyleSheet.create({
   toggle: { marginBottom: space.xxl },
@@ -143,26 +154,125 @@ type ShopMode = 'buy' | 'sell';
 const ORDER_HISTORY_PREVIEW_COUNT = 2;
 
 /**
- * A stylist is also a marketplace buyer — they run out of the same braiding
- * hair or polish another seller has in stock. Before this, Shop only ever
- * showed the provider's own inventory: there was no way to browse or order
- * from anyone else without switching to a client account. "Buy" reuses the
- * exact same catalogue the client Market tab shows (MarketBrowse); "Sell" is
- * this account's own storefront management, unchanged.
+ * Only an approved vendor sells. Everyone else sees where their application
+ * stands, and what to do next.
  */
-export default function ProviderShop() {
+function VendorStatusCard() {
   const { colors } = useTheme();
-  const [mode, setMode] = useState<ShopMode>('sell');
+  const { data, isLoading, isError } = useVendorMe();
+  const application = data?.application ?? null;
+
+  if (isLoading) return <EmptyPanel body="Loading…" />;
+  if (isError || !data) return <EmptyPanel body="Couldn't check your shop. Pull down to retry." />;
+
+  if (!application) {
+    return (
+      <Card bordered style={styles.card}>
+        <Text variant="cardTitle">Sell on StylistsCenter</Text>
+        <Text variant="meta" color="neutral700" style={styles.meta}>
+          Only verified beauty businesses with a physical shop can sell. Tell us about your shop and
+          we will review it. Buyers pay you directly when they collect or receive their order.
+        </Text>
+        <Button
+          label="Apply to sell"
+          block
+          style={styles.action}
+          onPress={() => {
+            router.push('/vendor/apply');
+          }}
+        />
+      </Card>
+    );
+  }
+
+  return (
+    <Card bordered style={styles.card}>
+      <View style={styles.row}>
+        <View style={styles.grow}>
+          <Text variant="cardTitle">{application.businessName}</Text>
+          <Text variant="meta" color="neutral700" style={styles.meta}>
+            {application.status === 'pending'
+              ? 'We are checking your shop. You will get a notification when we are done.'
+              : 'Your application was not approved.'}
+          </Text>
+        </View>
+        <Badge
+          label={VENDOR_STATUS_LABELS[application.status]}
+          tone={application.status === 'pending' ? 'accent' : 'neutral'}
+        />
+      </View>
+      {application.status === 'rejected' && application.reviewNote ? (
+        <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
+          <Text variant="meta" color="neutral700">
+            Reason: {application.reviewNote}
+          </Text>
+        </View>
+      ) : null}
+      <Button
+        label={application.status === 'rejected' ? 'Fix and apply again' : 'Edit my application'}
+        variant="secondary"
+        block
+        style={styles.action}
+        onPress={() => {
+          router.push('/vendor/apply');
+        }}
+      />
+    </Card>
+  );
+}
+
+/** One line per money part, so a vendor knows what to collect and why. */
+function amountBreakdown(order: ProviderOrderDto): string {
+  const parts = [`Products ${formatUsd(order.totalUsdCents)}`];
+  if (order.deliveryChargeUsdCents > 0) {
+    parts.push(`delivery ${formatUsd(order.deliveryChargeUsdCents)}`);
+  }
+  if (order.coinsValueUsdCents > 0) parts.push(`coins -${formatUsd(order.coinsValueUsdCents)}`);
+  return parts.join(' · ');
+}
+
+function orderLifecycleText(order: ProviderOrderDto): string {
+  if (order.status === 'reserved') {
+    return order.fulfilment === 'delivery'
+      ? 'Pack this order, then tell the buyer it is on its way.'
+      : 'Pack this order, then tell the buyer it is ready to collect.';
+  }
+  return order.fulfilment === 'delivery'
+    ? 'The buyer has been told it is on its way. Mark it delivered once they have paid you.'
+    : 'The buyer has been told it is ready. Mark it collected once they have paid you.';
+}
+
+/**
+ * A stylist is also a marketplace buyer — they run out of the same braiding
+ * hair or polish another seller has in stock. "Buy" reuses the exact same
+ * catalogue the client Market tab shows (MarketBrowse); "Sell" is this
+ * account's own storefront management.
+ *
+ * `standalone` is the same screen reached from the client Market tab, for
+ * someone who has no stylist tabs (a shop that is not a stylist, or a
+ * stylist browsing as a client): no tab bar, no role switcher, no Buy view.
+ */
+export function ShopScreen({ standalone = false }: { standalone?: boolean }) {
+  const { colors } = useTheme();
+  const onBack = useBack('/(tabs)/market');
+  const [chosenMode, setMode] = useState<ShopMode>('sell');
+  const mode = standalone ? 'sell' : chosenMode;
   const lines = useCartStore((s) => s.lines);
   const itemCount = cartItemCount(lines);
 
-  const { data: products, isError: productsError } = useProviderProducts();
-  const { data: orders, isError: ordersError } = useProviderOrders();
+  const { data: vendorMe } = useVendorMe();
+  const vendor = vendorMe?.application ?? null;
+  const approved = vendor?.status === 'approved';
+
+  const { data: products, isError: productsError } = useProviderProducts(approved);
+  const { data: orders, isError: ordersError } = useVendorOrders(approved);
   const createProduct = useCreateProviderProduct();
   const updateProduct = useUpdateProviderProduct();
   const restockProduct = useRestockProviderProduct();
   const deleteProduct = useDeleteProviderProduct();
-  const markOrderReady = useProviderMarkOrderReady();
+  const markOrderReady = useVendorMarkOrderReady();
+  const completeOrder = useVendorCompleteOrder();
+  const cancelOrder = useVendorCancelOrder();
   const startConversation = useStartOrderConversation();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -183,12 +293,10 @@ export default function ProviderShop() {
   const [error, setError] = useState<string | null>(null);
   const [showAllOrderHistory, setShowAllOrderHistory] = useState(false);
   const [pickupNotes, setPickupNotes] = useState<Record<string, string>>({});
-  const incomingOrders =
-    orders?.filter(
-      (order) => order.status === 'reserved' || order.status === 'ready_for_collection',
-    ) ?? [];
-  const orderHistory =
-    orders?.filter((order) => order.status === 'collected' || order.status === 'cancelled') ?? [];
+  const isInProgress = (order: ProviderOrderDto) =>
+    order.status !== 'cancelled' && !isOrderCompleted(order.status);
+  const incomingOrders = orders?.filter(isInProgress) ?? [];
+  const orderHistory = orders?.filter((order) => !isInProgress(order)) ?? [];
   const visibleOrderHistory = showAllOrderHistory
     ? orderHistory
     : orderHistory.slice(0, ORDER_HISTORY_PREVIEW_COUNT);
@@ -235,6 +343,41 @@ export default function ProviderShop() {
       onError: (reason) =>
         setError(describeError(reason, "Couldn't open your conversation. Try again.")),
     });
+  };
+
+  const confirmComplete = (order: ProviderOrderDto) => {
+    Alert.alert(
+      order.fulfilment === 'delivery' ? 'Mark as delivered?' : 'Mark as collected?',
+      `Only do this once ${order.buyerName} has the goods and has paid you ${formatUsd(order.amountDueUsdCents)}. This completes the order and adds the commission to your balance.`,
+      [
+        { text: 'Not yet', style: 'cancel' },
+        {
+          text: order.fulfilment === 'delivery' ? 'Delivered' : 'Collected',
+          onPress: () => {
+            setError(null);
+            completeOrder.mutate(order.id, {
+              onError: (reason) => setError(describeError(reason, "Couldn't update that order.")),
+            });
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmCancel = (order: ProviderOrderDto) => {
+    Alert.alert('Cancel this order?', `${order.buyerName} will be told and the stock goes back.`, [
+      { text: 'Keep it', style: 'cancel' },
+      {
+        text: 'Cancel order',
+        style: 'destructive',
+        onPress: () => {
+          setError(null);
+          cancelOrder.mutate(order.id, {
+            onError: (reason) => setError(describeError(reason, "Couldn't cancel that order.")),
+          });
+        },
+      },
+    ]);
   };
 
   const openEditor = (product: NonNullable<typeof products>[number]) => {
@@ -317,7 +460,7 @@ export default function ProviderShop() {
     );
   };
 
-  const toggle = (
+  const toggle = standalone ? null : (
     <View style={styles.toggle}>
       <SegmentedPills
         options={[
@@ -332,7 +475,7 @@ export default function ProviderShop() {
 
   return (
     <Screen
-      hasTabBar
+      hasTabBar={!standalone}
       // Buy mode is the infinite catalogue, so it gets a virtualised list
       // instead of Screen's ScrollView. Sell mode (inline editors, a form and
       // two short order lists) stays a plain scrolling column.
@@ -344,7 +487,8 @@ export default function ProviderShop() {
       header={
         <ScreenHeader
           title="Shop"
-          showBack={false}
+          showBack={standalone}
+          {...(standalone ? { onBack } : {})}
           right={
             <View style={styles.headerActions}>
               {mode === 'buy' ? (
@@ -381,7 +525,7 @@ export default function ProviderShop() {
                   </Pressable>
                 </>
               ) : null}
-              <RoleSwitcher />
+              {standalone ? null : <RoleSwitcher />}
             </View>
           }
         />
@@ -389,8 +533,28 @@ export default function ProviderShop() {
     >
       {toggle}
 
-      {mode === 'sell' ? (
+      {mode === 'sell' ? <>{approved ? null : <VendorStatusCard />}</> : null}
+
+      {mode === 'sell' && approved ? (
         <>
+          <Card bordered style={styles.card}>
+            <Text variant="cardTitle">Delivery and collection</Text>
+            <Text variant="meta" color="neutral700" style={styles.meta}>
+              {vendor?.delivers
+                ? `You deliver (${formatUsd(vendor.deliveryChargeUsdCents)}) to ${vendor.deliveryAreas.join(', ')}.`
+                : 'You do not deliver. Buyers collect from your shop.'}
+            </Text>
+            <Button
+              label="Change delivery and collection"
+              variant="secondary"
+              block
+              style={styles.action}
+              onPress={() => {
+                router.push('/vendor/settings');
+              }}
+            />
+          </Card>
+
           {error ? (
             <Text variant="meta" color={colors.accent700} style={styles.error}>
               {error}
@@ -411,7 +575,8 @@ export default function ProviderShop() {
                   <View style={styles.grow}>
                     <Text variant="cardTitle">{order.buyerName}</Text>
                     <Text variant="meta" color="neutral700" style={styles.meta}>
-                      {order.reference} · {order.paymentMethod === 'ecocash' ? 'Paynow' : 'Cash'}
+                      {order.reference} ·{' '}
+                      {order.fulfilment === 'delivery' ? 'Delivery' : 'Collection'}
                     </Text>
                   </View>
                   <Badge label={ORDER_STATUS_LABELS[order.status]} tone="accent" />
@@ -422,21 +587,32 @@ export default function ProviderShop() {
                   </Text>
                 ))}
                 <Text variant="bodyStrong" style={styles.action}>
-                  {formatUsd(order.totalUsdCents)}
+                  {order.paymentMethod === 'ecocash'
+                    ? 'Paid in the app'
+                    : `Collect ${formatUsd(order.amountDueUsdCents)} from the buyer`}
                 </Text>
+                <Text variant="metaSmall" color="neutral600">
+                  {amountBreakdown(order)}
+                </Text>
+                {order.fulfilment === 'delivery' ? (
+                  <Text variant="meta" color="neutral700" style={styles.meta}>
+                    Deliver to: {order.deliveryAddress}
+                    {order.buyerPhone ? ` · ${order.buyerPhone}` : ''}
+                  </Text>
+                ) : null}
                 <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
                   <Text variant="meta" color="neutral700">
-                    {order.status === 'reserved'
-                      ? order.paymentCleared
-                        ? 'Pack this order, then tell the buyer when it is ready to collect.'
-                        : 'Waiting for the buyer’s payment to clear before you prepare this order.'
-                      : 'The buyer has been told it is ready. They confirm once they have it.'}
+                    {orderLifecycleText(order)}
                   </Text>
                 </View>
                 <View style={styles.orderActions}>
                   {order.canMarkReady ? (
                     <TextField
-                      label="Collection time or instructions"
+                      label={
+                        order.fulfilment === 'delivery'
+                          ? 'Delivery time or note'
+                          : 'Collection time or instructions'
+                      }
                       placeholder="For example, ready today after 4 pm"
                       value={pickupNotes[order.id] ?? ''}
                       onChangeText={(value) => {
@@ -459,7 +635,13 @@ export default function ProviderShop() {
                   />
                   {order.canMarkReady ? (
                     <Button
-                      label={markOrderReady.isPending ? 'Updating…' : 'Ready for collection'}
+                      label={
+                        markOrderReady.isPending
+                          ? 'Updating…'
+                          : order.fulfilment === 'delivery'
+                            ? 'Out for delivery'
+                            : 'Ready for collection'
+                      }
                       block
                       disabled={markOrderReady.isPending}
                       onPress={() => {
@@ -470,13 +652,38 @@ export default function ProviderShop() {
                             input: { pickupNote: pickupNotes[order.id]?.trim() || undefined },
                           },
                           {
-                            onSuccess: () => {
-                              setError(null);
-                            },
                             onError: (reason) =>
                               setError(describeError(reason, "Couldn't update that order.")),
                           },
                         );
+                      }}
+                    />
+                  ) : null}
+                  {order.canComplete ? (
+                    <Button
+                      label={
+                        completeOrder.isPending
+                          ? 'Updating…'
+                          : order.fulfilment === 'delivery'
+                            ? 'Mark delivered'
+                            : 'Mark collected'
+                      }
+                      variant={order.canMarkReady ? 'secondary' : 'primary'}
+                      block
+                      disabled={completeOrder.isPending}
+                      onPress={() => {
+                        confirmComplete(order);
+                      }}
+                    />
+                  ) : null}
+                  {order.canCancel ? (
+                    <Button
+                      label="Cancel order"
+                      variant="ghost"
+                      block
+                      disabled={cancelOrder.isPending}
+                      onPress={() => {
+                        confirmCancel(order);
                       }}
                     />
                   ) : null}
@@ -496,7 +703,8 @@ export default function ProviderShop() {
                     <View style={styles.grow}>
                       <Text variant="cardTitle">{order.buyerName}</Text>
                       <Text variant="meta" color="neutral700" style={styles.meta}>
-                        {order.reference} · {order.paymentMethod === 'ecocash' ? 'Paynow' : 'Cash'}
+                        {order.reference} ·{' '}
+                        {order.fulfilment === 'delivery' ? 'Delivery' : 'Collection'}
                       </Text>
                     </View>
                     <Badge label={ORDER_STATUS_LABELS[order.status]} tone="neutral" />
@@ -507,7 +715,7 @@ export default function ProviderShop() {
                     </Text>
                   ))}
                   <Text variant="bodyStrong" style={styles.action}>
-                    {formatUsd(order.totalUsdCents)}
+                    {formatUsd(order.totalUsdCents)} products
                   </Text>
                   <Button
                     label={startConversation.isPending ? 'Opening…' : 'Message buyer'}
@@ -723,4 +931,8 @@ export default function ProviderShop() {
       ) : null}
     </Screen>
   );
+}
+
+export default function ProviderShop() {
+  return <ShopScreen />;
 }

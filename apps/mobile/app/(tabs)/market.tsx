@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { Package, ShoppingBag } from 'lucide-react-native';
+import { Package, ShoppingBag, Store } from 'lucide-react-native';
 import { space } from '@sc/tokens';
 import { Screen, ScreenHeader, Pressable, Badge, useTheme } from '@sc/ui';
 import { MarketBrowse } from '../../src/components/MarketBrowse.js';
@@ -29,9 +29,10 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Marketplace (handoff screens 15-18). Stylists sell the hair, wigs and
- * supplies they already work with; buyers collect in person, which is why
- * every row leads with the seller and the distance to them.
+ * Marketplace (handoff screens 15-18). Verified shops sell hair, wigs and
+ * supplies; buyers collect or have them delivered and pay the shop directly,
+ * which is why every row leads with the seller and the distance to them. The
+ * shop button is "Sell on StylistsCenter" for anyone who is not selling yet.
  */
 export default function Market() {
   const { colors } = useTheme();
@@ -47,6 +48,16 @@ export default function Market() {
           showBack={false}
           right={
             <View style={styles.headerActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Sell on StylistsCenter"
+                onPress={() => {
+                  router.push('/vendor/shop');
+                }}
+                style={[styles.ordersButton, { borderColor: colors.divider }]}
+              >
+                <Store size={18} strokeWidth={1.7} color={colors.text} />
+              </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="My orders"

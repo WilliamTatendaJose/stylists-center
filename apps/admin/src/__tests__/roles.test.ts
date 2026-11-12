@@ -11,13 +11,14 @@ describe('canOpen', () => {
   });
 
   it('finance sees money pages, not trust or staff', () => {
-    for (const path of ['/overview', '/payments', '/cash-outs', '/subscriptions', '/providers']) {
+    for (const path of ['/overview', '/payments', '/cash-outs', '/fees', '/providers']) {
       expect(canOpen('finance', path)).toBe(true);
     }
     for (const path of [
       '/bans',
       '/reports',
       '/verifications',
+      '/vendors',
       '/staff',
       '/audit-log',
       '/catalog',
@@ -32,12 +33,13 @@ describe('canOpen', () => {
       '/reports/abc',
       '/bans',
       '/verifications',
+      '/vendors',
       '/users',
       '/catalog',
     ]) {
       expect(canOpen('support', path)).toBe(true);
     }
-    for (const path of ['/payments', '/cash-outs', '/subscriptions', '/staff', '/audit-log']) {
+    for (const path of ['/payments', '/cash-outs', '/fees', '/staff', '/audit-log']) {
       expect(canOpen('support', path)).toBe(false);
     }
   });

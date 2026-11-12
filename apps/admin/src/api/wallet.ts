@@ -1,5 +1,10 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AdminCashOutRowDto, Paged, RecordCashOutSettlementInput } from '@sc/shared';
+import type {
+  AdminAgentRowDto,
+  AdminCashOutRowDto,
+  Paged,
+  RecordCashOutSettlementInput,
+} from '@sc/shared';
 import { apiFetch } from './client';
 import { listQuery, type ListParams } from './paging';
 
@@ -10,6 +15,14 @@ export function useCashOuts(params: ListParams = {}) {
     queryKey: [...CASH_OUTS_KEY, params],
     queryFn: () =>
       apiFetch<Paged<AdminCashOutRowDto>>(`/v1/admin/wallet/cash-outs${listQuery({ ...params })}`),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useAgents(params: ListParams & { subscription?: 'active' | 'lapsed' } = {}) {
+  return useQuery({
+    queryKey: ['admin', 'wallet', 'agents', params],
+    queryFn: () => apiFetch<Paged<AdminAgentRowDto>>(`/v1/admin/wallet/agents${listQuery(params)}`),
     placeholderData: keepPreviousData,
   });
 }

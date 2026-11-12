@@ -35,6 +35,8 @@ enum BookingStatus {
   completed
   declined
   cancelled
+  /// Did not complete: reported unpaid by the stylist, or neither side confirmed in time.
+  incomplete
 }
 
 /// Mirrors @sc/shared's MatchState exactly (domain/match.ts's canTransition table).
@@ -86,9 +88,34 @@ enum ReferralStatus {
 }
 
 enum WalletTxnType {
+  /// An agent's reward for a recruited agent who is verified and has paid.
   referral_coin
   cash_out
   adjustment
+  /// A client's coins for a completed booking (spend-only, expire).
+  booking_reward
+  /// A buyer's coins for a delivered or collected marketplace order (spend-only, expire).
+  purchase_reward
+  /// An agent's coins on a purchase by a customer who used their code.
+  referral_purchase
+  /// Coins a client spent on a booking or order.
+  redeem_debit
+  /// The same coins arriving with the stylist or vendor.
+  redeem_credit
+  /// Client coins that reached their expiry unspent.
+  expiry
+  /// A redemption reversed because the booking or order was cancelled.
+  refund
+}
+
+/// Which pool of coins a ledger row belongs to. Spend-only coins are what
+/// clients earn (they expire and can never be cashed out). Cash coins arrive
+/// with stylists and vendors when a client pays with coins. Agent coins are
+/// agent earnings and need an active subscription to cash out.
+enum CoinPool {
+  spend
+  cash
+  agent
 }
 
 /// Mirrors @sc/shared's ProviderProfileDto priceDisplay field exactly.
@@ -175,6 +202,7 @@ model User {
   ordersAsBuyer       Order[]             @relation("OrderBuyer")
   productReviews      ProductReview[]
   pushTokens          DevicePushToken[]
+  termsAcceptances    TermsAcceptance[]
 
   @@index([cityId])
   @@index([deletedAt])
@@ -217,16 +245,18 @@ model ProviderProfile {
    */
   acceptingBookings         Boolean      @default(true)
   verified                  Boolean      @default(false)
+  /// False for a vendor-only profile (a shop that is not a stylist): searches
+  /// and smart match skip it, but it still owns products and orders.
+  offersServices            Boolean      @default(true)
   ratingAvg                 Float        @default(0)
   completedCount            Int          @default(0)
   salonCreatedAt            DateTime?
-  /// Per-provider so a future admin webapp can change one provider's price
-  /// without a deploy — see DEFAULT_SUBSCRIPTION_PRICE_USD_CENTS in @sc/shared.
+  /// UNUSED since stylists stopped paying a subscription (they owe monthly
+  /// fees instead: FeeLedgerEntry/FeeStatement). Kept, with its data, so
+  /// history stays readable and no destructive migration is needed; do not
+  /// read it for any rule. Agents' subscriptions are stored elsewhere.
   subscriptionPriceUsdCents Int          @default(500)
-  /// Null for a provider who has never paid — never active, not an error.
-  /// Whether that reads as "active" is computed from this at request time
-  /// (isSubscriptionActive in @sc/shared), never stored as a separate flag,
-  /// so it can never drift out of sync with the date it's derived from.
+  /// UNUSED, see subscriptionPriceUsdCents.
   subscriptionPaidUntil     DateTime?
   createdAt                 DateTime     @default(now())
   updatedAt                 DateTime     @updatedAt
@@ -238,10 +268,14 @@ model ProviderProfile {
   trips                Trip[]
   products             Product[]
   orders               Order[]
-  subscriptionPayments Payment[]         @relation("SubscriptionPayments")
+  subscriptionPayments Payment[]          @relation("SubscriptionPayments")
+  feePayments          Payment[]          @relation("FeePayments")
+  feeStatements        FeeStatement[]
   payouts              Payout[]
   // The trigram (GIN) and partial availability indexes are declared in the
   // hand-written migration — Prisma's schema language cannot express either.
+  feeLedgerEntries     FeeLedgerEntry[]
+  vendor               VendorApplication?
 
   @@index([categoryId])
   @@index([cityId])
@@ -345,27 +379,42 @@ model MatchOffer {
 /// confirmation is the only signal the platform has that a cash booking
 /// happened at all.
 model Booking {
-  id                  String          @id @default(uuid())
-  reference           String          @unique
-  clientId            String
-  client              User            @relation("BookingClient", fields: [clientId], references: [id])
-  providerId          String
-  provider            ProviderProfile @relation(fields: [providerId], references: [id])
-  serviceId           String
-  service             Service         @relation(fields: [serviceId], references: [id])
-  matchRequestId      String?
-  matchRequest        MatchRequest?   @relation(fields: [matchRequestId], references: [id])
-  startsAt            DateTime
+  id                    String          @id @default(uuid())
+  reference             String          @unique
+  clientId              String
+  client                User            @relation("BookingClient", fields: [clientId], references: [id])
+  providerId            String
+  provider              ProviderProfile @relation(fields: [providerId], references: [id])
+  serviceId             String
+  service               Service         @relation(fields: [serviceId], references: [id])
+  matchRequestId        String?
+  matchRequest          MatchRequest?   @relation(fields: [matchRequestId], references: [id])
+  startsAt              DateTime
   /// Fixed at booking time from the selected service duration. This makes the
   /// appointment range auditable even if the service menu changes later.
-  endsAt              DateTime
-  paymentMethod       PaymentMethod
-  status              BookingStatus   @default(awaiting_provider)
-  priceUsdCents       Int
-  confirmedByClient   Boolean         @default(false)
-  confirmedByProvider Boolean         @default(false)
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
+  endsAt                DateTime
+  paymentMethod         PaymentMethod
+  status                BookingStatus   @default(awaiting_provider)
+  priceUsdCents         Int
+  confirmedByClient     Boolean         @default(false)
+  confirmedByProvider   Boolean         @default(false)
+  /// When each side confirmed. The auto-complete sweep counts its window from the first of these, so it needs the time and not just the flag.
+  confirmedByClientAt   DateTime?
+  confirmedByProviderAt DateTime?
+  completedAt           DateTime?
+  /// True when the booking completed because the window ran out with only one side confirmed.
+  autoCompleted         Boolean         @default(false)
+  /// Service fee added to `priceUsdCents` for the client, frozen at booking time so a later settings change never rewrites what this client was shown or what the stylist owes. Both 0 on bookings made before the pay-the-stylist model (those were paid in the app, fee-free).
+  serviceFeeUsdCents    Int             @default(0)
+  serviceFeeBps         Int             @default(0)
+  /// Coins the client spent on this booking and their cash value when spent. The client pays the stylist price + fee - coinsUsdCents directly.
+  coinsUsed             Int             @default(0)
+  coinsUsdCents         Int             @default(0)
+  /// The stylist reported the client did not pay. No fee is ever charged for such a booking; staff review clients with repeat reports.
+  nonPaymentReportedAt  DateTime?
+  nonPaymentNote        String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
   payments Payment[]
   reviews  Review[]
@@ -375,6 +424,7 @@ model Booking {
   @@index([clientId])
   @@index([providerId])
   @@index([status])
+  @@index([clientId, nonPaymentReportedAt])
 }
 
 /// Append-only escrow ledger (plan §6). Never mutate a row in place — a
@@ -389,6 +439,12 @@ model Payment {
   order                  Order?           @relation(fields: [orderId], references: [id])
   subscriptionProviderId String?
   subscriptionProvider   ProviderProfile? @relation("SubscriptionPayments", fields: [subscriptionProviderId], references: [id])
+  /// Set on an agent's subscription payment (instead of the three above).
+  agentId                String?
+  agent                  Agent?           @relation(fields: [agentId], references: [id])
+  /// Set when a stylist or vendor paid their fee balance through the app. The gateway rows follow the same append-only pattern as bookings and orders; the balance itself lives in FeeLedgerEntry, credited once when a row reaches 'paid'.
+  feeProviderId          String?
+  feeProvider            ProviderProfile? @relation("FeePayments", fields: [feeProviderId], references: [id])
   provider               String // 'fake-ecocash' | 'paynow' | 'pesepay' — a string, not an enum, so a further gateway is a new value, not a migration
   status                 String // held | released | refunded | failed
   amountUsdCents         Int
@@ -405,6 +461,8 @@ model Payment {
   @@index([bookingId])
   @@index([orderId])
   @@index([subscriptionProviderId])
+  @@index([agentId])
+  @@index([feeProviderId])
   @@index([reference])
 }
 
@@ -429,13 +487,28 @@ model Payout {
 
 /// Mirrors @sc/shared's OrderStatus exactly.
 enum OrderStatus {
-  /// Paid or pledged, stock held for the buyer, waiting to be collected.
+  /// Stock held for the buyer; the buyer pays the vendor on delivery or collection.
   reserved
-  /// Seller says the goods are packed; buyer may now confirm collection.
+  /// Seller says the goods are packed, for a collection order.
   ready_for_collection
-  /// Buyer confirmed they have it; escrow released.
+  /// Seller has sent a delivery order on its way.
+  out_for_delivery
+  /// Handed over at the shop. Completed: the vendor owes commission.
   collected
+  /// Handed over at the buyer's address. Completed: the vendor owes commission.
+  delivered
   cancelled
+}
+
+enum FulfilmentMethod {
+  collection
+  delivery
+}
+
+enum VendorStatus {
+  pending
+  approved
+  rejected
 }
 
 /// A physical item a stylist sells — hair, wigs, nail supplies, cosmetics.
@@ -465,28 +538,37 @@ model Product {
 
 /// One order is always with ONE stylist — the buyer collects from a single place.
 model Order {
-  id                   String          @id @default(uuid())
-  reference            String          @unique
-  buyerId              String
-  buyer                User            @relation("OrderBuyer", fields: [buyerId], references: [id])
-  providerId           String
-  provider             ProviderProfile @relation(fields: [providerId], references: [id])
-  status               OrderStatus     @default(reserved)
-  paymentMethod        PaymentMethod
+  id                     String           @id @default(uuid())
+  reference              String           @unique
+  buyerId                String
+  buyer                  User             @relation("OrderBuyer", fields: [buyerId], references: [id])
+  providerId             String
+  provider               ProviderProfile  @relation(fields: [providerId], references: [id])
+  status                 OrderStatus      @default(reserved)
+  paymentMethod          PaymentMethod
   /// Buyer-scoped request key: retrying a timed-out checkout returns the same order.
-  checkoutKey          String?
-  checkoutFingerprint  String?
-  checkoutUrl          String?
-  checkoutInstructions String?
-  pickupAddress        String?
-  pickupHours          String?
-  pickupLat            Float?
-  pickupLng            Float?
-  pickupNote           String?
-  /// Sum of the item snapshots, stored so a later price change cannot rewrite history.
-  totalUsdCents        Int
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  checkoutKey            String?
+  checkoutFingerprint    String?
+  checkoutUrl            String?
+  checkoutInstructions   String?
+  pickupAddress          String?
+  pickupHours            String?
+  pickupLat              Float?
+  pickupLng              Float?
+  pickupNote             String?
+  fulfilment             FulfilmentMethod @default(collection)
+  deliveryAddress        String?
+  /// Kept apart from totalUsdCents: the commission is on the product total only.
+  deliveryChargeUsdCents Int              @default(0)
+  /// Coins the buyer spent on this order and what they were worth at the time.
+  coinsUsed              Int              @default(0)
+  coinsValueUsdCents     Int              @default(0)
+  /// When the order was delivered or collected.
+  completedAt            DateTime?
+  /// Sum of the item snapshots (products only, no delivery), stored so a later price change cannot rewrite history.
+  totalUsdCents          Int
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
 
   items          OrderItem[]
   payments       Payment[]
@@ -495,6 +577,39 @@ model Order {
   @@unique([buyerId, checkoutKey])
   @@index([buyerId])
   @@index([providerId])
+}
+
+/// A shop's application to sell, one per ProviderProfile. Only an approved
+/// one may list products or take orders; the vendor's delivery and collection
+/// defaults live here too.
+model VendorApplication {
+  id                     String          @id @default(uuid())
+  providerId             String          @unique
+  provider               ProviderProfile @relation(fields: [providerId], references: [id])
+  businessName           String
+  registrationNumber     String?
+  shopAddress            String
+  shopLat                Float?
+  shopLng                Float?
+  premisesPhotoUrls      String[]        @default([])
+  contactName            String
+  contactPhone           String
+  status                 VendorStatus    @default(pending)
+  /// Plain id, no foreign key: staff accounts are never hard-deleted, and this keeps AdminUser untouched.
+  reviewedByAdminId      String?
+  reviewNote             String?
+  reviewedAt             DateTime?
+  submittedAt            DateTime        @default(now())
+  /// Delivery and collection defaults, set by the vendor once approved.
+  delivers               Boolean         @default(false)
+  deliveryChargeUsdCents Int             @default(0)
+  deliveryAreas          String[]        @default([])
+  collectionAddress      String?
+  collectionHours        String?
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  @@index([status, submittedAt])
 }
 
 /// Name and price are snapshotted: what the buyer agreed to pay must not move when the seller edits the product.
@@ -650,15 +765,18 @@ model MessageAttachment {
 /// currently allowed to earn (SRS §7: fraud mitigation can suspend an agent
 /// without deleting their history).
 model Agent {
-  id                 String             @id @default(uuid())
-  userId             String             @unique
-  user               User               @relation(fields: [userId], references: [id])
-  referralCode       String             @unique
-  verificationStatus VerificationStatus @default(unverified)
-  status             String             @default("active") // active | suspended
-  createdAt          DateTime           @default(now())
+  id                    String             @id @default(uuid())
+  userId                String             @unique
+  user                  User               @relation(fields: [userId], references: [id])
+  referralCode          String             @unique
+  verificationStatus    VerificationStatus @default(unverified)
+  status                String             @default("active") // active | suspended
+  /// Agents pay a subscription to use the rewards programme. Null until the first payment.
+  subscriptionPaidUntil DateTime?
+  createdAt             DateTime           @default(now())
 
   referrals Referral[]
+  payments  Payment[]
 }
 
 model Referral {
@@ -678,18 +796,41 @@ model Referral {
 /// Every coin movement, in and out — cash-out unlocks once the sum for a
 /// user exceeds CASH_OUT_MIN_USD_CENTS (@sc/shared/domain/money.ts).
 model WalletTransaction {
-  id        String        @id @default(uuid())
-  userId    String
-  user      User          @relation(fields: [userId], references: [id])
-  type      WalletTxnType
-  coins     Int
-  usdCents  Int
-  reference String?
-  createdAt DateTime      @default(now())
+  id             String        @id @default(uuid())
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  type           WalletTxnType
+  coins          Int
+  usdCents       Int
+  reference      String?
+  createdAt      DateTime      @default(now())
+  /// Existing rows are cash/agent coins; see `CoinPool`.
+  pool           CoinPool      @default(cash)
+  /// Set only on spend-only earning rows: when the coins expire.
+  expiresAt      DateTime?
+  /// Set only on spend-only earning rows: coins not yet spent or expired. Spending takes from the soonest-to-expire row first.
+  remainingCoins Int?
+  /// One row per booking/order/event per kind of coin movement, so a repeated hook (retry, race) inserts nothing. Null on legacy rows.
+  dedupeKey      String?       @unique
 
   cashOutSettlement CashOutSettlement?
+  /// The earning rows this debit spent from (spend pool only), so a refund puts the coins back in the same rows.
+  spentFrom         WalletCoinSpend[]  @relation("SpendDebit")
+  spentBy           WalletCoinSpend[]  @relation("SpendLot")
 
   @@index([userId])
+}
+
+model WalletCoinSpend {
+  id         String            @id @default(uuid())
+  debitTxnId String
+  debit      WalletTransaction @relation("SpendDebit", fields: [debitTxnId], references: [id])
+  lotTxnId   String
+  lot        WalletTransaction @relation("SpendLot", fields: [lotTxnId], references: [id])
+  coins      Int
+
+  @@unique([debitTxnId, lotTxnId])
+  @@index([lotTxnId])
 }
 
 /// A cash-out request (WalletTransaction.type = 'cash_out') already debited
@@ -865,4 +1006,114 @@ model ContentDocument {
   version          Int      @default(1)
   updatedByAdminId String?
   updatedAt        DateTime @updatedAt
+}
+
+/// What a fee ledger row records.
+enum FeeEntryKind {
+  /// Service fee on a completed booking (owed by the stylist).
+  booking_fee
+  /// Commission on a delivered or collected marketplace order (owed by the vendor).
+  order_fee
+  /// A fee taken back: a reported non-payment, or a cancelled charge.
+  waiver
+  /// Money paid towards the balance (through the app or recorded by staff).
+  payment
+  /// A manual correction by staff, either direction.
+  adjustment
+}
+
+/// What each stylist or vendor owes StylistsCenter. Clients pay stylists and
+/// vendors directly, so the app keeps this running balance instead of
+/// splitting payments. Append-only: a reversal is a new `waiver` row, never
+/// an edit. Positive amounts are owed; negative amounts are paid or credited.
+/// The balance is the sum of `amountUsdCents` for a provider.
+model FeeLedgerEntry {
+  id               String          @id @default(uuid())
+  providerId       String
+  provider         ProviderProfile @relation(fields: [providerId], references: [id])
+  kind             FeeEntryKind
+  amountUsdCents   Int
+  /// What the fee was charged on (job price or product total), for statements.
+  baseUsdCents     Int?
+  /// The rate used, in basis points, so a statement shows it even after the setting changes.
+  rateBps          Int?
+  bookingId        String?
+  orderId          String?
+  /// For `payment` rows made through the app: the gateway Payment row.
+  paymentId        String?
+  note             String?
+  createdByAdminId String?
+  createdAt        DateTime        @default(now())
+
+  // One charge and at most one waiver per booking or order, so retries and
+  // races can never double-charge. Postgres treats NULLs as distinct, so
+  // rows without a booking/order are unaffected.
+  @@unique([kind, bookingId])
+  @@unique([kind, orderId])
+  @@index([providerId, createdAt])
+}
+
+/// One row per user per version they agreed to. A new version of a document
+/// (staff save it in the console) means users must accept it again, so the
+/// version is part of the key and old acceptances are kept as history.
+model TermsAcceptance {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  key        String
+  version    Int
+  acceptedAt DateTime @default(now())
+
+  @@unique([userId, key, version])
+}
+
+/// Which reminder a statement has had. One row per statement and kind makes each reminder send exactly once.
+enum FeeReminderKind {
+  /// `feeReminderDaysBefore` days before the due date.
+  before_due
+  on_due
+  /// `feeReminderDaysAfter` days after the due date.
+  overdue
+}
+
+/// A stylist's or vendor's fee statement for one calendar month (Africa/Harare),
+/// generated once after the month ends and never recalculated, so it does not
+/// shift when a setting changes later. Figures are copied from the ledger at
+/// generation time; the due date is stored for the same reason.
+model FeeStatement {
+  id                  String          @id @default(uuid())
+  providerId          String
+  provider            ProviderProfile @relation(fields: [providerId], references: [id])
+  /// 'YYYY-MM' in Harare time: the unique key for idempotent generation.
+  month               String
+  periodStart         DateTime
+  /// Exclusive: the first instant of the next month.
+  periodEnd           DateTime
+  openingUsdCents     Int
+  bookingFeesUsdCents Int
+  orderFeesUsdCents   Int
+  /// Fees taken back this month, as a positive amount.
+  waiversUsdCents     Int
+  /// Payments received this month, as a positive amount.
+  paymentsUsdCents    Int
+  /// Staff corrections this month, signed (positive = owed more).
+  adjustmentsUsdCents Int
+  /// opening + fees - waivers - payments + adjustments. Can be negative (credit).
+  closingUsdCents     Int
+  dueAt               DateTime
+  generatedAt         DateTime        @default(now())
+  reminders           FeeReminder[]
+
+  @@unique([providerId, month])
+  @@index([dueAt])
+}
+
+model FeeReminder {
+  id          String          @id @default(uuid())
+  statementId String
+  statement   FeeStatement    @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  kind        FeeReminderKind
+  sentAt      DateTime        @default(now())
+
+  @@unique([statementId, kind])
 }

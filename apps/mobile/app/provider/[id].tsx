@@ -227,7 +227,13 @@ export default function ProviderProfile() {
           ) : (
             <View style={styles.footerRow}>
               <Button label="Message" variant="secondary" size="lg" onPress={goMessage} />
-              <Button label="Book" size="lg" onPress={goBook} style={styles.bookButton} />
+              <Button
+                label={provider.unavailable ? 'Not available right now' : 'Book'}
+                size="lg"
+                disabled={provider.unavailable === true}
+                onPress={goBook}
+                style={styles.bookButton}
+              />
             </View>
           )
         }

@@ -4,7 +4,6 @@ import { createBookingSchema } from './bookings.js';
 import { firebaseExchangeSchema, meSchema, selectAccountTypeSchema } from './auth.js';
 import { conversationSchema } from './chat.js';
 import { imageUrlSchema } from './uploads.js';
-import { paySubscriptionSchema } from './subscription.js';
 import { createOrderSchema } from './market.js';
 import { paymentActionSchema, submitPaymentOtpSchema } from './payments.js';
 import {
@@ -98,12 +97,11 @@ describe('createMatchRequestSchema', () => {
 });
 
 describe('createBookingSchema', () => {
-  it('accepts a minimal EcoCash booking', () => {
+  it('accepts a minimal booking', () => {
     const result = createBookingSchema.safeParse({
       providerId: PROVIDER_ID,
       serviceId: SERVICE_ID,
       startsAt: '2026-07-30T14:30:00.000Z',
-      paymentMethod: 'ecocash',
     });
     expect(result.success).toBe(true);
   });
@@ -113,21 +111,8 @@ describe('createBookingSchema', () => {
       providerId: PROVIDER_ID,
       serviceId: SERVICE_ID,
       startsAt: '30 July 2026',
-      paymentMethod: 'cash',
     });
     expect(result.success).toBe(false);
-  });
-});
-
-describe('paySubscriptionSchema', () => {
-  it('accepts EcoCash and rejects unverified self-reported cash renewals', () => {
-    expect(
-      paySubscriptionSchema.safeParse({
-        paymentMethod: 'ecocash',
-        payerPhone: '077 000 0000',
-      }).success,
-    ).toBe(true);
-    expect(paySubscriptionSchema.safeParse({ paymentMethod: 'cash' }).success).toBe(false);
   });
 });
 
@@ -238,7 +223,7 @@ describe('admin schemas', () => {
   it('rejects a provider update with neither field set', () => {
     expect(updateProviderAdminSchema.safeParse({}).success).toBe(false);
     expect(updateProviderAdminSchema.safeParse({ verified: true }).success).toBe(true);
-    expect(updateProviderAdminSchema.safeParse({ subscriptionPriceUsdCents: 500 }).success).toBe(
+    expect(updateProviderAdminSchema.safeParse({ verificationNote: 'Checked ID' }).success).toBe(
       true,
     );
   });
@@ -252,26 +237,52 @@ describe('payment channel schemas', () => {
     paymentMethod: 'ecocash',
   } as const;
 
-  it('accepts a booking from an older app that sends no channel', () => {
+  // Bookings are paid to the stylist directly now. An older app build still
+  // sends a method and channel; they must not fail the request, and must not
+  // reach the service either.
+  it('accepts a booking from an older app that still sends a payment method and channel', () => {
     expect(createBookingSchema.safeParse(booking).success).toBe(true);
+    const parsed = createBookingSchema.safeParse({ ...booking, payChannel: 'innbucks' });
+    expect(parsed.success).toBe(true);
+    expect(parsed.data).toEqual({
+      providerId: booking.providerId,
+      serviceId: booking.serviceId,
+      startsAt: booking.startsAt,
+    });
   });
 
-  it('accepts every channel on a booking and rejects an unknown one', () => {
-    for (const payChannel of ['ecocash', 'onemoney', 'innbucks', 'omari', 'card']) {
-      expect(createBookingSchema.safeParse({ ...booking, payChannel }).success).toBe(true);
-    }
-    expect(createBookingSchema.safeParse({ ...booking, payChannel: 'paypal' }).success).toBe(false);
+  it('takes whole, non-negative coins and nothing else', () => {
+    expect(createBookingSchema.safeParse({ ...booking, coins: 5 }).success).toBe(true);
+    expect(createBookingSchema.safeParse({ ...booking, coins: 0 }).success).toBe(true);
+    expect(createBookingSchema.safeParse({ ...booking, coins: -1 }).success).toBe(false);
+    expect(createBookingSchema.safeParse({ ...booking, coins: 1.5 }).success).toBe(false);
   });
 
-  it('refuses card on a market order', () => {
+  // Market orders are paid to the vendor on delivery or collection, so the
+  // order carries no payment choice; it needs an address only for delivery.
+  it('takes a market order with no payment choice and defaults to collection', () => {
+    const parsed = createOrderSchema.parse({
+      providerId: booking.providerId,
+      checkoutKey: 'checkout-key-123',
+      items: [{ productId: booking.serviceId, quantity: 1 }],
+    });
+    expect(parsed.fulfilment).toBe('collection');
+  });
+
+  it('asks for an address on a delivery order only', () => {
     const order = {
       providerId: booking.providerId,
       checkoutKey: 'checkout-key-123',
-      paymentMethod: 'ecocash',
       items: [{ productId: booking.serviceId, quantity: 1 }],
     };
-    expect(createOrderSchema.safeParse({ ...order, payChannel: 'innbucks' }).success).toBe(true);
-    expect(createOrderSchema.safeParse({ ...order, payChannel: 'card' }).success).toBe(false);
+    expect(createOrderSchema.safeParse({ ...order, fulfilment: 'delivery' }).success).toBe(false);
+    expect(
+      createOrderSchema.safeParse({
+        ...order,
+        fulfilment: 'delivery',
+        deliveryAddress: '12 Samora Machel Ave',
+      }).success,
+    ).toBe(true);
   });
 
   it('accepts only a 4-8 digit OTP', () => {

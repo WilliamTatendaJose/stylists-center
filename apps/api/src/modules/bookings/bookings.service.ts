@@ -1,13 +1,11 @@
 import {
   BadRequestException,
   ForbiddenException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type {
   BookingRowDto,
-  BookingStatus,
   ConfirmCompletionResponse,
   CreateBookingInput,
   CreateBookingResponse,
@@ -16,29 +14,25 @@ import type {
 } from '@sc/shared';
 import {
   canCancelBooking,
+  clientTotalCents,
+  feeCents,
   formatBookingReference,
   isLateCancellation,
-  isSubscriptionActive,
+  maxCoinsForBooking,
   FREE_CANCELLATION_WINDOW_HOURS,
-  needsCashReconciliation,
 } from '@sc/shared';
 import { Optional } from '@nestjs/common';
-import { walletRates } from '../../config/wallet-rates';
-import { SettingsService } from '../settings/settings.service';
+import { SettingsService, settingsFor } from '../settings/settings.service';
+import { FeeStandingService } from '../fees/fee-standing.service';
+import { RewardsHooksService } from '../rewards/rewards-hooks.service';
+import { BookingLifecycleService } from './booking-lifecycle.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
-import {
-  PAYMENT_GATEWAY,
-  type PaymentGatewayPort,
-  type PaymentIntentResult,
-} from '../payments/payment-gateway.port';
 import { PaymentStatusService } from '../payments/payment-status.service';
-import { payerPhoneFor } from '../payments/pay-channels';
 import { TrustService } from '../trust/trust.service';
 import { toBookingRowDto } from './mappers';
-import { expireStaleBookingRequests } from './booking-expiry';
 import { isWithinWeeklyHours, readWeeklyHours } from '../providers/calendar-policy';
 
 const NON_BLOCKING_STATUSES = ['cancelled', 'declined'] as const;
@@ -51,8 +45,10 @@ export class BookingsService {
     private readonly matching: MatchingService,
     private readonly trust: TrustService,
     private readonly push: PushService,
-    @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
     private readonly paymentStatus: PaymentStatusService,
+    private readonly standing: FeeStandingService,
+    private readonly rewards: RewardsHooksService,
+    private readonly lifecycle: BookingLifecycleService,
     @Optional() private readonly settings?: SettingsService,
   ) {}
 
@@ -64,18 +60,14 @@ export class BookingsService {
     if (service?.providerId !== input.providerId) {
       throw new NotFoundException('Service not found for this provider');
     }
-    // A stylist booking themselves would pay into their own escrow and
-    // collect it back as earnings — a way to fake completed jobs and ratings.
+    // A stylist booking themselves would be a way to fake completed jobs,
+    // ratings and coins.
     if (service.provider.userId === clientId) {
       throw new BadRequestException("You can't book your own services");
     }
-    // Discovery (search, "Available now", smart-match fan-out) already
-    // excludes a provider whose subscription has lapsed — this closes the
-    // remaining gap where a client still has their profile/service open
-    // from before it lapsed, or reached it via a chat/booking-history link.
-    if (!isSubscriptionActive(service.provider.subscriptionPaidUntil?.toISOString() ?? null)) {
-      throw new BadRequestException("This stylist isn't currently accepting bookings");
-    }
+    // Checked before anything else is written: a stylist whose fee balance is
+    // overdue takes no new bookings, however the client reached them.
+    await this.standing.assertCanTrade(input.providerId);
 
     const startsAt = new Date(input.startsAt);
     const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
@@ -92,35 +84,24 @@ export class BookingsService {
     if (existingTimeOff) throw new BadRequestException('That stylist is away at this time');
     const reference = formatBookingReference(await this.nextBookingSequence());
 
-    // EcoCash checkout is created BEFORE the match is confirmed and the
-    // booking is written, not after. `confirmForBooking` moves a MatchRequest
-    // to 'confirmed' — a state whose only allowed exit is 'no_show' (see
-    // match.ts's ALLOWED_TRANSITIONS) — and declines every sibling offer as
-    // part of the same step. Both are effectively irreversible. Doing this
-    // first and only then attempting checkout meant a gateway failure left
-    // the match permanently stuck "confirmed" with no booking behind it and
-    // no way for the client to ever complete or retry it. Creating the
-    // checkout intent first means a gateway failure never touches the match
-    // or the database at all — the client just sees the request fail and can
-    // retry cleanly. The remaining risk (the slot filling in the gap between
-    // a successful checkout and the transaction below) leaves an orphaned
-    // Paynow payment intent with no booking, which is recoverable; a wedged
-    // MatchRequest was not.
-    let checkoutIntent: PaymentIntentResult | undefined;
-    const payChannel = input.payChannel ?? 'ecocash';
-    if (input.paymentMethod === 'ecocash') {
-      const client = await this.prisma.user.findUniqueOrThrow({
-        where: { id: clientId },
-        select: { phone: true },
-      });
-      const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, client.phone);
-      checkoutIntent = await this.paymentGateway.createCheckout({
-        reference,
-        amountUsdCents: service.priceUsdCents,
-        description: `Booking ${reference}: ${service.name}`,
-        channel: payChannel,
-        ...(paymentPhone ? { phone: paymentPhone } : {}),
-      });
+    // The client pays the stylist directly, so there is no checkout to start
+    // here. The fee is frozen now, from today's setting, so a later change
+    // never rewrites what this client was shown.
+    const config = this.settings ?? settingsFor(this.prisma);
+    const [serviceFeeBps, coinUsdCents] = await Promise.all([
+      config.get('serviceFeeBps'),
+      config.get('coinUsdCents'),
+    ]);
+    const serviceFeeUsdCents = feeCents(service.priceUsdCents, serviceFeeBps);
+    const clientTotal = clientTotalCents(service.priceUsdCents, serviceFeeBps);
+    const coins = input.coins ?? 0;
+    const maxCoins = maxCoinsForBooking(clientTotal, coinUsdCents);
+    if (coins > maxCoins) {
+      throw new BadRequestException(
+        maxCoins === 0
+          ? "Coins can't be used on this booking"
+          : `You can use at most ${String(maxCoins)} coins on this booking`,
+      );
     }
 
     const booking = await this.prisma.$transaction(async (tx) => {
@@ -155,7 +136,9 @@ export class BookingsService {
 
       // A match is only consumed after its appointment range is known to be
       // free. Keeping the provider lock until the row is written prevents a
-      // second client from taking the same appointment in the meantime.
+      // second client from taking the same appointment in the meantime. It
+      // must come before the booking insert: the insert's foreign key would
+      // otherwise hold a lock on the match row that this step waits on.
       if (input.matchId) {
         await this.matching.confirmForBooking(input.matchId, clientId, input.providerId);
       }
@@ -169,27 +152,33 @@ export class BookingsService {
           matchRequestId: input.matchId ?? null,
           startsAt,
           endsAt,
-          paymentMethod: input.paymentMethod,
+          // 'cash' is the stored name for "paid to the stylist directly".
+          paymentMethod: 'cash',
           priceUsdCents: service.priceUsdCents,
+          serviceFeeUsdCents,
+          serviceFeeBps,
         },
       });
 
-      if (checkoutIntent) {
-        await tx.payment.create({
-          data: {
-            bookingId: created.id,
-            provider: checkoutIntent.provider,
-            status: checkoutIntent.status,
-            amountUsdCents: service.priceUsdCents,
-            externalRef: checkoutIntent.externalRef,
-            reference,
-            channel: payChannel,
-            otpUrl: checkoutIntent.otpUrl ?? null,
-          },
+      if (coins > 0) {
+        // Inside this transaction: if the hook refuses (not enough coins) the
+        // booking is not created, and if the booking fails the coins stay put.
+        const { usdCents } = await this.rewards.redeemForBooking(tx, {
+          bookingId: created.id,
+          clientId,
+          providerUserId: service.provider.userId,
+          coins,
+        });
+        if (usdCents < 0 || usdCents > clientTotal) {
+          throw new BadRequestException("Coins can't be used on this booking");
+        }
+        await tx.booking.update({
+          where: { id: created.id },
+          data: { coinsUsed: coins, coinsUsdCents: usdCents },
         });
       }
 
-      return created;
+      return tx.booking.findUniqueOrThrow({ where: { id: created.id } });
     });
 
     const row = await this.toRowById(booking.id);
@@ -199,13 +188,11 @@ export class BookingsService {
       id: booking.id,
       reference: booking.reference,
       status: booking.status,
-      ...(checkoutIntent?.checkoutUrl ? { checkoutUrl: checkoutIntent.checkoutUrl } : {}),
-      ...(checkoutIntent?.instructions ? { instructions: checkoutIntent.instructions } : {}),
-      ...(checkoutIntent?.action ? { action: checkoutIntent.action } : {}),
     };
   }
 
   /**
+   * Only for bookings paid in the app before clients paid stylists directly.
    * Reports the latest known state of a booking's payment, actively polling
    * Paynow first if it's still pending — the client screen that sent someone
    * a phone prompt needs a real answer to show, and the inbound webhook alone
@@ -294,6 +281,8 @@ export class BookingsService {
           status: 'awaiting_provider',
           confirmedByClient: false,
           confirmedByProvider: false,
+          confirmedByClientAt: null,
+          confirmedByProviderAt: null,
         },
       });
     });
@@ -309,7 +298,7 @@ export class BookingsService {
   }
 
   async listForClient(clientId: string): Promise<BookingRowDto[]> {
-    await expireStaleBookingRequests(this.prisma, { clientId });
+    await this.lifecycle.expireStale({ clientId });
     const bookings = await this.prisma.booking.findMany({
       where: { clientId },
       // toBookingRowDto is typed against the full provider/service rows, so
@@ -328,6 +317,7 @@ export class BookingsService {
     return bookings.map((b) => toBookingRowDto(b, reviewedIds.has(b.id)));
   }
 
+  /** The client's "job done". The stylist's side is `ProviderService.confirmCompletion`. */
   async confirmCompletion(bookingId: string, clientId: string): Promise<ConfirmCompletionResponse> {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
@@ -335,118 +325,8 @@ export class BookingsService {
     });
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.clientId !== clientId) throw new ForbiddenException();
-    if (booking.status === 'completed') {
-      return {
-        confirmedByClient: booking.confirmedByClient,
-        confirmedByProvider: booking.confirmedByProvider,
-        status: booking.status,
-      };
-    }
-    // Both the cash and EcoCash happy paths are awaiting_provider -> confirmed
-    // -> completed — completion only makes sense once the provider has
-    // confirmed the appointment, never while still awaiting them.
-    if (booking.status !== 'confirmed') {
-      throw new BadRequestException(
-        `Cannot confirm completion for a booking in status "${booking.status}"`,
-      );
-    }
 
-    if (booking.confirmedByClient) {
-      return {
-        confirmedByClient: booking.confirmedByClient,
-        confirmedByProvider: booking.confirmedByProvider,
-        status: booking.status,
-      };
-    }
-
-    // Cash needs both sides (needsCashReconciliation); EcoCash's escrow is
-    // released on the client's word alone — they're the one who received the
-    // service, so their confirmation is what the "held until complete" promise
-    // (plan R3) actually turns on.
-    const updated = await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
-      const current = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
-      if (current.status === 'completed' || current.confirmedByClient) return current;
-
-      const fundedPayment =
-        current.paymentMethod === 'ecocash'
-          ? await tx.payment.findFirst({
-              where: { bookingId, status: { in: ['paid', 'held'] } },
-              orderBy: { createdAt: 'desc' },
-            })
-          : null;
-      if (current.paymentMethod === 'ecocash' && !fundedPayment) {
-        throw new BadRequestException('Payment has not cleared yet');
-      }
-
-      const stillNeedsReconciliation = needsCashReconciliation({
-        paymentMethod: current.paymentMethod,
-        status: current.status,
-        confirmedByClient: true,
-        confirmedByProvider: current.confirmedByProvider,
-      });
-      const completes = current.paymentMethod === 'ecocash' || !stillNeedsReconciliation;
-      const nextStatus: BookingStatus = completes ? 'completed' : current.status;
-      const result = await tx.booking.update({
-        where: { id: bookingId },
-        data: { confirmedByClient: true, status: nextStatus },
-      });
-
-      if (completes) {
-        await tx.providerProfile.update({
-          where: { id: current.providerId },
-          data: { completedCount: { increment: 1 } },
-        });
-        if (current.paymentMethod === 'ecocash') {
-          if (fundedPayment) {
-            await tx.payment.create({
-              data: {
-                bookingId,
-                provider: fundedPayment.provider,
-                status: 'released',
-                amountUsdCents: fundedPayment.amountUsdCents,
-                feeUsdCents: fundedPayment.feeUsdCents,
-                externalRef: fundedPayment.externalRef,
-              },
-            });
-          }
-        } else {
-          await tx.payment.create({
-            data: {
-              bookingId,
-              provider: 'cash',
-              status: 'released',
-              amountUsdCents: current.priceUsdCents,
-            },
-          });
-        }
-        const referral = await tx.referral.findFirst({
-          where: { referredUserId: current.clientId, status: 'pending' },
-          include: { agent: { select: { userId: true } } },
-        });
-        if (referral) {
-          const claimed = await tx.referral.updateMany({
-            where: { id: referral.id, status: 'pending' },
-            data: { status: 'paid' },
-          });
-          if (claimed.count === 1) {
-            const rates = await walletRates(this.settings);
-            await tx.walletTransaction.create({
-              data: {
-                userId: referral.agent.userId,
-                type: 'referral_coin',
-                // The Commission table is the promise made when the invite
-                // was linked, so credit exactly that row's coin amount.
-                coins: referral.coinsAwarded,
-                usdCents: referral.coinsAwarded * rates.coinUsdCents,
-                reference: `First completed booking ${current.reference}`,
-              },
-            });
-          }
-        }
-      }
-      return result;
-    });
+    const updated = await this.lifecycle.confirm(bookingId, 'client');
 
     const row = await this.toRowById(bookingId);
     this.socketEmitter.emitToUser(clientId, 'booking.updated', row);
@@ -455,11 +335,13 @@ export class BookingsService {
     // The stylist, not the client: the client is the one who just tapped
     // confirm, and telling someone about their own action is how an app
     // teaches people to ignore its notifications.
-    void this.push.sendToUser(booking.provider.userId, {
-      title: 'Client confirmed completion',
-      body: `Booking ${booking.reference}`,
-      data: { type: 'booking.updated', bookingId },
-    });
+    if (!booking.confirmedByClient) {
+      void this.push.sendToUser(booking.provider.userId, {
+        title: 'Client confirmed completion',
+        body: `Booking ${booking.reference}`,
+        data: { type: 'booking.updated', bookingId },
+      });
+    }
 
     return {
       confirmedByClient: updated.confirmedByClient,
@@ -533,9 +415,17 @@ export class BookingsService {
       throw new BadRequestException(`Cannot cancel a booking in status "${booking.status}"`);
     }
 
-    await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: 'cancelled' },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
+      const current = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
+      // Lost a race with the stylist or the sweep: do not cancel a finished job.
+      if (!canCancelBooking(current.status)) {
+        throw new BadRequestException(`Cannot cancel a booking in status "${current.status}"`);
+      }
+      await tx.booking.update({ where: { id: bookingId }, data: { status: 'cancelled' } });
+      // No fee is charged for a cancelled booking (the fee is only charged on
+      // completion); the client gets any coins they spent back.
+      if (current.coinsUsed > 0) await this.rewards.refundRedemption(tx, { bookingId });
     });
 
     /**
@@ -553,7 +443,7 @@ export class BookingsService {
       await this.trust.recordStrike(clientId, bookingId, 'late_cancellation');
     }
 
-    // Money first-class: an EcoCash booking has real value sitting in escrow,
+    // Bookings paid in the app before direct payment: an EcoCash booking has real value sitting in escrow,
     // and a cancellation that freed the slot but kept the client's money would
     // be the worst possible bug in this flow.
     if (booking.paymentMethod === 'ecocash') {

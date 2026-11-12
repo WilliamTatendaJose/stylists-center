@@ -1,14 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import {
   formatUsd,
-  PAY_CHANNEL_LABELS,
-  PHONE_PAY_CHANNELS,
+  maxCoinsForOrder,
+  orderAmountDueUsdCents,
   type CreateOrderResponse,
-  type PayChannel,
-  type PaymentMethod,
+  type FulfilmentMethod,
 } from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
@@ -21,12 +20,11 @@ import {
   RadioCard,
   RuleList,
   EmptyPanel,
+  TextField,
   useTheme,
 } from '@sc/ui';
 import { useCreateOrder } from '../../src/api/hooks/useMarket.js';
-import { useMe } from '../../src/api/hooks/useMe.js';
-import { usePayChannels } from '../../src/api/hooks/usePayments.js';
-import { OnlinePaymentFields, payerPhoneError } from '../../src/components/OnlinePaymentFields.js';
+import { useWallet } from '../../src/api/hooks/useWallet.js';
 import {
   cartTotalUsdCents,
   groupCartBySeller,
@@ -54,11 +52,24 @@ const styles = StyleSheet.create({
   },
   qtyValue: { minWidth: 22, textAlign: 'center' },
   removeButton: { marginLeft: 'auto' },
-  section: { marginTop: space.xl, marginBottom: space.l },
+  section: { marginTop: space.l, marginBottom: space.l },
   sectionLabel: { marginBottom: space.m },
-  radioGap: { marginBottom: space.s },
+  fulfilment: { marginTop: space.m, gap: space.s },
   footer: { gap: space.s },
 });
+
+/**
+ * A short, stable tag for the choices that change what an order is. The
+ * server treats a checkout key as one specific request, so the same cart
+ * checked out as delivery instead of collection must be a different key, or
+ * the second attempt would be refused as "changed".
+ */
+function variantTag(parts: (string | number)[]): string {
+  const text = parts.join('|');
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  return hash.toString(36);
+}
 
 /**
  * Cart and checkout (handoff screen 17).
@@ -66,9 +77,11 @@ const styles = StyleSheet.create({
  * A cart can hold items from more than one seller — collection still only
  * ever happens at one place, so checkout places one order PER seller, not
  * one order for the whole cart. The two are different things: "everything
- * I want to buy" (the cart) versus "one trip to one stylist" (an order).
- * Conflating them was what made adding a second stylist's item look like it
- * deleted the first — it was silently replacing the entire cart.
+ * I want to buy" (the cart) versus "one trip to one shop" (an order).
+ *
+ * Nothing is paid here: the buyer pays each shop in cash or their own mobile
+ * money when they collect or receive the goods. Coins are the one thing that
+ * moves in the app, as a discount the shop is paid back for.
  */
 export default function Cart() {
   const { colors } = useTheme();
@@ -81,29 +94,47 @@ export default function Cart() {
   const getCheckoutKey = useCartStore((s) => s.getCheckoutKey);
 
   const createOrder = useCreateOrder();
-  const { data: me } = useMe();
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ecocash');
+  const { data: wallet } = useWallet();
+  const [methods, setMethods] = useState<Record<string, FulfilmentMethod>>({});
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [addressError, setAddressError] = useState<string | null>(null);
+  const [useCoins, setUseCoins] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sellerErrors, setSellerErrors] = useState<Record<string, string>>({});
-  const [payerPhone, setPayerPhone] = useState('');
-  const [phoneError, setPhoneError] = useState<string | null>(null);
-  // No card here: a cart can split into several orders, and each would need
-  // its own browser page. The API refuses card for orders too.
-  const { channels } = usePayChannels({ excludeCard: true });
-  const [chosenChannel, setChosenChannel] = useState<PayChannel>('ecocash');
-  const payChannel = channels.includes(chosenChannel) ? chosenChannel : (channels[0] ?? 'ecocash');
-
-  // Prefilled with the account number as the common case, still editable —
-  // the line someone pays from is not necessarily the one they log in with.
-  useEffect(() => {
-    if (me?.phone) {
-      const phone = me.phone;
-      setPayerPhone((current) => current || phone);
-    }
-  }, [me?.phone]);
 
   const groups = groupCartBySeller(lines);
-  const total = cartTotalUsdCents(lines);
+  const productTotal = cartTotalUsdCents(lines);
+  const methodFor = (group: CartGroup): FulfilmentMethod =>
+    group.delivers && methods[group.providerId] === 'delivery' ? 'delivery' : 'collection';
+  const needsAddress = groups.some((g) => methodFor(g) === 'delivery');
+
+  // Coins are spent shop by shop, up to what each order is worth, until the
+  // balance runs out. The server enforces the same cap and rejects any more.
+  const coinsAvailable = wallet?.coins ?? 0;
+  const coinUsdCents = wallet?.coinUsdCents ?? 0;
+  let coinsLeft = useCoins ? coinsAvailable : 0;
+  const plan = groups.map((group) => {
+    const fulfilment = methodFor(group);
+    const products = group.lines.reduce((n, l) => n + l.priceUsdCents * l.quantity, 0);
+    const delivery = fulfilment === 'delivery' ? group.deliveryChargeUsdCents : 0;
+    const coins = Math.min(coinsLeft, maxCoinsForOrder(products, delivery, coinUsdCents));
+    coinsLeft -= coins;
+    const coinsValue = coins * coinUsdCents;
+    return {
+      group,
+      fulfilment,
+      delivery,
+      coins,
+      due: orderAmountDueUsdCents({
+        productTotalUsdCents: products,
+        deliveryChargeUsdCents: delivery,
+        coinsValueUsdCents: coinsValue,
+      }),
+    };
+  });
+  const totalDue = plan.reduce((n, p) => n + p.due, 0);
+  const totalDelivery = plan.reduce((n, p) => n + p.delivery, 0);
+  const totalCoinsValue = plan.reduce((n, p) => n + p.coins * coinUsdCents, 0);
 
   if (groups.length === 0) {
     return (
@@ -123,38 +154,42 @@ export default function Cart() {
    * Only groups that failed stay in the cart afterwards, ready to retry.
    */
   const placeOrders = async () => {
-    // Catch a bad number before placing anything: these orders consume stock,
-    // and a rejected phone would otherwise fail them one seller at a time.
-    const numberError =
-      paymentMethod === 'ecocash' ? payerPhoneError(payChannel, payerPhone) : null;
-    if (numberError) {
-      setPhoneError(numberError);
+    // Catch a missing address before placing anything: these orders consume stock.
+    if (needsAddress && deliveryAddress.trim().length < 5) {
+      setAddressError('Enter where to deliver.');
       return;
     }
-    setPhoneError(null);
+    setAddressError(null);
     setSellerErrors({});
     setSubmitting(true);
 
     const settled = await Promise.allSettled(
-      groups.map((group): Promise<{ group: CartGroup; created: CreateOrderResponse }> =>
-        createOrder
-          .mutateAsync({
-            providerId: group.providerId,
-            checkoutKey: getCheckoutKey(group.providerId),
-            paymentMethod,
-            items: group.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
-            ...(paymentMethod === 'ecocash' && payChannel !== 'card' ? { payChannel } : {}),
-            ...(paymentMethod === 'ecocash' && PHONE_PAY_CHANNELS.has(payChannel)
-              ? { payerPhone: payerPhone.trim() }
-              : {}),
-          })
-          .then((created) => ({ group, created })),
+      plan.map(
+        ({
+          group,
+          fulfilment,
+          coins,
+        }): Promise<{ group: CartGroup; created: CreateOrderResponse; fulfilment: string }> =>
+          createOrder
+            .mutateAsync({
+              providerId: group.providerId,
+              checkoutKey: `${getCheckoutKey(group.providerId)}-${variantTag([
+                fulfilment,
+                fulfilment === 'delivery' ? deliveryAddress.trim() : '',
+                coins,
+              ])}`,
+              fulfilment,
+              ...(fulfilment === 'delivery' ? { deliveryAddress: deliveryAddress.trim() } : {}),
+              ...(coins > 0 ? { coins } : {}),
+              items: group.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })),
+            })
+            .then((created) => ({ group, created, fulfilment })),
       ),
     );
 
     setSubmitting(false);
 
-    const succeeded: { group: CartGroup; created: CreateOrderResponse }[] = [];
+    const succeeded: { group: CartGroup; created: CreateOrderResponse; fulfilment: string }[] = [];
     const nextErrors: Record<string, string> = {};
 
     settled.forEach((result, index) => {
@@ -181,43 +216,15 @@ export default function Cart() {
     }
     if (remainingCount === 0) clear();
 
-    // In-app EcoCash starts one phone prompt per order. Every order waits on
-    // its real result rather than treating a successful API request as paid.
-    const awaitingPayment = succeeded.some(
-      ({ created }) => created.instructions ?? created.checkoutUrl ?? created.action,
-    );
-    if (awaitingPayment) {
-      // The waiting screen stays inside Style Center and polls each order.
-      const pendingOrders = succeeded.map(({ group, created }) => ({
-        id: created.id,
-        reference: created.reference,
-        providerName: group.providerName,
-        totalUsdCents: created.totalUsdCents,
-        requiresHostedCheckout: Boolean(created.checkoutUrl),
-        ...(created.action ? { action: created.action } : {}),
-      }));
-      const firstInstructions = succeeded.find(({ created }) => created.instructions)?.created
-        .instructions;
-      router.replace({
-        pathname: '/market/paying',
-        params: {
-          orders: JSON.stringify(pendingOrders),
-          ...(remainingCount ? { remainingCount: String(remainingCount) } : {}),
-          ...(firstInstructions ? { instructions: firstInstructions } : {}),
-          payChannel,
-        },
-      });
-      return;
-    }
-
     router.replace({
       pathname: '/market/done',
       params: {
         orders: JSON.stringify(
-          succeeded.map(({ group, created }) => ({
+          succeeded.map(({ group, created, fulfilment }) => ({
             reference: created.reference,
             providerName: group.providerName,
-            totalUsdCents: created.totalUsdCents,
+            amountDueUsdCents: created.amountDueUsdCents,
+            fulfilment,
           })),
         ),
         ...(remainingCount ? { remainingCount: String(remainingCount) } : {}),
@@ -235,10 +242,8 @@ export default function Cart() {
               submitting
                 ? 'Placing order…'
                 : groups.length > 1
-                  ? `Pay ${formatUsd(total)} — ${String(groups.length)} orders`
-                  : paymentMethod === 'ecocash'
-                    ? `Pay ${formatUsd(total)} in app`
-                    : `Reserve — pay ${formatUsd(total)} on collection`
+                  ? `Place ${String(groups.length)} orders — pay ${formatUsd(totalDue)} on receipt`
+                  : `Place order — pay ${formatUsd(totalDue)} on receipt`
             }
             block
             size="lg"
@@ -251,10 +256,10 @@ export default function Cart() {
         </View>
       }
     >
-      {groups.map((group) => (
+      {plan.map(({ group, fulfilment, delivery, coins, due }) => (
         <View key={group.providerId} style={styles.sellerBlock}>
           <Text variant="meta" color="neutral700" style={styles.sellerLabel}>
-            Collecting from {group.providerName}
+            From {group.providerName}
           </Text>
 
           {sellerErrors[group.providerId] ? (
@@ -323,53 +328,82 @@ export default function Cart() {
               </View>
             </Card>
           ))}
+
+          <View style={styles.fulfilment}>
+            <RadioCard
+              title="I'll collect it"
+              description="Pick it up from the shop when it is ready."
+              dot
+              selected={fulfilment === 'collection'}
+              onPress={() => {
+                setMethods((current) => ({ ...current, [group.providerId]: 'collection' }));
+              }}
+            />
+            {group.delivers ? (
+              <RadioCard
+                title={`Deliver to me — ${formatUsd(group.deliveryChargeUsdCents)}`}
+                description="The shop brings it to your address."
+                dot
+                selected={fulfilment === 'delivery'}
+                onPress={() => {
+                  setMethods((current) => ({ ...current, [group.providerId]: 'delivery' }));
+                }}
+              />
+            ) : (
+              <Text variant="metaSmall" color="neutral600">
+                This shop does not deliver.
+              </Text>
+            )}
+          </View>
+          <Text variant="meta" color="neutral700" style={styles.fulfilment}>
+            {delivery > 0 ? `Delivery ${formatUsd(delivery)} · ` : ''}
+            {coins > 0 ? `${String(coins)} coins used · ` : ''}
+            Pay {group.providerName} {formatUsd(due)}
+          </Text>
         </View>
       ))}
+
+      {needsAddress ? (
+        <View style={styles.section}>
+          <TextField
+            label="Delivery address"
+            value={deliveryAddress}
+            onChangeText={(value) => {
+              setDeliveryAddress(value);
+              setAddressError(null);
+            }}
+            placeholder="House number, street and suburb"
+          />
+          {addressError ? (
+            <Text
+              variant="meta"
+              color={colors.accent700}
+              accessibilityLiveRegion="polite"
+              accessibilityRole="alert"
+            >
+              {addressError}
+            </Text>
+          ) : null}
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <Text variant="sectionLabel" style={styles.sectionLabel}>
           How you&apos;ll pay
         </Text>
-        <Text variant="metaSmall" color="neutral600" style={styles.sellerLabel}>
-          {groups.length > 1
-            ? 'Applies to every order in this checkout.'
-            : 'Applies to this order.'}
+        <Text variant="body" color="neutral700" style={styles.sectionLabel}>
+          You pay each shop directly, in cash or from your own mobile money, when you collect or
+          receive your order. Nothing is charged in the app.
         </Text>
-        <View style={styles.radioGap}>
+        {coinsAvailable > 0 && coinUsdCents > 0 ? (
           <RadioCard
-            title="Pay in app"
-            description={`Pay with ${channels.map((c) => PAY_CHANNEL_LABELS[c]).join(', ')}. Stay in Style Center while we confirm the payment.`}
+            title={`Use my coins (${String(coinsAvailable)} available)`}
+            description={`Each coin takes ${formatUsd(coinUsdCents)} off. The shop is credited the coins.`}
             dot
-            selected={paymentMethod === 'ecocash'}
+            selected={useCoins}
             onPress={() => {
-              setPaymentMethod('ecocash');
+              setUseCoins((current) => !current);
             }}
-          />
-        </View>
-        <RadioCard
-          title="Cash — pay on collection"
-          description="Reserved for you now, settled when you pick it up."
-          dot
-          selected={paymentMethod === 'cash'}
-          onPress={() => {
-            setPaymentMethod('cash');
-          }}
-        />
-
-        {paymentMethod === 'ecocash' ? (
-          <OnlinePaymentFields
-            channels={channels}
-            channel={payChannel}
-            onChannelChange={(next) => {
-              setChosenChannel(next);
-              setPhoneError(null);
-            }}
-            phone={payerPhone}
-            onPhoneChange={(value) => {
-              setPayerPhone(value);
-              setPhoneError(null);
-            }}
-            phoneError={phoneError}
           />
         ) : null}
       </View>
@@ -378,10 +412,15 @@ export default function Cart() {
         items={[
           { label: 'Items', value: String(lines.reduce((n, l) => n + l.quantity, 0)) },
           {
-            label: groups.length > 1 ? 'Orders' : 'Collect from',
+            label: groups.length > 1 ? 'Orders' : 'From',
             value: groups.length > 1 ? String(groups.length) : (groups[0]?.providerName ?? ''),
           },
-          { label: 'Total', value: formatUsd(total) },
+          { label: 'Products', value: formatUsd(productTotal) },
+          ...(totalDelivery > 0 ? [{ label: 'Delivery', value: formatUsd(totalDelivery) }] : []),
+          ...(totalCoinsValue > 0
+            ? [{ label: 'Coins', value: `-${formatUsd(totalCoinsValue)}` }]
+            : []),
+          { label: 'To pay on receipt', value: formatUsd(totalDue) },
         ]}
       />
     </Screen>

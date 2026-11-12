@@ -69,11 +69,11 @@ const ProductRow = memo(function ProductRow({ product }: { product: ProductRowDt
       meta={`${product.providerName} · ${product.areaName}`}
       // Stock is called out only when it is low enough to matter:
       // "12 available" is noise, "Only 2 left" is a reason to decide.
-      subMeta={
+      subMeta={`${
         product.stockQty <= 3
           ? `Only ${String(product.stockQty)} left`
           : `${String(product.stockQty)} available`
-      }
+      }${product.delivers ? ' · Delivers' : ''}`}
       rightPrimary={formatUsd(product.priceUsdCents)}
       rightCaption={`${product.distanceKm.toFixed(1)} km`}
       onPress={() => {

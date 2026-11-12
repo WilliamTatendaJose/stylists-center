@@ -38,6 +38,7 @@ import {
   useMyBookings,
 } from '../../src/api/hooks/useBookings.js';
 import { useCreateReport } from '../../src/api/hooks/useReports.js';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
@@ -120,10 +121,13 @@ const BookingCard = memo(function BookingCard({
   const onBookAgain = () => {
     actions.onBookAgain(booking);
   };
+  const { completionAutoConfirmHours } = useAppConfig();
   const reconcile = needsCashReconciliation(booking);
   const canCompleteEcocash = canConfirmEcocashCompletion(booking);
+  // Bookings made before clients paid stylists directly were paid in the app.
+  const paidInApp = booking.paymentMethod === 'ecocash';
   const statusLabel =
-    reconcile || canCompleteEcocash ? 'Confirm it happened' : BOOKING_STATUS_LABELS[booking.status];
+    reconcile || canCompleteEcocash ? 'Confirm job done' : BOOKING_STATUS_LABELS[booking.status];
   const badgeTone = booking.status === 'awaiting_provider' ? 'accent' : 'neutral';
   const rated = !booking.canRate;
 
@@ -142,9 +146,25 @@ const BookingCard = memo(function BookingCard({
             {booking.serviceName} · {booking.whenLabel}
           </Text>
           <Text variant="metaSmall" color="neutral600">
-            {booking.paymentMethod === 'ecocash' ? 'Paynow' : 'Cash'} ·{' '}
-            {formatUsd(booking.priceUsdCents)}
+            {paidInApp
+              ? `Paid in the app · ${formatUsd(booking.priceUsdCents)}`
+              : booking.serviceFeeUsdCents > 0
+                ? `${formatUsd(booking.clientTotalUsdCents)} (includes ${formatUsd(booking.serviceFeeUsdCents)} service fee)`
+                : formatUsd(booking.clientTotalUsdCents)}
           </Text>
+          {!paidInApp && booking.coinsUsed > 0 ? (
+            <Text variant="metaSmall" color="neutral600">
+              {booking.coinsUsed} coins used (−{formatUsd(booking.coinsUsdCents)}) · you pay{' '}
+              {formatUsd(booking.amountDueUsdCents)}
+            </Text>
+          ) : null}
+          {/* Plain text on purpose: the number is for paying, and tapping to
+              copy or dial from a booking card is a different feature. */}
+          {!paidInApp && booking.providerPaymentPhone ? (
+            <Text variant="metaSmall" color="neutral600">
+              Pay {booking.counterpartyName} directly, in cash or to {booking.providerPaymentPhone}
+            </Text>
+          ) : null}
         </View>
         <Badge label={statusLabel} tone={badgeTone} />
       </View>
@@ -172,15 +192,19 @@ const BookingCard = memo(function BookingCard({
       {reconcile ? (
         <View style={[styles.reconcilePanel, { backgroundColor: colors.surface }]}>
           <Text variant="bodyStrong">
-            Cash booking — confirm it happened so it closes cleanly for both of you.
+            Was the job done? Confirm it once you have had your appointment.
           </Text>
           <Text variant="meta" color="neutral700" style={styles.reconcileBody}>
             {booking.confirmedByProvider
-              ? `${booking.counterpartyName} has already confirmed.`
-              : `Waiting on ${booking.counterpartyName} — closes when you both confirm.`}
+              ? `${booking.counterpartyName} has confirmed they were paid.`
+              : booking.confirmedByClient
+                ? `Waiting on ${booking.counterpartyName} to confirm they were paid.`
+                : `${booking.counterpartyName} confirms they were paid.`}{' '}
+            If only one of you confirms, the booking closes by itself after{' '}
+            {completionAutoConfirmHours} hours.
           </Text>
           <Button
-            label={booking.confirmedByClient ? 'Confirmed' : 'Yes, it happened'}
+            label={booking.confirmedByClient ? 'Confirmed' : 'Yes, the job was done'}
             disabled={booking.confirmedByClient || confirmPending}
             block
             onPress={onConfirmCompletion}
@@ -196,7 +220,7 @@ const BookingCard = memo(function BookingCard({
         <View style={[styles.reconcilePanel, { backgroundColor: colors.surface }]}>
           <Text variant="bodyStrong">Had your appointment? Confirm it&apos;s done.</Text>
           <Text variant="meta" color="neutral700" style={styles.reconcileBody}>
-            This is what releases payment to {booking.counterpartyName.split(' ')[0]}.
+            This is what releases the payment held for {booking.counterpartyName.split(' ')[0]}.
           </Text>
           <Button
             label={confirmPending ? 'Confirming…' : 'Mark as done'}
@@ -246,7 +270,7 @@ interface BookingSection {
 
 const keyExtractor = (booking: BookingRowDto) => booking.id;
 
-/** Bookings (handoff screen 9): awaiting-stylist, cash-reconciliation, and completed row states. */
+/** Bookings (handoff screen 9): awaiting-stylist, confirm-job-done, and completed row states. */
 export default function Bookings() {
   const { colors } = useTheme();
   const { data: bookings = [], isError, isLoading, refetch, isRefetching } = useMyBookings();
@@ -286,6 +310,7 @@ export default function Bookings() {
     const isPast = (b: BookingRowDto) =>
       new Date(b.startsAt).getTime() < now ||
       b.status === 'completed' ||
+      b.status === 'incomplete' ||
       b.status === 'cancelled' ||
       b.status === 'declined';
 
@@ -589,7 +614,9 @@ export default function Bookings() {
           {cancelTarget?.counterpartyName} will be told the slot is free
           {cancelTarget?.paymentMethod === 'ecocash'
             ? ', and the amount held for it goes back to you in full.'
-            : '.'}
+            : cancelTarget && cancelTarget.coinsUsed > 0
+              ? `, and your ${String(cancelTarget.coinsUsed)} coins go back to you.`
+              : '.'}
         </Text>
 
         {/* The consequence is disclosed before the decision, not after it.

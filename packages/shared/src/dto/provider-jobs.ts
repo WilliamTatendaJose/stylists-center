@@ -17,14 +17,26 @@ export const providerBookingRowSchema = z.object({
   whenLabel: z.string(),
   startsAt: z.iso.datetime(),
   paymentMethod: paymentMethodSchema,
+  /** The stylist's own price. */
   priceUsdCents: z.number().int(),
+  /** Service fee on this job, billed to the stylist monthly (0 on older jobs paid online in the app). */
+  serviceFeeUsdCents: z.number().int(),
+  /** Coins the client spent on this job, and their cash value. */
+  coinsUsed: z.number().int(),
+  coinsUsdCents: z.number().int(),
+  /** What the client should hand over: price plus fee, minus coins. 0 for older jobs paid online in the app. */
+  amountToCollectUsdCents: z.number().int(),
   status: bookingStatusSchema,
   confirmedByClient: z.boolean(),
   confirmedByProvider: z.boolean(),
+  /** ISO time the stylist reported non-payment, if they did. */
+  nonPaymentReportedAt: z.iso.datetime().nullable(),
   /** Server-decided so the buttons a stylist sees and the rules the API enforces cannot drift. */
   canConfirm: z.boolean(),
   canDecline: z.boolean(),
   canConfirmCompletion: z.boolean(),
+  /** Still inside the window for saying the client did not pay. */
+  canReportNonPayment: z.boolean(),
 });
 export type ProviderBookingRowDto = z.infer<typeof providerBookingRowSchema>;
 
@@ -41,6 +53,11 @@ export const providerOfferSchema = z.object({
   respondBy: z.iso.datetime(),
 });
 export type ProviderOfferDto = z.infer<typeof providerOfferSchema>;
+
+export const reportNonPaymentSchema = z.object({
+  note: z.string().trim().max(500).optional(),
+});
+export type ReportNonPaymentInput = z.infer<typeof reportNonPaymentSchema>;
 
 export const providerAvailabilitySchema = z.object({
   acceptingBookings: z.boolean(),

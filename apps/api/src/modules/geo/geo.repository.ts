@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { Prisma } from '../../generated/prisma';
+import { FeeStandingService } from '../fees/fee-standing.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface ProviderGeoRow {
@@ -68,7 +69,12 @@ const FUZZY_MATCH_THRESHOLD = 0.35;
  */
 @Injectable()
 export class GeoRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional so a repository built without the fees module (some specs)
+    // simply hides nobody.
+    @Optional() private readonly standing?: FeeStandingService,
+  ) {}
 
   async findProvidersWithinRadius(options: FindProvidersOptions): Promise<ProviderGeoRow[]> {
     const {
@@ -95,13 +101,19 @@ export class GeoRepository {
       ? Prisma.sql`AND p."userId" <> ${excludeUserId}`
       : Prisma.empty;
 
-    // A lapsed subscription is time-based, not a stored flag — computed here
-    // against the clock at read time, same as isSubscriptionActive in
-    // @sc/shared, so it can never drift out of sync with a background job
-    // that forgot to run.
     const availabilityFilter = onlyAcceptingBookings
-      ? Prisma.sql`AND p."acceptingBookings" = true AND p."subscriptionPaidUntil" > now()`
+      ? Prisma.sql`AND p."acceptingBookings" = true`
       : Prisma.empty;
+
+    // A stylist or vendor whose fees are long overdue is paused: hidden from
+    // every listing here (search, "Available now", map, smart-match fan-out)
+    // rather than in each caller, so a new caller cannot forget. Their own
+    // page still opens (findProviderById) and says they are unavailable.
+    const restricted = (await this.standing?.restrictedProviderIds()) ?? [];
+    const restrictedFilter =
+      restricted.length > 0
+        ? Prisma.sql`AND p.id NOT IN (${Prisma.join(restricted)})`
+        : Prisma.empty;
 
     const term = searchTerm?.trim();
     const hasTerm = !!term && term.length > 0;
@@ -205,8 +217,10 @@ export class GeoRepository {
       JOIN "User" u ON u.id = p."userId"
       JOIN "Category" c ON c.id = p."categoryId"
       ${textScoreJoin}
-      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL
-      ${radiusFilter} ${categoryFilter} ${selfFilter} ${availabilityFilter} ${searchFilter}
+      -- Vendor-only shops (offersServices = false) sell products but are not stylists:
+      -- they must never show up in search, browse or smart match.
+      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL AND p."offersServices" = true
+      ${radiusFilter} ${categoryFilter} ${selfFilter} ${availabilityFilter} ${restrictedFilter} ${searchFilter}
       ${orderBy}
       ${pagination}
     `;
@@ -237,6 +251,7 @@ export class GeoRepository {
       JOIN "User" u ON u.id = p."userId"
       JOIN "Category" c ON c.id = p."categoryId"
       WHERE p.id = ${id} AND u."deletedAt" IS NULL AND u."disabledAt" IS NULL
+        AND p."offersServices" = true -- a vendor-only shop has no stylist page
     `;
     return rows[0] ?? null;
   }
@@ -252,7 +267,9 @@ export class GeoRepository {
       SELECT p."categoryId", COUNT(*) AS count
       FROM "ProviderProfile" p
       JOIN "User" u ON u.id = p."userId"
-      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL
+      -- Vendor-only shops (offersServices = false) sell products but are not stylists:
+      -- they must never show up in search, browse or smart match.
+      WHERE u."deletedAt" IS NULL AND u."disabledAt" IS NULL AND p."offersServices" = true
         AND ST_DWithin(p.location, ${point}, ${radiusKm * 1000})
       GROUP BY p."categoryId"
     `;

@@ -206,15 +206,11 @@ describe('voidUnpaidSubject', () => {
     expect(twice.stockQty).toBe(once.stockQty);
   });
 
-  it('does nothing for a subscription — a refused one never bought anything', async () => {
-    const before = await prisma.providerProfile.findUniqueOrThrow({
-      where: { id: providerProfileId },
-    });
-    await voidUnpaidSubject(prisma, { subscriptionProviderId: providerProfileId });
+  it('does nothing for a fee payment — a refused one never took anything off the balance', async () => {
+    const before = await prisma.feeLedgerEntry.count({ where: { providerId: providerProfileId } });
+    await voidUnpaidSubject(prisma, { feeProviderId: providerProfileId });
 
-    const after = await prisma.providerProfile.findUniqueOrThrow({
-      where: { id: providerProfileId },
-    });
-    expect(after.subscriptionPaidUntil).toEqual(before.subscriptionPaidUntil);
+    const after = await prisma.feeLedgerEntry.count({ where: { providerId: providerProfileId } });
+    expect(after).toBe(before);
   });
 });

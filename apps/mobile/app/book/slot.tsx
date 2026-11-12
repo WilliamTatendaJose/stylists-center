@@ -11,6 +11,8 @@ import { useBack } from '../../src/navigation/useBack.js';
 import { useRescheduleBooking } from '../../src/api/hooks/useBookings.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
+import { clientPrice, formatClientPrice } from '../../src/utils/bookingPrice.js';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -49,6 +51,7 @@ export default function ChooseSlot() {
   const reschedule = useRescheduleBooking();
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const { serviceFeeBps } = useAppConfig();
   const { data: provider } = useProvider(providerId ?? undefined);
   const dates = useMemo(buildDateStrip, []);
   const [date, setDate] = useState(dates[0]?.value ?? '');
@@ -103,7 +106,7 @@ export default function ChooseSlot() {
     setSlot(date, value);
   };
 
-  const continueToPayment = () => {
+  const continueToConfirm = () => {
     if (!canContinue) return;
     if (rescheduleBookingId && time) {
       setSubmitError(null);
@@ -143,7 +146,9 @@ export default function ChooseSlot() {
               {selectedService?.name ?? 'Choose a service'}
             </Text>
             <Text variant="h3">
-              {selectedService ? formatUsd(selectedService.priceUsdCents) : '—'}
+              {selectedService
+                ? formatUsd(clientPrice(selectedService.priceUsdCents, serviceFeeBps).totalUsdCents)
+                : '—'}
             </Text>
           </View>
           <Button
@@ -152,13 +157,13 @@ export default function ChooseSlot() {
                 ? reschedule.isPending
                   ? 'Saving…'
                   : 'Request new time'
-                : 'Continue to payment'
+                : 'Continue'
             }
             block
             size="lg"
             arrow
             disabled={!canContinue || reschedule.isPending}
-            onPress={continueToPayment}
+            onPress={continueToConfirm}
           />
         </View>
       }
@@ -172,7 +177,7 @@ export default function ChooseSlot() {
             <RadioCard
               key={service.id}
               title={service.name}
-              description={`${String(service.durationMinutes)} min · ${formatUsd(service.priceUsdCents)}`}
+              description={`${String(service.durationMinutes)} min · ${formatClientPrice(service.priceUsdCents, serviceFeeBps)}`}
               selected={service.id === serviceId}
               onPress={() => {
                 if (rescheduleBookingId) return;

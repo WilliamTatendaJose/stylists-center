@@ -14,11 +14,15 @@
  * are deliberately not here: they protect the server and are not policy.
  */
 import { BUDGET_MAX_USD, BUDGET_MIN_USD, BUDGET_STEP_USD } from './budget.js';
-import { CASH_OUT_MIN_USD_CENTS, COIN_USD_CENTS, REFERRAL_REWARD_COINS } from './money.js';
+import { CASH_OUT_MIN_USD_CENTS, REFERRAL_REWARD_COINS } from './money.js';
 import { DEFAULT_SUBSCRIPTION_PRICE_USD_CENTS, SUBSCRIPTION_CYCLE_DAYS } from './subscription.js';
 
 /** How a value is entered and displayed. Money is always integer USD cents. */
-export type SettingKind = 'cents' | 'coins' | 'days' | 'usd' | 'text';
+/**
+ * - bps: a percentage stored in basis points (300 = 3%), entered as a percent.
+ * - count: a plain whole number (hours, months, day of the month).
+ */
+export type SettingKind = 'cents' | 'coins' | 'days' | 'usd' | 'bps' | 'count' | 'text';
 
 interface SettingBase {
   label: string;
@@ -52,14 +56,16 @@ export const SETTING_DEFINITIONS = {
     group: 'Wallet and rewards',
     env: 'COIN_USD_CENTS',
     public: true,
-    default: COIN_USD_CENTS,
+    // Confirmed by StylistsCenter: 1 coin = $0.10. (The older code constant,
+    // COIN_USD_CENTS, stays 20 for history; this is the value in effect.)
+    default: 10,
     min: 1,
     max: 10_000,
   },
   referralRewardCoins: {
     kind: 'coins',
     label: 'Referral reward',
-    help: 'Coins credited to an agent when someone they referred completes their first booking.',
+    help: 'Coins credited to an agent for each agent they recruit, once that agent is verified and has paid their first subscription.',
     group: 'Wallet and rewards',
     env: 'REFERRAL_REWARD_COINS',
     public: true,
@@ -80,8 +86,8 @@ export const SETTING_DEFINITIONS = {
   },
   subscriptionPriceUsdCents: {
     kind: 'cents',
-    label: 'Subscription price for new accounts',
-    help: 'Monthly subscription given to newly created stylist accounts. Existing accounts keep their own price, which can be changed per account on the Providers page.',
+    label: 'Agent subscription price',
+    help: 'Monthly subscription agents pay to use the rewards programme. Stylists pay a service fee per job instead.',
     group: 'Subscriptions',
     env: 'SUBSCRIPTION_PRICE_USD_CENTS',
     public: true,
@@ -91,8 +97,8 @@ export const SETTING_DEFINITIONS = {
   },
   subscriptionCycleDays: {
     kind: 'days',
-    label: 'Subscription length',
-    help: 'Days of cover that one subscription payment buys.',
+    label: 'Agent subscription length',
+    help: 'Days of cover one agent subscription payment buys, counted from the day it is paid.',
     group: 'Subscriptions',
     env: 'SUBSCRIPTION_CYCLE_DAYS',
     public: true,
@@ -132,6 +138,138 @@ export const SETTING_DEFINITIONS = {
     default: BUDGET_STEP_USD,
     min: 1,
     max: 1_000,
+  },
+  serviceFeeBps: {
+    kind: 'bps',
+    label: 'Service fee on bookings',
+    help: 'Added to the service price the client sees (a $20 job shows $20.60 at 3%). The stylist is paid directly and owes this fee to StylistsCenter.',
+    group: 'Fees and billing',
+    env: 'SERVICE_FEE_BPS',
+    public: true,
+    default: 300,
+    min: 0,
+    max: 5_000,
+  },
+  marketplaceFeeBps: {
+    kind: 'bps',
+    label: 'Marketplace commission',
+    help: 'Charged to the vendor on the product total of each delivered or collected order, excluding the delivery charge.',
+    group: 'Fees and billing',
+    env: 'MARKETPLACE_FEE_BPS',
+    public: true,
+    default: 300,
+    min: 0,
+    max: 5_000,
+  },
+  billingDueDay: {
+    kind: 'count',
+    label: 'Fee balance due day',
+    help: "Day of the month a stylist's or vendor's fees for the previous month are due.",
+    group: 'Fees and billing',
+    env: 'BILLING_DUE_DAY',
+    public: true,
+    default: 5,
+    min: 1,
+    max: 28,
+  },
+  feeReminderDaysBefore: {
+    kind: 'days',
+    label: 'First reminder before due date',
+    help: 'Days before the due date that the first payment reminder is sent. Another is sent on the due date.',
+    group: 'Fees and billing',
+    env: 'FEE_REMINDER_DAYS_BEFORE',
+    public: false,
+    default: 3,
+    min: 0,
+    max: 28,
+  },
+  feeReminderDaysAfter: {
+    kind: 'days',
+    label: 'Overdue reminder',
+    help: 'Days after the due date that an overdue reminder is sent.',
+    group: 'Fees and billing',
+    env: 'FEE_REMINDER_DAYS_AFTER',
+    public: false,
+    default: 7,
+    min: 1,
+    max: 60,
+  },
+  feeRestrictAfterDays: {
+    kind: 'days',
+    label: 'Restrict account after',
+    help: 'Days after the due date that an unpaid account is restricted: no new bookings or sales until the balance is paid.',
+    group: 'Fees and billing',
+    env: 'FEE_RESTRICT_AFTER_DAYS',
+    public: true,
+    default: 30,
+    min: 1,
+    max: 365,
+  },
+  completionAutoConfirmHours: {
+    kind: 'count',
+    label: 'Auto-complete a job after (hours)',
+    help: 'If only the stylist or only the client confirms a job, it is treated as completed after this many hours.',
+    group: 'Bookings',
+    env: 'COMPLETION_AUTO_CONFIRM_HOURS',
+    public: true,
+    default: 48,
+    min: 1,
+    max: 720,
+  },
+  nonPaymentReportHours: {
+    kind: 'count',
+    label: 'Report non-payment within (hours)',
+    help: 'A stylist who reports that a client did not pay within this many hours of the appointment is not charged the fee for that job.',
+    group: 'Bookings',
+    env: 'NON_PAYMENT_REPORT_HOURS',
+    public: true,
+    default: 48,
+    min: 1,
+    max: 720,
+  },
+  rewardSpendUsdPerCoin: {
+    kind: 'usd',
+    label: 'Spend per reward coin',
+    help: 'Clients earn 1 coin for every this-many dollars spent on completed bookings and marketplace purchases; agents earn the same on purchases made with their referral code.',
+    group: 'Wallet and rewards',
+    env: 'REWARD_SPEND_USD_PER_COIN',
+    public: true,
+    default: 10,
+    min: 1,
+    max: 10_000,
+  },
+  coinExpiryMonths: {
+    kind: 'count',
+    label: 'Client coins expire after (months)',
+    help: 'Coins a client earns expire this many months after they were earned.',
+    group: 'Wallet and rewards',
+    env: 'COIN_EXPIRY_MONTHS',
+    public: true,
+    default: 12,
+    min: 1,
+    max: 120,
+  },
+  referralAttributionMonths: {
+    kind: 'count',
+    label: 'Referral earnings last (months)',
+    help: "An agent earns on a customer's purchases for this many months after the customer first uses the agent's code.",
+    group: 'Wallet and rewards',
+    env: 'REFERRAL_ATTRIBUTION_MONTHS',
+    public: true,
+    default: 12,
+    min: 1,
+    max: 120,
+  },
+  cashOutIntervalDays: {
+    kind: 'days',
+    label: 'Cash-out frequency',
+    help: 'An agent or stylist can request a cash-out at most once in this many days.',
+    group: 'Wallet and rewards',
+    env: 'CASH_OUT_INTERVAL_DAYS',
+    public: true,
+    default: 30,
+    min: 0,
+    max: 365,
   },
   supportPhone: {
     kind: 'text',
@@ -241,14 +379,16 @@ export function checkSettingsConsistency(settings: PlatformSettings): string | n
 }
 
 /** Budget amounts the request screen offers and the server accepts. */
-export function isBudgetAmountAllowed(amountUsd: number, settings: PlatformSettings): boolean {
+type BudgetSettings = Pick<PlatformSettings, 'budgetMinUsd' | 'budgetMaxUsd' | 'budgetStepUsd'>;
+
+export function isBudgetAmountAllowed(amountUsd: number, settings: BudgetSettings): boolean {
   if (!Number.isInteger(amountUsd)) return false;
   if (amountUsd < settings.budgetMinUsd || amountUsd > settings.budgetMaxUsd) return false;
   return (amountUsd - settings.budgetMinUsd) % settings.budgetStepUsd === 0;
 }
 
 /** The nearest allowed budget amount, for a slider whose range just changed. */
-export function snapBudgetAmount(amountUsd: number, settings: PlatformSettings): number {
+export function snapBudgetAmount(amountUsd: number, settings: BudgetSettings): number {
   const { budgetMinUsd: min, budgetMaxUsd: max, budgetStepUsd: step } = settings;
   const clamped = Math.min(Math.max(amountUsd, min), max);
   return min + Math.round((clamped - min) / step) * step;

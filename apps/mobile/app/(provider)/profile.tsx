@@ -14,7 +14,6 @@ import {
 } from 'lucide-react-native';
 import {
   deriveInitials,
-  formatInHarare,
   formatLocalPhone,
   formatUsd,
   isValidMobileMoneyPhone,
@@ -35,23 +34,20 @@ import {
   TextField,
   useTheme,
 } from '@sc/ui';
+import { useFeeSummary } from '../../src/api/hooks/useFees.js';
 import {
   useAddProviderService,
   useProviderManagementProfile,
-  useProviderSubscription,
   useUpdateProviderProfile,
   useUpdateProviderService,
 } from '../../src/api/hooks/useProviders.js';
 import { useMe, useSetActiveRole } from '../../src/api/hooks/useMe.js';
+import { CoinWalletSection } from '../../src/components/CoinWalletSection.js';
 import { PasswordSecurity } from '../../src/components/PasswordSecurity.js';
 import { HelpAndLegal } from '../../src/components/HelpAndLegal.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { useAuthStore } from '../../src/state/useAuthStore.js';
-import {
-  useSessionStore,
-  usePendingSubscriptionStore,
-  useLocationPickerStore,
-} from '../../src/state/index.js';
+import { useSessionStore, useLocationPickerStore } from '../../src/state/index.js';
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
@@ -73,13 +69,13 @@ const styles = StyleSheet.create({
   cardAction: { marginTop: space.l },
   accountGap: { marginTop: space.s },
   linkStack: { gap: space.s },
-  subscriptionTop: {
+  feesTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
   grow: { flex: 1, minWidth: 0 },
-  subscriptionMeta: { marginTop: 2 },
+  feesMeta: { marginTop: 2 },
   photoHelp: { marginTop: space.s },
   roleTop: { flexDirection: 'row', alignItems: 'flex-start', gap: space.m },
   roleCopy: { flex: 1, minWidth: 0 },
@@ -140,9 +136,7 @@ export default function ProviderProfile() {
   const updateProfile = useUpdateProviderProfile();
   const addService = useAddProviderService();
   const updateService = useUpdateProviderService();
-  const { data: subscription } = useProviderSubscription();
-  const pendingSubscription = usePendingSubscriptionStore((s) => s.pending);
-  const subPaymentPending = pendingSubscription !== null;
+  const { data: fees } = useFeeSummary();
   const setActiveRole = useSetActiveRole();
   const deviceLocation = useSessionStore((state) => state.location);
   const locationSource = useSessionStore((state) => state.locationSource);
@@ -528,56 +522,38 @@ export default function ProviderProfile() {
           />
         </ProfileSection>
 
-        {subscription ? (
-          <ProfileSection label="Plan and visibility">
-            <Card bordered style={styles.contentCard}>
-              <View style={styles.subscriptionTop}>
-                <View style={styles.grow}>
-                  <Text variant="cardTitle">Subscription</Text>
-                  <Text variant="meta" color="neutral700" style={styles.subscriptionMeta}>
-                    {formatUsd(subscription.priceUsdCents)} / month
-                  </Text>
-                  {subscription.paidUntil ? (
-                    <Text variant="metaSmall" color="neutral600" style={styles.subscriptionMeta}>
-                      {subscription.active ? 'Renews' : 'Expired'}{' '}
-                      {formatInHarare(subscription.paidUntil, 'd MMM yyyy')}
-                    </Text>
-                  ) : null}
-                </View>
-                <Badge
-                  label={
-                    subPaymentPending
-                      ? 'Payment pending'
-                      : subscription.active
-                        ? 'Active'
-                        : 'Past due'
-                  }
-                  tone={subscription.active && !subPaymentPending ? 'accent100' : 'accent'}
-                />
-              </View>
-              {!subscription.active && !subPaymentPending ? (
-                <Text variant="meta" color="neutral700" style={styles.subscriptionMeta}>
-                  Pay to appear in search and smart-match.
+        <ProfileSection label="Fees">
+          <Card bordered style={styles.contentCard}>
+            <View style={styles.feesTop}>
+              <View style={styles.grow}>
+                <Text variant="cardTitle">StylistsCenter fees</Text>
+                <Text variant="meta" color="neutral700" style={styles.feesMeta}>
+                  {fees
+                    ? fees.balanceUsdCents > 0
+                      ? `You owe ${formatUsd(fees.balanceUsdCents)}`
+                      : 'You owe nothing right now'
+                    : 'Booking fees and order commission'}
                 </Text>
+              </View>
+              {fees?.restricted ? (
+                <Badge label="Paused" tone="accent" />
+              ) : fees && fees.overdueUsdCents > 0 ? (
+                <Badge label="Overdue" tone="accent" />
               ) : null}
-              <Button
-                label={
-                  subPaymentPending
-                    ? 'Continue payment'
-                    : subscription.active
-                      ? 'Renew early'
-                      : `Pay ${formatUsd(subscription.priceUsdCents)}`
-                }
-                variant={subscription.active ? 'secondary' : 'primary'}
-                block
-                style={styles.cardAction}
-                onPress={() => {
-                  router.push(subPaymentPending ? '/subscription/paying' : '/subscription/payment');
-                }}
-              />
-            </Card>
-          </ProfileSection>
-        ) : null}
+            </View>
+            <Button
+              label="View fees"
+              variant="secondary"
+              block
+              style={styles.cardAction}
+              onPress={() => {
+                router.push('/fees');
+              }}
+            />
+          </Card>
+        </ProfileSection>
+
+        <CoinWalletSection hideWhenEmpty />
 
         <ProfileSection label="Notifications">
           <NotificationPreferences />

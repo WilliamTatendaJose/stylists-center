@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { AdminWalletService } from './admin-wallet.service';
+import { SettingsService } from '../settings/settings.service';
 import { WalletService } from '../wallet/wallet.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { Env } from '../../config/env';
@@ -84,11 +85,9 @@ describe('AdminWalletService', () => {
     // request through WalletService so the row under test is produced the same
     // way production produces it, not hand-rolled to match the assertions.
     //
-    // 30 coins, not 12: WalletService(prisma) below is built without a config,
-    // so cashOut() prices coins at @sc/shared's fallback COIN_USD_CENTS (20),
-    // not this file's own BASE_ENV.COIN_USD_CENTS (50) — 12 coins would only
-    // clear $2.40, short of the $5 minimum. 30 keeps the same $6.00 total the
-    // usdCents/amountUsdCents assertions below were already written against.
+    // 30 coins at an explicit 20c each: the same $6.00 total the
+    // usdCents/amountUsdCents assertions below were written against, and
+    // above the $5 cash-out minimum whatever the coin-value default is.
     const credit = await prisma.walletTransaction.create({
       data: {
         userId: agentUserId,
@@ -100,7 +99,10 @@ describe('AdminWalletService', () => {
     });
     creditTxnId = credit.id;
 
-    const requested = await new WalletService(prisma).cashOut(agentUserId);
+    const requested = await new WalletService(
+      prisma,
+      new SettingsService(undefined, { COIN_USD_CENTS: '20' }),
+    ).cashOut(agentUserId);
     cashOutTxnId = requested.id;
   });
 
@@ -134,10 +136,32 @@ describe('AdminWalletService', () => {
     // is owed, so the sign is flipped on the way out.
     expect(row?.amountUsdCents).toBe(600);
     expect(row?.coins).toBe(30);
+    expect(row?.coinType).toBe('cash');
     expect(row?.displayName).toBe('Cash Out Agent');
     expect(row?.settled).toBe(false);
     expect(row?.settledAt).toBeNull();
     expect(row?.settledNote).toBeNull();
+  });
+
+  it('shows agents with their subscription status, and filters on it', async () => {
+    const page = { limit: 200, offset: 0 };
+    const lapsed = await adminWallet.listAgents({ subscription: 'lapsed', page });
+    const row = lapsed.items.find((a) => a.agentId === agentId);
+    expect(row).toMatchObject({
+      displayName: 'Cash Out Agent',
+      subscriptionActive: false,
+      subscriptionPaidUntil: null,
+    });
+    const active = await adminWallet.listAgents({ subscription: 'active', page });
+    expect(active.items.some((a) => a.agentId === agentId)).toBe(false);
+
+    await prisma.agent.update({
+      where: { id: agentId },
+      data: { subscriptionPaidUntil: new Date(Date.now() + 86_400_000) },
+    });
+    const now = await adminWallet.listAgents({ subscription: 'active', page });
+    expect(now.items.find((a) => a.agentId === agentId)?.subscriptionActive).toBe(true);
+    await prisma.agent.update({ where: { id: agentId }, data: { subscriptionPaidUntil: null } });
   });
 
   it('never returns the referral credit — only cash_out rows belong in the queue', async () => {

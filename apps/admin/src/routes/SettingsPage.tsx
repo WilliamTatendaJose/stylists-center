@@ -26,12 +26,17 @@ export function displaySetting(kind: AdminSettingDto['kind'], value: number | st
       return `${String(num)} coin${num === 1 ? '' : 's'}`;
     case 'days':
       return `${String(num)} day${num === 1 ? '' : 's'}`;
+    case 'bps':
+      return `${(num / 100).toFixed(2).replace(/\.?0+$/, '')}%`;
+    case 'count':
+      return String(num);
   }
 }
 
 /** What goes in the edit box: dollars for money stored in cents. */
 function toInput(kind: AdminSettingDto['kind'], value: number | string): string {
   if (kind === 'cents') return (Number(value) / 100).toFixed(2);
+  if (kind === 'bps') return String(Number(value) / 100);
   return String(value);
 }
 
@@ -41,7 +46,7 @@ export function fromInput(
   raw: string,
 ): { ok: true; value: number | string } | { ok: false; error: string } {
   if (kind === 'text') return { ok: true, value: raw.trim() };
-  const trimmed = raw.trim().replace(/^\$/, '');
+  const trimmed = raw.trim().replace(/^\$/, '').replace(/%$/, '');
   if (trimmed === '' || !Number.isFinite(Number(trimmed))) {
     return { ok: false, error: 'Enter a number' };
   }
@@ -49,6 +54,12 @@ export function fromInput(
     if (!/^\d+(\.\d{1,2})?$/.test(trimmed))
       return { ok: false, error: 'Enter dollars and cents, e.g. 5.00' };
     return { ok: true, value: Math.round(Number(trimmed) * 100) };
+  }
+  if (kind === 'bps') {
+    const pct = trimmed.replace(/%$/, '');
+    if (!/^\d+(\.\d{1,2})?$/.test(pct))
+      return { ok: false, error: 'Enter a percentage, e.g. 3 or 2.5' };
+    return { ok: true, value: Math.round(Number(pct) * 100) };
   }
   if (!/^\d+$/.test(trimmed)) return { ok: false, error: 'Enter a whole number' };
   return { ok: true, value: Number(trimmed) };
@@ -75,7 +86,8 @@ function SettingRow({ setting, canEdit }: { setting: AdminSettingDto; canEdit: b
     );
   };
 
-  const unit = setting.kind === 'cents' || setting.kind === 'usd' ? 'USD' : '';
+  const unit =
+    setting.kind === 'cents' || setting.kind === 'usd' ? 'USD' : setting.kind === 'bps' ? '%' : '';
 
   return (
     <div className="border-t border-neutral-100 py-4 first:border-t-0 dark:border-dark-border">

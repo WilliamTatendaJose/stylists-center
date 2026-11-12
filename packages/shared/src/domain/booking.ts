@@ -1,15 +1,24 @@
 /**
- * Booking status and payment method (SRS §5.4 `Booking`, §3.9 payments).
+ * Booking status and payment method (SRS §5.4 `Booking`).
  *
- * `awaiting_provider` -> `confirmed` -> `completed` is the EcoCash happy path.
- * Cash bookings sit in `confirmed` until BOTH `confirmDoneByClient` and
- * `confirmDoneByProvider` are true (see CompletionConfirmation in the API
- * schema) — that double confirmation is the only signal the platform has that
- * a cash booking happened at all, and its absence is the no-show signal.
- * `declined` covers a provider who does not confirm within the hour.
+ * Clients pay the stylist directly, so every new booking has payment method
+ * `cash` (the stored name for "paid to the stylist, outside the app").
+ * `ecocash` only exists on older bookings that were paid through the app.
+ *
+ * `awaiting_provider` -> `confirmed` -> `completed`. A direct-payment booking
+ * sits in `confirmed` until BOTH the stylist (payment received) and the
+ * client (job done) confirm, or until `completionAutoConfirmHours` after one
+ * of them has. `declined` covers a provider who does not confirm within the
+ * hour.
  */
 export type BookingStatus =
-  'awaiting_provider' | 'confirmed' | 'completed' | 'declined' | 'cancelled';
+  | 'awaiting_provider'
+  | 'confirmed'
+  | 'completed'
+  | 'declined'
+  | 'cancelled'
+  /** Reported unpaid by the stylist, or neither side confirmed in time. No fee, no coins. */
+  | 'incomplete';
 
 export type PaymentMethod = 'ecocash' | 'cash';
 
@@ -19,6 +28,7 @@ export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
   completed: 'Completed',
   declined: 'Declined',
   cancelled: 'Cancelled',
+  incomplete: 'Incomplete',
 };
 
 /**
@@ -142,4 +152,52 @@ export function formatBookingReference(sequenceNumber: number): string {
 
 export function formatOrderReference(sequenceNumber: number): string {
   return `SC-M${sequenceNumber.toString().padStart(4, '0')}`;
+}
+
+/**
+ * What a booking costs and what the client hands the stylist. The fee is
+ * added on top of the stylist's price; coins then reduce what is paid in
+ * cash. Older bookings (paid in the app) have fee 0 and are settled already.
+ */
+export function bookingAmounts(params: {
+  paymentMethod: PaymentMethod;
+  priceUsdCents: number;
+  serviceFeeUsdCents: number;
+  coinsUsdCents: number;
+}): { clientTotalUsdCents: number; amountDueUsdCents: number } {
+  const clientTotalUsdCents = params.priceUsdCents + params.serviceFeeUsdCents;
+  const amountDueUsdCents =
+    params.paymentMethod === 'ecocash'
+      ? 0
+      : Math.max(0, clientTotalUsdCents - params.coinsUsdCents);
+  return { clientTotalUsdCents, amountDueUsdCents };
+}
+
+/** Most coins that can go on a booking: whole coins only, never worth more than the total. */
+export function maxCoinsForBooking(clientTotalUsdCents: number, coinUsdCents: number): number {
+  if (clientTotalUsdCents <= 0 || coinUsdCents <= 0) return 0;
+  return Math.floor(clientTotalUsdCents / coinUsdCents);
+}
+
+/**
+ * Whether the stylist can still say the client did not pay: from the
+ * appointment start until `reportHours` after it, on a job that is
+ * confirmed or done. Not for jobs paid in the app (nothing to collect) or
+ * ones already reported.
+ */
+export function canReportNonPayment(
+  params: {
+    paymentMethod: PaymentMethod;
+    status: BookingStatus;
+    startsAtIso: string;
+    alreadyReported: boolean;
+  },
+  reportHours: number,
+  now: number = Date.now(),
+): boolean {
+  if (params.paymentMethod !== 'cash' || params.alreadyReported) return false;
+  if (params.status !== 'confirmed' && params.status !== 'completed') return false;
+  const startsAt = new Date(params.startsAtIso).getTime();
+  if (Number.isNaN(startsAt) || now < startsAt) return false;
+  return now <= startsAt + reportHours * 60 * 60_000;
 }

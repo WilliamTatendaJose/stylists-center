@@ -26,7 +26,9 @@ const styles = StyleSheet.create({
 interface PlacedOrder {
   reference: string;
   providerName: string;
-  totalUsdCents: number;
+  /** What the buyer pays the shop on receipt. */
+  amountDueUsdCents: number;
+  fulfilment: 'collection' | 'delivery';
 }
 
 function parseOrders(raw: string | undefined): PlacedOrder[] {
@@ -40,7 +42,7 @@ function parseOrders(raw: string | undefined): PlacedOrder[] {
         typeof o === 'object' &&
         typeof (o as PlacedOrder).reference === 'string' &&
         typeof (o as PlacedOrder).providerName === 'string' &&
-        typeof (o as PlacedOrder).totalUsdCents === 'number',
+        typeof (o as PlacedOrder).amountDueUsdCents === 'number',
     );
   } catch {
     // A malformed or absent param degrades to an empty list, not a crash —
@@ -62,7 +64,7 @@ export default function OrderDone() {
   }>();
   const marketHome = useMarketHome();
   const orders = parseOrders(ordersParam);
-  const grandTotal = orders.reduce((sum, o) => sum + o.totalUsdCents, 0);
+  const grandTotal = orders.reduce((sum, o) => sum + o.amountDueUsdCents, 0);
   const multi = orders.length > 1;
   const remainingCount = Number(remainingCountParam ?? 0);
 
@@ -73,12 +75,12 @@ export default function OrderDone() {
       </View>
 
       <Text variant="h2Small" color={color.onAccent.text} style={styles.title}>
-        Reserved for you.
+        Order placed.
       </Text>
       <Text variant="body" color={color.onAccent.labelDim} style={styles.body}>
         {multi
-          ? `${String(orders.length)} stylists are holding these for you. Bring the order number when you collect from each.`
-          : `${orders[0]?.providerName ?? 'The stylist'} is holding these for you. Bring your order number when you collect.`}
+          ? `${String(orders.length)} shops are holding these for you. Pay each shop when you collect or receive your order.`
+          : `${orders[0]?.providerName ?? 'The shop'} is holding this for you. Pay the shop when you ${orders[0]?.fulfilment === 'delivery' ? 'receive' : 'collect'} your order.`}
       </Text>
 
       {orders.map((order) => (
@@ -87,15 +89,18 @@ export default function OrderDone() {
             onAccent
             items={[
               { label: 'Order', value: order.reference },
-              { label: 'Collect from', value: order.providerName },
-              { label: 'Total', value: formatUsd(order.totalUsdCents) },
+              {
+                label: order.fulfilment === 'delivery' ? 'Delivered by' : 'Collect from',
+                value: order.providerName,
+              },
+              { label: 'Pay on receipt', value: formatUsd(order.amountDueUsdCents) },
             ]}
           />
         </View>
       ))}
 
       {multi ? (
-        <RuleList onAccent items={[{ label: 'Grand total', value: formatUsd(grandTotal) }]} />
+        <RuleList onAccent items={[{ label: 'Total to pay', value: formatUsd(grandTotal) }]} />
       ) : null}
 
       <View style={styles.actions}>

@@ -15,7 +15,7 @@ import {
 } from '@sc/ui';
 import { space } from '@sc/tokens';
 import {
-  useCashOut,
+  useAgentSubscription,
   useClaimReferral,
   useEnrollAgent,
   useReferrals,
@@ -24,14 +24,11 @@ import {
   useWalletTransactions,
 } from '../../src/api/hooks/index.js';
 import { describeError } from '../../src/api/errorMessage.js';
+import { CoinWalletSection } from '../../src/components/CoinWalletSection.js';
 import { RoleSwitcher } from '../../src/components/RoleSwitcher.js';
 import { inviteShareLink } from '../../src/sharing/shareLinks.js';
 
 const styles = StyleSheet.create({
-  balanceBlock: { alignItems: 'flex-start', marginBottom: space.xxl },
-  balanceTitle: { marginBottom: space.s },
-  coinsLabel: { marginTop: 2 },
-  conversion: { marginTop: space.s, marginBottom: space.l },
   cashOutNote: { marginTop: space.s },
   section: { marginBottom: space.xxl },
   sectionLabel: { marginBottom: space.m },
@@ -81,6 +78,19 @@ const styles = StyleSheet.create({
   transactionAmount: { alignItems: 'flex-end', gap: space.xs },
 });
 
+const TRANSACTION_LABELS: Record<WalletTransactionDto['type'], string> = {
+  referral_coin: 'Recruiting reward',
+  referral_purchase: 'Referral purchase reward',
+  booking_reward: 'Booking reward',
+  purchase_reward: 'Purchase reward',
+  redeem_debit: 'Paid with coins',
+  redeem_credit: 'Paid to you in coins',
+  expiry: 'Coins expired',
+  refund: 'Coins returned',
+  cash_out: 'Cash out',
+  adjustment: 'Wallet adjustment',
+};
+
 const keyExtractor = (transaction: WalletTransactionDto) => transaction.id;
 
 const TransactionRow = memo(function TransactionRow({
@@ -92,13 +102,7 @@ const TransactionRow = memo(function TransactionRow({
   return (
     <View style={[styles.transactionRow, { borderBottomColor: colors.divider }]}>
       <View style={styles.transactionCopy}>
-        <Text variant="bodyStrong">
-          {transaction.type === 'referral_coin'
-            ? 'Referral reward'
-            : transaction.type === 'cash_out'
-              ? 'Cash out'
-              : 'Wallet adjustment'}
-        </Text>
+        <Text variant="bodyStrong">{TRANSACTION_LABELS[transaction.type]}</Text>
         <Text variant="metaSmall" color="neutral600" style={styles.transactionMeta}>
           {transaction.reference ?? 'Wallet activity'} ·{' '}
           {formatInHarare(transaction.createdAt, 'd MMM, HH:mm')}
@@ -130,10 +134,10 @@ export default function WalletScreen() {
   const { data: wallet, isError } = useWallet();
   const { data: referrals } = useReferrals();
   const { data: transactions } = useWalletTransactions();
-  const cashOut = useCashOut();
   const claimReferral = useClaimReferral();
   const enrollAgent = useEnrollAgent();
   const { data: verification } = useVerification();
+  const { data: subscription } = useAgentSubscription(Boolean(wallet?.isVerifiedAgent));
   const [cashOutError, setCashOutError] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState('');
   const [inviteCode, setInviteCode] = useState('');
@@ -159,8 +163,8 @@ export default function WalletScreen() {
           Have an invite code?
         </Text>
         <Text variant="body" color="neutral700" style={styles.inviteBody}>
-          Link it now. Your friend earns {wallet.referralRewardCoins} SC Coins after your first
-          completed booking.
+          Link it now. Your friend earns {wallet.referralRewardCoins} SC Coins once you are a
+          verified agent and have paid your first agent subscription.
         </Text>
         <View style={styles.inviteField}>
           <TextField
@@ -192,8 +196,8 @@ export default function WalletScreen() {
         </Text>
         <Text variant="body" color="neutral700">
           {wallet.referralStatus === 'paid'
-            ? `Your first booking unlocked ${wallet.referredByName}'s reward.`
-            : `${wallet.referredByName} earns ${String(wallet.referralRewardCoins)} SC Coins after your first completed booking.`}
+            ? `${wallet.referredByName} has earned their reward for inviting you.`
+            : `${wallet.referredByName} earns ${String(wallet.referralRewardCoins)} SC Coins once you are a verified agent and have paid your first agent subscription.`}
         </Text>
       </Card>
     ) : null;
@@ -216,13 +220,16 @@ export default function WalletScreen() {
         hasTabBar
         header={<ScreenHeader title="Agent wallet" showBack={false} right={<RoleSwitcher />} />}
       >
+        <View style={styles.section}>
+          <CoinWalletSection hideWhenEmpty />
+        </View>
         {inviteCard}
         <Text variant="h3">Become an agent</Text>
         <Text variant="body" color="neutral700" style={styles.emptyBody}>
-          Submit identity verification to become an agent and start earning SC Coins —{' '}
-          {wallet.referralRewardCoins} coins for every stylist and client you refer who completes a
-          booking. We delete the uploaded documents after review; the first completed booking
-          releases the reward.
+          Verify your identity and subscribe to start earning SC Coins: 1 coin for every $10 spent
+          on the marketplace by customers who use your code, and {wallet.referralRewardCoins} coins
+          for every agent you recruit once they are verified and have paid their first subscription.
+          We delete the uploaded documents after review.
         </Text>
         {verification && verification.status !== 'unverified' ? (
           <View style={styles.verificationStatus}>
@@ -273,87 +280,46 @@ export default function WalletScreen() {
     );
   }
 
-  /**
-   * `wallet.coins` is the server's ledger total. A legacy paid referral can
-   * occasionally be present in the Commission table before its matching
-   * credit reaches that ledger. Once both lists have loaded, include only that
-   * missing amount in the display total. This keeps the number on top aligned
-   * with paid commissions without treating pending rewards as available or
-   * re-adding a reward that was already cashed out.
-   */
-  const paidReferralCoins =
-    referrals?.reduce(
-      (total, referral) => total + (referral.status === 'paid' ? referral.coins : 0),
-      0,
-    ) ?? 0;
-  const creditedReferralCoins =
-    transactions?.reduce(
-      (total, transaction) =>
-        total +
-        (transaction.type === 'referral_coin' && transaction.coins > 0 ? transaction.coins : 0),
-      0,
-    ) ?? 0;
-  const missingReferralCoins =
-    referrals && transactions ? Math.max(0, paidReferralCoins - creditedReferralCoins) : 0;
-  const displayCoins = wallet.coins + missingReferralCoins;
-  const displayUsdCents = displayCoins * wallet.coinUsdCents;
-
   const shareCode = () => {
     void Share.share({
-      message: `Join Style Center with my invite link: ${inviteShareLink(wallet.referralCode)}\nI earn SC Coins when you complete your first booking.`,
+      message: `Join Style Center with my invite link: ${inviteShareLink(wallet.referralCode)}\nI earn SC Coins when you shop with my code.`,
     });
   };
 
   const listHeader = (
     <>
-      <View style={styles.balanceBlock}>
-        <Text variant="sectionLabel" style={styles.balanceTitle}>
-          Available balance
-        </Text>
-        <Text variant="balance" color={colors.accent}>
-          {displayCoins} SC
-        </Text>
-        <Text variant="kicker" color={colors.accent} style={styles.coinsLabel}>
-          Coins
-        </Text>
-        <Text variant="meta" color="neutral700" style={styles.conversion}>
-          = {formatUsd(displayUsdCents)} · 1 coin = {formatUsd(wallet.coinUsdCents)}
-        </Text>
-        <Button
-          label={cashOut.isPending ? 'Submittingâ€¦' : `Cash out ${formatUsd(wallet.usdCents)}`}
-          block
-          size="lg"
-          disabled={!wallet.canCashOut || cashOut.isPending}
-          onPress={() => {
-            setCashOutError(null);
-            cashOut.mutate(undefined, {
-              // A cash-out that failed silently was indistinguishable from one
-              // that worked â€” for a withdrawal, that is the one thing a user
-              // cannot be left guessing about.
-              onError: (error) => {
-                setCashOutError(describeError(error, "Couldn't submit that cash-out. Try again."));
-              },
-            });
-          }}
-        />
-        {cashOutError ? (
-          <Text
-            variant="metaSmall"
-            color={colors.accent700}
-            style={styles.cashOutNote}
-            accessibilityLiveRegion="polite"
-            accessibilityRole="alert"
-          >
-            {cashOutError}
-          </Text>
-        ) : (
-          <Text variant="metaSmall" color="neutral600" style={styles.cashOutNote}>
-            {cashOut.isSuccess
-              ? 'Submitted â€” paid to your EcoCash number shortly.'
-              : `Cash-out unlocks above ${formatUsd(wallet.cashOutMinUsdCents)}. Paid to your EcoCash number.`}
-          </Text>
-        )}
+      <View style={styles.section}>
+        <CoinWalletSection />
       </View>
+
+      {subscription ? (
+        <View style={styles.section}>
+          <Text variant="sectionLabel" style={styles.sectionLabel}>
+            Agent subscription
+          </Text>
+          <Card bordered style={styles.referralCard}>
+            <View style={styles.colReferral}>
+              <Text variant="bodyStrong">
+                {formatUsd(subscription.priceUsdCents)} for {String(subscription.cycleDays)} days
+              </Text>
+              <Text variant="metaSmall" color="neutral600" style={styles.referralCode}>
+                {subscription.paidUntil
+                  ? `${subscription.active ? 'Active until' : 'Ended'} ${formatInHarare(subscription.paidUntil, 'd MMM yyyy')}`
+                  : 'Not subscribed yet'}
+              </Text>
+            </View>
+            <Button
+              label={subscription.active ? 'Renew' : `Pay ${formatUsd(subscription.priceUsdCents)}`}
+              variant={subscription.active ? 'secondary' : 'primary'}
+              onPress={() => router.push('/agent-subscription')}
+            />
+          </Card>
+          <Text variant="metaSmall" color="neutral600" style={styles.commissionNote}>
+            An active subscription is needed to earn on purchases made with your code and to cash
+            out agent coins.
+          </Text>
+        </View>
+      ) : null}
 
       <View style={styles.section}>
         <Text variant="sectionLabel" style={styles.sectionLabel}>
@@ -414,8 +380,8 @@ export default function WalletScreen() {
           </View>
         ))}
         <Text variant="metaSmall" color="neutral600" style={styles.commissionNote}>
-          Credited rewards are added to your available balance. Pending rewards unlock after the
-          referral's first completed booking.
+          Credited rewards are added to your agent coins. A recruit's reward is credited once they
+          are a verified agent and have paid their first subscription.
         </Text>
       </View>
 

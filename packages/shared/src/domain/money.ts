@@ -46,3 +46,17 @@ export function formatUsd(cents: UsdCents): string {
   const remainder = abs % 100;
   return `${sign}$${dollars.toString()}.${remainder.toString().padStart(2, '0')}`;
 }
+
+/**
+ * When the next cash-out is allowed, given the last request. Null when one
+ * can be made now (never cashed out, or the interval has passed).
+ */
+export function nextCashOutAt(
+  lastRequestedAt: Date | null,
+  intervalDays: number,
+  now: Date = new Date(),
+): Date | null {
+  if (!lastRequestedAt || intervalDays <= 0) return null;
+  const next = new Date(lastRequestedAt.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+  return next.getTime() > now.getTime() ? next : null;
+}

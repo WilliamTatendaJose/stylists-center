@@ -13,8 +13,8 @@ export const ROLE_LABELS: Record<AdminRoleName, string> = {
 
 export const ROLE_DESCRIPTIONS: Record<AdminRoleName, string> = {
   owner: 'Everything, including staff accounts and the audit log',
-  finance: 'Payments, payouts, cash-outs and subscriptions',
-  support: 'Reports, bans, reviews, users, verifications, providers and catalog',
+  finance: 'Payments, payouts, cash-outs and fee balances',
+  support: 'Reports, bans, reviews, users, verifications, vendors, providers and catalog',
 };
 
 /** Pages each non-owner role can open. Owners can open every page. */
@@ -23,7 +23,7 @@ const PAGES: Record<Exclude<AdminRoleName, 'owner'>, string[]> = {
     '/overview',
     '/lookup',
     '/providers',
-    '/subscriptions',
+    '/fees',
     '/payments',
     '/cash-outs',
     // Read-only for finance and support; only owners can change them.
@@ -40,6 +40,7 @@ const PAGES: Record<Exclude<AdminRoleName, 'owner'>, string[]> = {
     '/providers',
     '/users',
     '/verifications',
+    '/vendors',
     '/catalog',
     '/settings',
     '/content',

@@ -1,7 +1,7 @@
 import { memo, useCallback, useMemo, useState } from 'react';
 import { FlatList, Linking, RefreshControl, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { formatUsd, ORDER_STATUS_LABELS, type OrderRowDto } from '@sc/shared';
+import { formatUsd, isOrderCompleted, ORDER_STATUS_LABELS, type OrderRowDto } from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
   Screen,
@@ -48,6 +48,18 @@ const styles = StyleSheet.create({
 
 const ORDER_HISTORY_PREVIEW_COUNT = 2;
 
+/** Still in progress: not handed over and not cancelled. */
+const isActive = (order: OrderRowDto) =>
+  order.status !== 'cancelled' && !isOrderCompleted(order.status);
+
+function lifecycleText(order: OrderRowDto): string {
+  if (order.status === 'reserved') return 'The shop is preparing your order.';
+  if (order.status === 'out_for_delivery') {
+    return 'On its way. Pay the shop when it arrives, then confirm once it is in your hands.';
+  }
+  return 'Ready to collect. Pay the shop and confirm only when the items are in your hands.';
+}
+
 interface OrderActions {
   onMessage: (order: OrderRowDto) => void;
   onCollect: (order: OrderRowDto) => void;
@@ -93,17 +105,19 @@ const OrderCard = memo(function OrderCard({
               {order.reference} · {order.areaName}
             </Text>
             <Text variant="metaSmall" color="neutral600">
-              {order.paymentMethod === 'ecocash' ? 'Paynow — paid' : 'Cash on collection'} ·{' '}
-              {formatUsd(order.totalUsdCents)}
+              {order.paymentMethod === 'ecocash'
+                ? 'Paid in the app'
+                : `Pay the shop ${formatUsd(order.amountDueUsdCents)} on ${
+                    order.fulfilment === 'delivery' ? 'delivery' : 'collection'
+                  }`}
+              {order.deliveryChargeUsdCents > 0
+                ? ` (includes ${formatUsd(order.deliveryChargeUsdCents)} delivery)`
+                : ''}
             </Text>
           </View>
           <Badge
             label={ORDER_STATUS_LABELS[order.status]}
-            tone={
-              order.status === 'reserved' || order.status === 'ready_for_collection'
-                ? 'accent'
-                : 'neutral'
-            }
+            tone={isActive(order) ? 'accent' : 'neutral'}
           />
         </View>
 
@@ -113,7 +127,7 @@ const OrderCard = memo(function OrderCard({
               <Text variant="meta" color="neutral700">
                 {item.quantity} × {item.name}
               </Text>
-              {order.status === 'collected' && !item.reviewed ? (
+              {isOrderCompleted(order.status) && !item.reviewed ? (
                 <Button
                   label={`Review ${item.name}`}
                   variant="ghost"
@@ -126,33 +140,41 @@ const OrderCard = memo(function OrderCard({
           ))}
         </View>
 
-        {order.status === 'reserved' || order.status === 'ready_for_collection' ? (
+        {isActive(order) ? (
           <View style={[styles.lifecycle, { backgroundColor: colors.surface }]}>
             <Text variant="meta" color="neutral700">
-              {order.status === 'reserved'
-                ? 'The seller is preparing your order.'
-                : 'Ready to collect. Confirm only when the items are in your hands.'}
+              {lifecycleText(order)}
             </Text>
-            <Text variant="meta" color="neutral700">
-              Collect at: {order.pickupAddress}
-            </Text>
-            <Text variant="meta" color="neutral700">
-              Hours: {order.pickupHours}
-            </Text>
+            {order.fulfilment === 'delivery' ? (
+              <Text variant="meta" color="neutral700">
+                Delivering to: {order.deliveryAddress}
+              </Text>
+            ) : (
+              <>
+                <Text variant="meta" color="neutral700">
+                  Collect at: {order.pickupAddress}
+                </Text>
+                <Text variant="meta" color="neutral700">
+                  Hours: {order.pickupHours}
+                </Text>
+              </>
+            )}
             {order.pickupNote ? (
               <Text variant="meta" color="neutral700">
-                Seller note: {order.pickupNote}
+                Shop note: {order.pickupNote}
               </Text>
             ) : null}
-            <Button
-              label="Open directions"
-              variant="ghost"
-              onPress={() => {
-                void Linking.openURL(
-                  `https://www.google.com/maps/search/?api=1&query=${order.pickupLat},${order.pickupLng}`,
-                );
-              }}
-            />
+            {order.fulfilment === 'collection' ? (
+              <Button
+                label="Open directions"
+                variant="ghost"
+                onPress={() => {
+                  void Linking.openURL(
+                    `https://www.google.com/maps/search/?api=1&query=${order.pickupLat},${order.pickupLng}`,
+                  );
+                }}
+              />
+            ) : null}
           </View>
         ) : null}
 
@@ -169,7 +191,13 @@ const OrderCard = memo(function OrderCard({
             />
             {order.canCollect ? (
               <Button
-                label={collectPending ? 'Confirming…' : "I've collected it"}
+                label={
+                  collectPending
+                    ? 'Confirming…'
+                    : order.fulfilment === 'delivery'
+                      ? "I've received it"
+                      : "I've collected it"
+                }
                 block
                 disabled={collectPending}
                 onPress={() => {
@@ -223,12 +251,8 @@ export default function Orders() {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [reviewError, setReviewError] = useState<string | null>(null);
-  const activeOrders = orders.filter(
-    (order) => order.status === 'reserved' || order.status === 'ready_for_collection',
-  );
-  const orderHistory = orders.filter(
-    (order) => order.status === 'collected' || order.status === 'cancelled',
-  );
+  const activeOrders = orders.filter(isActive);
+  const orderHistory = orders.filter((order) => !isActive(order));
   const visibleOrderHistory = showAllOrderHistory
     ? orderHistory
     : orderHistory.slice(0, ORDER_HISTORY_PREVIEW_COUNT);
@@ -350,10 +374,9 @@ export default function Orders() {
         />
       ) : null}
 
-      {activeOrders.some((o) => o.status === 'ready_for_collection') ? (
+      {activeOrders.some((o) => o.canCollect) ? (
         <Text variant="metaSmall" color="neutral600">
-          Confirming collection is what releases payment to the stylist, so only tap it once you
-          actually have the items.
+          Only confirm once you actually have the items. You pay the shop directly.
         </Text>
       ) : null}
     </>
@@ -412,7 +435,9 @@ export default function Orders() {
           {cancelTarget?.providerName} gets the stock back
           {cancelTarget?.paymentMethod === 'ecocash'
             ? ', and the amount held for it is refunded to you in full.'
-            : '.'}
+            : cancelTarget && cancelTarget.coinsUsed > 0
+              ? `, and your ${String(cancelTarget.coinsUsed)} coins are returned.`
+              : '.'}
         </Text>
 
         {cancelError ? (

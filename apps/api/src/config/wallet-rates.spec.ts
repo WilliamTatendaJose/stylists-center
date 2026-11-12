@@ -5,9 +5,12 @@ import { walletRates } from './wallet-rates';
 describe('walletRates', () => {
   it('uses the shared defaults when nothing is configured', async () => {
     expect(await walletRates(new SettingsService(undefined, {}))).toEqual({
-      coinUsdCents: 20,
+      coinUsdCents: 10,
       referralRewardCoins: 6,
       cashOutMinUsdCents: 500,
+      cashOutIntervalDays: 30,
+      subscriptionPriceUsdCents: 500,
+      subscriptionCycleDays: 30,
     });
   });
 
@@ -21,11 +24,14 @@ describe('walletRates', () => {
       coinUsdCents: 75,
       referralRewardCoins: 10,
       cashOutMinUsdCents: 1000,
+      cashOutIntervalDays: 30,
+      subscriptionPriceUsdCents: 500,
+      subscriptionCycleDays: 30,
     });
   });
 
   it('ignores an out-of-range environment value and falls back to the default', async () => {
     const settings = new SettingsService(undefined, { COIN_USD_CENTS: '-3' });
-    expect((await walletRates(settings)).coinUsdCents).toBe(20);
+    expect((await walletRates(settings)).coinUsdCents).toBe(10);
   });
 });

@@ -6,7 +6,6 @@ import {
   type CreateProviderProductInput,
   type RestockProviderProductInput,
   type UpdateProviderProductInput,
-  type OrderPaymentStatusDto,
   type OrderRowDto,
   type ProductDetailDto,
   type ProductPageDto,
@@ -17,6 +16,10 @@ import {
   type MarkOrderReadyInput,
   type CreateProductReviewInput,
   type ProductReviewsDto,
+  type ApplyVendorInput,
+  type VendorApplicationDto,
+  type VendorFulfilmentInput,
+  type VendorMeDto,
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { useSessionStore } from '../../state/index.js';
@@ -150,37 +153,6 @@ export function useCreateOrder() {
   });
 }
 
-const TERMINAL_PAYMENT_STATUSES = new Set<OrderPaymentStatusDto['status']>([
-  'held',
-  'paid',
-  'released',
-  'refunded',
-  'failed',
-  'disputed',
-]);
-
-/** Widened to `string` so a screen holding statuses in local state needn't re-narrow them. */
-export function isTerminalOrderPayment(status: string | undefined) {
-  return Boolean(
-    status && TERMINAL_PAYMENT_STATUSES.has(status as OrderPaymentStatusDto['status']),
-  );
-}
-
-/**
- * Polls one order's payment while its EcoCash prompt is outstanding. A cart
- * spanning several sellers places one order each, so the waiting screen runs
- * one of these per order and only calls the checkout done when all have
- * settled.
- */
-export function useOrderPaymentStatus(orderId: string | undefined, enabled: boolean) {
-  return useQuery({
-    queryKey: ['order-payment-status', orderId],
-    queryFn: () => apiFetch<OrderPaymentStatusDto>(`/v1/market/orders/${orderId}/payment-status`),
-    enabled: Boolean(orderId) && enabled,
-    refetchInterval: (query) => (isTerminalOrderPayment(query.state.data?.status) ? false : 3000),
-  });
-}
-
 export function useCollectOrder() {
   const queryClient = useQueryClient();
 
@@ -208,20 +180,14 @@ export function useCancelOrder() {
 }
 
 const PROVIDER_PRODUCTS_KEY = ['provider', 'products'] as const;
-const PROVIDER_ORDERS_KEY = ['provider', 'orders'] as const;
+const VENDOR_ORDERS_KEY = ['vendor', 'orders'] as const;
+const VENDOR_KEY = ['vendor', 'me'] as const;
 
-export function useProviderProducts() {
+export function useProviderProducts(enabled = true) {
   return useQuery({
+    enabled,
     queryKey: PROVIDER_PRODUCTS_KEY,
     queryFn: () => apiFetch<ProviderProductDto[]>('/v1/provider/products'),
-  });
-}
-
-export function useProviderOrders() {
-  return useQuery({
-    queryKey: PROVIDER_ORDERS_KEY,
-    queryFn: () => apiFetch<ProviderOrderDto[]>('/v1/provider/orders'),
-    refetchInterval: 30_000,
   });
 }
 
@@ -274,13 +240,86 @@ export function useDeleteProviderProduct() {
   });
 }
 
-export function useProviderMarkOrderReady() {
+/** The shop's incoming orders (`/v1/vendors/orders`). Works for a vendor-only shop as well as a stylist. */
+export function useVendorOrders(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: VENDOR_ORDERS_KEY,
+    queryFn: () => apiFetch<ProviderOrderDto[]>('/v1/vendors/orders'),
+    refetchInterval: 30_000,
+  });
+}
+
+function useVendorOrderAction<Variables>(
+  path: (variables: Variables) => string,
+  body?: (variables: Variables) => unknown,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ orderId, input }: { orderId: string; input: MarkOrderReadyInput }) =>
-      apiFetch<void>(`/v1/provider/orders/${orderId}/ready`, { method: 'POST', body: input }),
+    mutationFn: (variables: Variables) =>
+      apiFetch<ProviderOrderDto>(path(variables), {
+        method: 'POST',
+        ...(body ? { body: body(variables) } : {}),
+      }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: PROVIDER_ORDERS_KEY });
+      void queryClient.invalidateQueries({ queryKey: VENDOR_ORDERS_KEY });
+      // A cancelled order puts its stock back.
+      void queryClient.invalidateQueries({ queryKey: PROVIDER_PRODUCTS_KEY });
+      void queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
+    },
+  });
+}
+
+/** Packed: ready at the shop, or out for delivery. */
+export function useVendorMarkOrderReady() {
+  return useVendorOrderAction(
+    ({ orderId }: { orderId: string; input: MarkOrderReadyInput }) =>
+      `/v1/vendors/orders/${orderId}/ready`,
+    ({ input }) => input,
+  );
+}
+
+/** Handed over (collected or delivered). */
+export function useVendorCompleteOrder() {
+  return useVendorOrderAction((orderId: string) => `/v1/vendors/orders/${orderId}/complete`);
+}
+
+export function useVendorCancelOrder() {
+  return useVendorOrderAction((orderId: string) => `/v1/vendors/orders/${orderId}/cancel`);
+}
+
+/** `GET /v1/vendors/me` — where the signed-in user stands as a vendor. */
+export function useVendorMe() {
+  return useQuery({
+    queryKey: VENDOR_KEY,
+    queryFn: () => apiFetch<VendorMeDto>('/v1/vendors/me'),
+  });
+}
+
+export function useApplyVendor() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ApplyVendorInput) =>
+      apiFetch<VendorApplicationDto>('/v1/vendors/apply', { method: 'POST', body: input }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: VENDOR_KEY });
+      // Applying can create the shop's profile, which changes who the account is.
+      void queryClient.invalidateQueries({ queryKey: ['me'] });
+    },
+  });
+}
+
+export function useUpdateVendorFulfilment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: VendorFulfilmentInput) =>
+      apiFetch<VendorApplicationDto>('/v1/vendors/me/fulfilment', {
+        method: 'PATCH',
+        body: input,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: VENDOR_KEY });
+      void queryClient.invalidateQueries({ queryKey: PRODUCTS_KEY });
     },
   });
 }

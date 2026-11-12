@@ -2,13 +2,15 @@ import 'dotenv/config';
 import { ConfigService } from '@nestjs/config';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Env } from '../../config/env';
+import { BookingLifecycleService } from '../bookings/booking-lifecycle.service';
+import { FeeLedgerService } from '../fees/fee-ledger.service';
+import { FeeStandingService } from '../fees/fee-standing.service';
+import { RewardsHooksService } from '../rewards/rewards-hooks.service';
+import { SettingsService } from '../settings/settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { PushService } from '../notifications/push.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import type { MatchingService } from '../matching/matching.service';
-import { FakeEcoCashAdapter } from '../payments/fake-ecocash.adapter';
-import { PaymentStatusService } from '../payments/payment-status.service';
-import type { PaymentGatewayPort } from '../payments/payment-gateway.port';
 import { ProviderService } from './provider.service';
 
 const BASE_ENV: Env = {
@@ -36,6 +38,15 @@ const BASE_ENV: Env = {
   EXPO_PUSH_API_URL: 'https://push.invalid/send',
   ANDROID_PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=zw.co.stylistscenter.app',
 };
+
+const vendorApplication = (status: 'pending' | 'approved' | 'rejected') => ({
+  providerId: '',
+  businessName: 'Test shop',
+  shopAddress: '1 Test Road',
+  contactName: 'Owner',
+  contactPhone: '+263771234567',
+  status,
+});
 
 describe('ProviderService management', () => {
   let prisma: PrismaService;
@@ -101,24 +112,23 @@ describe('ProviderService management', () => {
   });
 
   beforeEach(() => {
-    const gateway = new FakeEcoCashAdapter();
     provider = new ProviderService(
       prisma,
       new SocketEmitterService(),
       null as unknown as MatchingService,
       new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
-      gateway,
-      new PaymentStatusService(prisma, gateway),
+      // No booking actions are exercised here.
+      null as unknown as BookingLifecycleService,
     );
   });
 
   afterAll(async () => {
-    await prisma.payment.deleteMany({ where: { subscriptionProviderId: providerId } });
     await prisma.payment.deleteMany({ where: { order: { providerId } } });
     await prisma.orderItem.deleteMany({ where: { order: { providerId } } });
     await prisma.order.deleteMany({ where: { providerId } });
     await prisma.product.deleteMany({ where: { providerId } });
     await prisma.service.deleteMany({ where: { providerId } });
+    await prisma.vendorApplication.deleteMany({ where: { providerId } });
     await prisma.payout.deleteMany({ where: { providerId } });
     await prisma.providerProfile.delete({ where: { id: providerId } });
     await prisma.user.deleteMany({ where: { id: { in: [providerUserId, buyerId] } } });
@@ -186,64 +196,31 @@ describe('ProviderService management', () => {
     });
   });
 
-  it('creates inventory, exposes incoming orders, and leaves collection confirmation to the buyer', async () => {
-    const product = await provider.createProduct(providerId, {
+  it('lists products only for an approved vendor', async () => {
+    const input = {
       name: 'Braiding hair',
       description: 'One packet',
       priceUsdCents: 500,
       stockQty: 8,
       imageUrls: [],
-    });
+    };
+    // No application, then a pending one, then a rejected one: none may list.
+    await expect(provider.createProduct(providerId, input)).rejects.toThrow('must be approved');
+    for (const status of ['pending', 'rejected'] as const) {
+      await prisma.vendorApplication.upsert({
+        where: { providerId },
+        create: { ...vendorApplication(status), providerId },
+        update: { status },
+      });
+      await expect(provider.createProduct(providerId, input)).rejects.toThrow('must be approved');
+    }
+    expect(await prisma.product.count({ where: { providerId } })).toBe(0);
+
+    await prisma.vendorApplication.update({ where: { providerId }, data: { status: 'approved' } });
+    const product = await provider.createProduct(providerId, input);
     expect((await provider.getProducts(providerId)).some((row) => row.id === product.id)).toBe(
       true,
     );
-
-    const order = await prisma.order.create({
-      data: {
-        reference: `PO-${String(Date.now())}`,
-        buyerId,
-        providerId,
-        paymentMethod: 'cash',
-        totalUsdCents: 1000,
-        items: {
-          create: {
-            productId: product.id,
-            nameSnapshot: product.name,
-            priceUsdCents: 500,
-            quantity: 2,
-          },
-        },
-      },
-    });
-    expect((await provider.getOrders(providerId))[0]).toMatchObject({
-      id: order.id,
-      buyerName: 'Test Buyer',
-      canMarkReady: true,
-    });
-
-    // A held payment must stay held until the buyer confirms collection.
-    await prisma.payment.create({
-      data: {
-        orderId: order.id,
-        provider: 'fake-ecocash',
-        status: 'held',
-        amountUsdCents: order.totalUsdCents,
-        createdAt: new Date(Date.now() - 1000),
-      },
-    });
-
-    await provider.markOrderReady(order.id, providerId);
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(
-      'ready_for_collection',
-    );
-    expect(
-      await prisma.payment.findFirst({ where: { orderId: order.id, status: 'released' } }),
-    ).toBeNull();
-    expect((await provider.getOrders(providerId))[0]).toMatchObject({
-      id: order.id,
-      status: 'ready_for_collection',
-      canMarkReady: false,
-    });
   });
 
   it('totals earnings from the newest ledger row per order and lists one entry each', async () => {
@@ -339,106 +316,95 @@ describe('ProviderService management', () => {
     expect(paid.paidOutUsdCents).toBe(paid.releasedUsdCents);
   });
 
-  describe('subscription', () => {
-    it('is inactive with no paidUntil for a provider who has never paid', async () => {
-      const subscription = await provider.getSubscription(providerId);
-      expect(subscription).toMatchObject({ priceUsdCents: 500, paidUntil: null, active: false });
-    });
+  describe('booking job actions', () => {
+    const HOUR = 60 * 60_000;
+    let serviceId: string;
+    const bookingIds: string[] = [];
 
-    it('creates a checkout intent for EcoCash and applies it on success, same as a fresh booking', async () => {
-      const before = await provider.getSubscription(providerId);
-      const result = await provider.paySubscription(providerId, { paymentMethod: 'ecocash' });
-      expect(new Date(result.paidUntil ?? '').getTime()).toBeGreaterThan(
-        before.paidUntil ? new Date(before.paidUntil).getTime() : Date.now(),
+    function jobs(): ProviderService {
+      const settings = new SettingsService(undefined, {});
+      const lifecycle = new BookingLifecycleService(
+        prisma,
+        new FeeLedgerService(prisma, settings),
+        new RewardsHooksService(prisma),
+        new FeeStandingService(prisma, settings),
+        new SocketEmitterService(),
+        new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+        settings,
       );
-
-      const payment = await prisma.payment.findFirst({
-        where: { subscriptionProviderId: providerId, provider: 'fake-ecocash' },
-      });
-      expect(payment).toMatchObject({ status: 'held', amountUsdCents: 500 });
-    });
-
-    /**
-     * The gateway call only proves a prompt was sent. Crediting the month at
-     * that point handed a free month to anyone who opened a Paynow checkout
-     * and walked away — the whole reason the paid/pending split exists.
-     */
-    it('does not extend the subscription while a real gateway payment is still pending', async () => {
-      const pendingGateway: PaymentGatewayPort = {
-        createCheckout: () =>
-          Promise.resolve({
-            externalRef: 'https://paynow.example/poll/1',
-            status: 'pending',
-            instructions: 'Approve the prompt on your phone',
-            provider: 'paynow',
-          }),
-        verifyCallback: () => false,
-        pollStatus: () => Promise.resolve('pending'),
-      };
-      const pendingProvider = new ProviderService(
+      return new ProviderService(
         prisma,
         new SocketEmitterService(),
         null as unknown as MatchingService,
         new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
-        pendingGateway,
-        new PaymentStatusService(prisma, pendingGateway),
+        lifecycle,
+        settings,
       );
+    }
 
-      const before = await pendingProvider.getSubscription(providerId);
-      const result = await pendingProvider.paySubscription(providerId, {
-        paymentMethod: 'ecocash',
-      });
-
-      expect(result.pending).toBe(true);
-      expect(result.paidUntil).toBe(before.paidUntil);
-      expect(result.instructions).toBe('Approve the prompt on your phone');
-
-      const after = await pendingProvider.getSubscription(providerId);
-      expect(after.paidUntil).toBe(before.paidUntil);
-      expect(after.active).toBe(before.active);
+    beforeAll(async () => {
+      serviceId = (
+        await prisma.service.create({
+          data: { providerId, name: 'Job service', durationMinutes: 60, priceUsdCents: 2000 },
+        })
+      ).id;
     });
 
-    it('credits the month once a poll reports the payment paid', async () => {
-      let reported: 'pending' | 'paid' = 'pending';
-      const settlingGateway: PaymentGatewayPort = {
-        createCheckout: () =>
-          Promise.resolve({
-            externalRef: 'https://paynow.example/poll/2',
-            status: 'pending',
-            provider: 'paynow',
-          }),
-        verifyCallback: () => false,
-        pollStatus: () => Promise.resolve(reported),
-      };
-      const settlingProvider = new ProviderService(
-        prisma,
-        new SocketEmitterService(),
-        null as unknown as MatchingService,
-        new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
-        settlingGateway,
-        new PaymentStatusService(prisma, settlingGateway),
+    afterAll(async () => {
+      await prisma.feeLedgerEntry.deleteMany({ where: { providerId } });
+      await prisma.payment.deleteMany({ where: { bookingId: { in: bookingIds } } });
+      await prisma.booking.deleteMany({ where: { id: { in: bookingIds } } });
+    });
+
+    it('shows what to collect and the fee, then closes on both confirmations and reports non-payment', async () => {
+      const startsAt = new Date(Date.now() - 3 * HOUR);
+      const booking = await prisma.booking.create({
+        data: {
+          reference: `SC-J${String(Date.now())}`,
+          clientId: buyerId,
+          providerId,
+          serviceId,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 60_000),
+          paymentMethod: 'cash',
+          status: 'confirmed',
+          priceUsdCents: 2000,
+          serviceFeeUsdCents: 60,
+          serviceFeeBps: 300,
+          coinsUsed: 5,
+          coinsUsdCents: 50,
+        },
+      });
+      bookingIds.push(booking.id);
+      const service = jobs();
+
+      const row = (await service.getJobs(providerId)).bookings.find((b) => b.id === booking.id);
+      expect(row).toMatchObject({
+        priceUsdCents: 2000,
+        serviceFeeUsdCents: 60,
+        coinsUsed: 5,
+        amountToCollectUsdCents: 2010,
+        canConfirmCompletion: true,
+        canReportNonPayment: true,
+        nonPaymentReportedAt: null,
+      });
+
+      await service.confirmCompletion(booking.id, providerId);
+      await service.confirmCompletion(booking.id, providerId); // a retry
+      expect((await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } })).status).toBe(
+        'confirmed',
       );
 
-      const before = await settlingProvider.getSubscription(providerId);
-      await settlingProvider.paySubscription(providerId, { paymentMethod: 'ecocash' });
-
-      // Still unpaid: whatever the provider had before is exactly what they
-      // still have — this call must not have bought them anything.
-      const stillPending = await settlingProvider.subscriptionPaymentStatus(providerId);
-      expect(stillPending.status).toBe('pending');
-      expect(stillPending.paidUntil).toBe(before.paidUntil);
-
-      reported = 'paid';
-      const settled = await settlingProvider.subscriptionPaymentStatus(providerId);
-      expect(settled.status).toBe('paid');
-      expect(settled.active).toBe(true);
-      expect(new Date(settled.paidUntil ?? '').getTime()).toBeGreaterThan(
-        new Date(before.paidUntil ?? 0).getTime(),
-      );
-
-      // Polling again after settlement must not stack a second month on.
-      const repeat = await settlingProvider.subscriptionPaymentStatus(providerId);
-      expect(repeat.paidUntil).toBe(settled.paidUntil);
+      await service.reportNonPayment(booking.id, providerId, 'Said they would pay tomorrow');
+      const reported = await prisma.booking.findUniqueOrThrow({ where: { id: booking.id } });
+      expect(reported).toMatchObject({
+        status: 'incomplete',
+        nonPaymentNote: 'Said they would pay tomorrow',
+      });
+      expect(await prisma.feeLedgerEntry.count({ where: { bookingId: booking.id } })).toBe(0);
+      const after = (await service.getJobs(providerId)).bookings.find((b) => b.id === booking.id);
+      expect(after).toMatchObject({ canReportNonPayment: false });
+      expect(after?.nonPaymentReportedAt).not.toBeNull();
     });
   });
 });

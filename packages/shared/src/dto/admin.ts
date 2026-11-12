@@ -23,14 +23,6 @@ export interface Paged<T> {
   offset: number;
 }
 
-/** Subscription totals across every provider, for the Subscriptions page header. */
-export const adminSubscriptionSummarySchema = z.object({
-  activeCount: z.number().int().nonnegative(),
-  lapsedCount: z.number().int().nonnegative(),
-  mrrUsdCents: z.number().int().nonnegative(),
-});
-export type AdminSubscriptionSummaryDto = z.infer<typeof adminSubscriptionSummarySchema>;
-
 /**
  * Admin console DTOs (apps/admin). Deliberately separate from the client/
  * provider DTOs in auth.ts — an admin session is a different identity with
@@ -147,6 +139,8 @@ export const adminUserRowSchema = z.object({
   displayName: z.string(),
   activeRole: activeRoleSchema,
   hasProviderProfile: z.boolean(),
+  /** Times stylists have reported this user as not paying for a booking, so staff can spot repeat cases. */
+  nonPaymentReports: z.number().int(),
   appStatus: adminAppUserStatusSchema,
   firebaseStatus: adminFirebaseStatusSchema,
   createdAt: z.iso.datetime(),
@@ -248,7 +242,7 @@ export const resolveAppealSchema = z.object({
 });
 export type ResolveAppealInput = z.infer<typeof resolveAppealSchema>;
 
-// --- Providers (verification + subscription pricing) ------------------
+// --- Providers (verification) ------------------
 
 export const adminProviderRowSchema = z.object({
   id: z.uuid(),
@@ -270,9 +264,6 @@ export const adminProviderRowSchema = z.object({
   productImageUrls: z.array(imageUrlSchema).max(100),
   ratingAvg: z.number(),
   completedCount: z.number().int(),
-  subscriptionPriceUsdCents: z.number().int(),
-  subscriptionPaidUntil: z.iso.datetime().nullable(),
-  subscriptionActive: z.boolean(),
   createdAt: z.iso.datetime(),
 });
 export type AdminProviderRowDto = z.infer<typeof adminProviderRowSchema>;
@@ -282,14 +273,12 @@ export const updateProviderAdminSchema = z
     verified: z.boolean().optional(),
     verificationStatus: verificationStatusSchema.optional(),
     verificationNote: z.string().trim().max(2000).nullable().optional(),
-    subscriptionPriceUsdCents: z.number().int().min(0).optional(),
   })
   .refine(
     (input) =>
       input.verified !== undefined ||
       input.verificationStatus !== undefined ||
-      input.verificationNote !== undefined ||
-      input.subscriptionPriceUsdCents !== undefined,
+      input.verificationNote !== undefined,
     {
       message: 'Provide at least one field to update',
     },
@@ -408,12 +397,30 @@ export const adminCashOutRowSchema = z.object({
   phone: z.string().nullable(),
   amountUsdCents: z.number().int(),
   coins: z.number().int(),
+  /** Which coins were cashed out: received from clients ('cash') or agent earnings ('agent'). */
+  coinType: z.enum(['cash', 'agent']),
   requestedAt: z.iso.datetime(),
   settled: z.boolean(),
   settledAt: z.iso.datetime().nullable(),
   settledNote: z.string().nullable(),
 });
 export type AdminCashOutRowDto = z.infer<typeof adminCashOutRowSchema>;
+
+/** One agent as the console sees them: who they are and whether their subscription is live. */
+export const adminAgentRowSchema = z.object({
+  agentId: z.uuid(),
+  userId: z.uuid(),
+  displayName: z.string(),
+  phone: z.string().nullable(),
+  referralCode: z.string(),
+  verificationStatus: z.string(),
+  status: z.string(),
+  subscriptionPaidUntil: z.iso.datetime().nullable(),
+  subscriptionActive: z.boolean(),
+  /** Agent earnings held, whether or not they can be cashed out right now. */
+  agentCoins: z.number().int(),
+});
+export type AdminAgentRowDto = z.infer<typeof adminAgentRowSchema>;
 
 export const recordCashOutSettlementSchema = z.object({
   note: z.string().trim().max(500).optional(),
@@ -573,6 +580,14 @@ export type AdminLookupResultDto = z.infer<typeof adminLookupResultSchema>;
 export const adminBookingDetailSchema = adminBookingSummarySchema.extend({
   confirmedByClient: z.boolean(),
   confirmedByProvider: z.boolean(),
+  serviceFeeUsdCents: z.number().int(),
+  coinsUsed: z.number().int(),
+  coinsUsdCents: z.number().int(),
+  /** When the stylist reported the client did not pay, and their note. */
+  nonPaymentReportedAt: z.iso.datetime().nullable(),
+  nonPaymentNote: z.string().nullable(),
+  /** Non-payment reports against this booking's client across all their bookings (this one included). */
+  clientNonPaymentReports: z.number().int(),
   payments: z.array(adminPaymentLedgerRowSchema),
   /** Up to two rows — a booking can have a client-mode and a provider-mode trip tracking the same job. */
   trips: z.array(

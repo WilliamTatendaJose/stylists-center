@@ -18,15 +18,14 @@ import { ProviderService } from './provider.service';
 import {
   CreateProviderProductDto,
   CreateProviderServiceDto,
-  PaySubscriptionDto,
   SetAvailabilityDto,
   UpdateProviderProfileDto,
   UpdateProviderServiceDto,
   UpdateProviderProductDto,
   RestockProviderProductDto,
-  MarkOrderReadyDto,
   UpdateWeeklyHoursDto,
   CreateProviderTimeOffDto,
+  ReportNonPaymentDto,
 } from './dto';
 import {
   ImageStorageService,
@@ -141,38 +140,9 @@ export class ProviderController {
     return this.provider.deleteProduct(id, providerId);
   }
 
-  @Get('orders')
-  orders(@CurrentProvider() providerId: string) {
-    return this.provider.getOrders(providerId);
-  }
-
-  @Post('orders/:id/ready')
-  markOrderReady(
-    @Param('id') id: string,
-    @CurrentProvider() providerId: string,
-    @Body() dto: MarkOrderReadyDto,
-  ) {
-    return this.provider.markOrderReady(id, providerId, dto);
-  }
-
   @Post('availability')
   setAvailability(@CurrentProvider() providerId: string, @Body() dto: SetAvailabilityDto) {
     return this.provider.setAvailability(providerId, dto.acceptingBookings);
-  }
-
-  @Get('subscription')
-  subscription(@CurrentProvider() providerId: string) {
-    return this.provider.getSubscription(providerId);
-  }
-
-  @Post('subscription/pay')
-  paySubscription(@CurrentProvider() providerId: string, @Body() dto: PaySubscriptionDto) {
-    return this.provider.paySubscription(providerId, dto);
-  }
-
-  @Get('subscription/payment-status')
-  subscriptionPaymentStatus(@CurrentProvider() providerId: string) {
-    return this.provider.subscriptionPaymentStatus(providerId);
   }
 
   @Post('bookings/:id/confirm')
@@ -188,6 +158,15 @@ export class ProviderController {
   @Post('bookings/:id/confirm-completion')
   confirmCompletion(@Param('id') id: string, @CurrentProvider() providerId: string) {
     return this.provider.confirmCompletion(id, providerId);
+  }
+
+  @Post('bookings/:id/report-non-payment')
+  reportNonPayment(
+    @Param('id') id: string,
+    @CurrentProvider() providerId: string,
+    @Body() dto: ReportNonPaymentDto,
+  ) {
+    return this.provider.reportNonPayment(id, providerId, dto.note);
   }
 
   @Post('offers/:id/accept')

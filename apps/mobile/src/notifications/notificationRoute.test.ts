@@ -31,6 +31,10 @@ describe('notificationRoute', () => {
     );
   });
 
+  it('opens the Fees screen from a fee reminder', () => {
+    expect(notificationRoute({ type: 'fees.reminder' })).toBe('/fees');
+  });
+
   it('ignores a known type whose id is missing, rather than routing somewhere broken', () => {
     expect(notificationRoute({ type: 'message.created' })).toBeNull();
     expect(notificationRoute({ type: 'booking.updated', bookingId: 42 })).toBeNull();

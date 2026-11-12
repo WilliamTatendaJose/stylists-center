@@ -22,6 +22,8 @@ import { ChatModule } from './modules/chat/chat.module';
 import { WalletModule } from './modules/wallet/wallet.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { MarketModule } from './modules/market/market.module';
+import { VendorsModule } from './modules/vendors/vendors.module';
+import { AdminVendorsModule } from './modules/admin-vendors/admin-vendors.module';
 import { ProviderModule } from './modules/provider/provider.module';
 import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
 import { AdminTrustModule } from './modules/admin-trust/admin-trust.module';
@@ -38,6 +40,9 @@ import { AdminVerificationsModule } from './modules/admin-verifications/admin-ve
 import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { AdminExportsModule } from './modules/admin-exports/admin-exports.module';
 import { SettingsModule } from './modules/settings/settings.module';
+import { FeesModule } from './modules/fees/fees.module';
+import { RewardsModule } from './modules/rewards/rewards.module';
+import { TermsModule } from './modules/terms/terms.module';
 
 @Module({
   imports: [
@@ -54,6 +59,8 @@ import { SettingsModule } from './modules/settings/settings.module';
     }),
     PrismaModule,
     SettingsModule,
+    FeesModule,
+    RewardsModule,
     RedisModule,
     StorageModule,
     HealthModule,
@@ -72,6 +79,7 @@ import { SettingsModule } from './modules/settings/settings.module';
     WalletModule,
     ReportsModule,
     MarketModule,
+    VendorsModule,
     ProviderModule,
     AdminAuthModule,
     AdminTrustModule,
@@ -85,8 +93,10 @@ import { SettingsModule } from './modules/settings/settings.module';
     AdminLookupModule,
     AdminReviewsModule,
     AdminVerificationsModule,
+    AdminVendorsModule,
     AdminUsersModule,
     AdminExportsModule,
+    TermsModule,
   ],
   providers: [
     /**

@@ -57,7 +57,7 @@ export type PaymentPollStatus = 'pending' | 'paid' | 'refunded' | 'failed' | 'di
  * gateway itself has confirmed it.
  */
 export interface PaymentConfirmation {
-  /** The reference this app initiated the checkout under — the booking/order/subscription reference. */
+  /** The reference this app initiated the checkout under — the booking/order/fee payment reference. */
   reference: string;
   /** The gateway's own reference for the transaction. */
   externalRef: string;

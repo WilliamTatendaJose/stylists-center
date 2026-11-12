@@ -2,24 +2,21 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
-  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import {
+  bookingAmounts,
   canProviderRespond,
+  canReportNonPayment,
   deriveInitials,
   deriveTint,
   formatBookingWhen,
-  isSubscriptionActive,
-  needsCashReconciliation,
   normalizePhone,
   type BookingStatus,
   type CreateProviderProductInput,
   type UpdateProviderProductInput,
   type CreateProviderServiceInput,
-  type PaySubscriptionInput,
-  type PaySubscriptionResponse,
   providerOwesCompletion,
   type ProviderAvailabilityDto,
   type ProviderBookingRowDto,
@@ -28,11 +25,8 @@ import {
   type ProviderJobsDto,
   type ProviderOfferDto,
   type ProviderManagementProfileDto,
-  type ProviderOrderDto,
-  type MarkOrderReadyInput,
   type ProductCategory,
   type ProviderProductDto,
-  type ProviderSubscriptionDto,
   type ServiceDto,
   type UpdateProviderProfileInput,
   type UpdateProviderServiceInput,
@@ -41,24 +35,19 @@ import {
   type CreateProviderTimeOffInput,
 } from '@sc/shared';
 import { Optional } from '@nestjs/common';
-import { walletRates } from '../../config/wallet-rates';
-import { SettingsService } from '../settings/settings.service';
+import { SettingsService, settingsFor } from '../settings/settings.service';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
 import { MatchingService } from '../matching/matching.service';
-import { PAYMENT_GATEWAY, type PaymentGatewayPort } from '../payments/payment-gateway.port';
-import { payerPhoneFor } from '../payments/pay-channels';
-import { PaymentStatusService } from '../payments/payment-status.service';
-import { applySubscriptionPayment } from '../payments/payments.service';
 import { toBookingRowDto } from '../bookings/mappers';
-import { expireStaleBookingRequests } from '../bookings/booking-expiry';
+import { BookingLifecycleService } from '../bookings/booking-lifecycle.service';
 import { isWithinWeeklyHours, readWeeklyHours } from '../providers/calendar-policy';
 import { ReminderService } from '../notifications/reminder.service';
 
-/** Statuses a stylist still has something to do about, plus recent history for context. */
-const VISIBLE_STATUSES = ['awaiting_provider', 'confirmed', 'completed'] as const;
+/** Statuses a stylist still has something to do about, plus recent history (including jobs that did not complete) for context. */
+const VISIBLE_STATUSES = ['awaiting_provider', 'confirmed', 'completed', 'incomplete'] as const;
 
 /**
  * What a client is told when a stylist moves their booking.
@@ -82,8 +71,7 @@ export class ProviderService {
     private readonly socketEmitter: SocketEmitterService,
     private readonly matching: MatchingService,
     private readonly push: PushService,
-    @Inject(PAYMENT_GATEWAY) private readonly paymentGateway: PaymentGatewayPort,
-    private readonly paymentStatus: PaymentStatusService,
+    private readonly lifecycle: BookingLifecycleService,
     @Optional() private readonly settings?: SettingsService,
     @Optional() private readonly reminders?: ReminderService,
   ) {}
@@ -344,10 +332,25 @@ export class ProviderService {
     );
   }
 
+  /**
+   * Only an approved vendor may list products. Checked on the vendor record
+   * rather than trusting the app to hide the button.
+   */
+  private async requireApprovedVendor(providerProfileId: string): Promise<void> {
+    const vendor = await this.prisma.vendorApplication.findUnique({
+      where: { providerId: providerProfileId },
+      select: { status: true },
+    });
+    if (vendor?.status !== 'approved') {
+      throw new ForbiddenException('Your shop must be approved before you can list products');
+    }
+  }
+
   async createProduct(
     providerProfileId: string,
     input: CreateProviderProductInput,
   ): Promise<ProviderProductDto> {
+    await this.requireApprovedVendor(providerProfileId);
     const product = await this.prisma.product.create({
       data: { providerId: providerProfileId, ...input, category: input.category ?? 'other' },
     });
@@ -395,90 +398,11 @@ export class ProviderService {
     });
   }
 
-  async getOrders(providerProfileId: string): Promise<ProviderOrderDto[]> {
-    const orders = await this.prisma.order.findMany({
-      where: { providerId: providerProfileId },
-      // Only what the mapping below reads, and only the newest 100 — the
-      // seller screen never needs a shop's full order history.
-      select: {
-        id: true,
-        reference: true,
-        status: true,
-        paymentMethod: true,
-        totalUsdCents: true,
-        createdAt: true,
-        pickupNote: true,
-        buyer: { select: { displayName: true } },
-        items: {
-          select: { productId: true, nameSnapshot: true, priceUsdCents: true, quantity: true },
-        },
-        payments: { select: { status: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-    return orders.map((order) => ({
-      id: order.id,
-      reference: order.reference,
-      buyerName: order.buyer.displayName,
-      status: order.status,
-      paymentMethod: order.paymentMethod,
-      totalUsdCents: order.totalUsdCents,
-      createdAt: order.createdAt.toISOString(),
-      pickupNote: order.pickupNote,
-      paymentCleared:
-        order.paymentMethod === 'cash' ||
-        order.payments.some((payment) => payment.status === 'paid' || payment.status === 'held'),
-      items: order.items.map((item) => ({
-        productId: item.productId,
-        name: item.nameSnapshot,
-        priceUsdCents: item.priceUsdCents,
-        quantity: item.quantity,
-      })),
-      canMarkReady:
-        order.status === 'reserved' &&
-        (order.paymentMethod === 'cash' ||
-          order.payments.some((payment) => payment.status === 'paid' || payment.status === 'held')),
-    }));
-  }
-
-  /** Seller confirms packing is complete; the buyer still controls final collection and escrow release. */
-  async markOrderReady(
-    orderId: string,
-    providerProfileId: string,
-    input: MarkOrderReadyInput = {},
-  ): Promise<void> {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) throw new NotFoundException('Order not found');
-    if (order.providerId !== providerProfileId) throw new ForbiddenException();
-    if (order.status === 'ready_for_collection' || order.status === 'collected') return;
-    if (order.status !== 'reserved') {
-      throw new BadRequestException(`Cannot prepare an order that is ${order.status}`);
-    }
-    if (order.paymentMethod === 'ecocash') {
-      const funded = await this.prisma.payment.findFirst({
-        where: { orderId, status: { in: ['paid', 'held'] } },
-      });
-      if (!funded) throw new BadRequestException('Payment has not cleared yet');
-    }
-
-    const pickupNote = input.pickupNote?.trim();
-    const updated = await this.prisma.order.updateMany({
-      where: { id: orderId, providerId: providerProfileId, status: 'reserved' },
-      data: { status: 'ready_for_collection', pickupNote: pickupNote?.length ? pickupNote : null },
-    });
-    if (updated.count > 0) {
-      void this.reminders?.schedulePickup(orderId, new Date());
-      void this.push.sendToUser(order.buyerId, {
-        title: 'Your order is ready',
-        body: `Order ${order.reference} is ready for collection.`,
-        data: { type: 'market.order.ready', orderId },
-      });
-    }
-  }
-
   private async listBookings(providerProfileId: string): Promise<ProviderBookingRowDto[]> {
-    await expireStaleBookingRequests(this.prisma, { providerId: providerProfileId });
+    await this.lifecycle.expireStale({ providerId: providerProfileId });
+    const reportHours = await (this.settings ?? settingsFor(this.prisma)).get(
+      'nonPaymentReportHours',
+    );
     const bookings = await this.prisma.booking.findMany({
       where: { providerId: providerProfileId, status: { in: [...VISIBLE_STATUSES] } },
       include: { client: { include: { providerProfile: true } }, service: true },
@@ -498,9 +422,14 @@ export class ProviderService {
         startsAt: b.startsAt.toISOString(),
         paymentMethod: b.paymentMethod,
         priceUsdCents: b.priceUsdCents,
+        serviceFeeUsdCents: b.serviceFeeUsdCents,
+        coinsUsed: b.coinsUsed,
+        coinsUsdCents: b.coinsUsdCents,
+        amountToCollectUsdCents: bookingAmounts(b).amountDueUsdCents,
         status: b.status,
         confirmedByClient: b.confirmedByClient,
         confirmedByProvider: b.confirmedByProvider,
+        nonPaymentReportedAt: b.nonPaymentReportedAt?.toISOString() ?? null,
         canConfirm: canProviderRespond(b.status),
         canDecline: canProviderRespond(b.status),
         canConfirmCompletion: providerOwesCompletion({
@@ -508,6 +437,15 @@ export class ProviderService {
           status: b.status,
           confirmedByProvider: b.confirmedByProvider,
         }),
+        canReportNonPayment: canReportNonPayment(
+          {
+            paymentMethod: b.paymentMethod,
+            status: b.status,
+            startsAtIso: b.startsAt.toISOString(),
+            alreadyReported: b.nonPaymentReportedAt !== null,
+          },
+          reportHours,
+        ),
       };
     });
   }
@@ -552,116 +490,36 @@ export class ProviderService {
    * every booking a client made stayed "Awaiting stylist" forever.
    */
   async confirmBooking(bookingId: string, providerProfileId: string): Promise<void> {
-    const booking = await this.requireOwnBooking(bookingId, providerProfileId);
-    if (!canProviderRespond(booking.status)) {
-      throw new BadRequestException(`Cannot confirm a booking that is ${booking.status}`);
-    }
-
-    await this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: 'confirmed' },
-    });
+    const booking = await this.lifecycle.accept(bookingId, providerProfileId);
     void this.reminders?.scheduleBooking(bookingId, booking.startsAt);
     await this.notifyClient(bookingId, booking.clientId);
   }
 
   async declineBooking(bookingId: string, providerProfileId: string): Promise<void> {
-    const booking = await this.requireOwnBooking(bookingId, providerProfileId);
-    if (!canProviderRespond(booking.status)) {
-      throw new BadRequestException(`Cannot decline a booking that is ${booking.status}`);
-    }
-
-    await this.prisma.booking.update({ where: { id: bookingId }, data: { status: 'declined' } });
-    // Declining frees the slot, so any escrow held for it must go back —
-    // the client is not paying for something that will not happen.
+    const booking = await this.lifecycle.decline(bookingId, providerProfileId);
+    // Bookings paid in the app before clients paid directly: declining frees
+    // the slot, so any escrow held for it must go back.
     await this.refundIfHeld(bookingId);
     await this.notifyClient(bookingId, booking.clientId);
   }
 
-  /**
-   * The stylist's half of a cash job's double confirmation.
-   *
-   * The client's Bookings screen has been saying "Waiting on <stylist> —
-   * closes when you both confirm" with no way for the stylist to do so, which
-   * left every cash booking permanently half-closed.
-   */
+  /** The stylist's "payment received". The booking completes once the client confirms too. */
   async confirmCompletion(bookingId: string, providerProfileId: string): Promise<void> {
-    const booking = await this.requireOwnBooking(bookingId, providerProfileId);
-    if (booking.status === 'completed') return;
-    if (booking.status !== 'confirmed') {
-      throw new BadRequestException(`Cannot complete a booking that is ${booking.status}`);
-    }
-    if (booking.confirmedByProvider) return;
+    const before = await this.requireOwnBooking(bookingId, providerProfileId);
+    const after = await this.lifecycle.confirm(bookingId, 'provider');
+    if (before.confirmedByProvider && before.status === after.status) return;
+    await this.notifyClient(bookingId, before.clientId);
+  }
 
-    await this.prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${bookingId}))`;
-      const current = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
-      if (current.status === 'completed' || current.confirmedByProvider) return;
-
-      const stillNeedsReconciliation = needsCashReconciliation({
-        paymentMethod: current.paymentMethod,
-        status: current.status,
-        confirmedByClient: current.confirmedByClient,
-        confirmedByProvider: true,
-      });
-      // EcoCash escrow releases on the client's word alone (their own
-      // confirmCompletion in bookings.service.ts) — the stylist is never the
-      // blocker for it, per providerOwesCompletion. Without the `=== 'cash'`
-      // guard, needsCashReconciliation is unconditionally false for EcoCash,
-      // so this alone would complete an EcoCash booking on the stylist's
-      // confirmation and leave its payment held/paid forever, never released.
-      const completes = current.paymentMethod === 'cash' && !stillNeedsReconciliation;
-
-      await tx.booking.update({
-        where: { id: bookingId },
-        data: {
-          confirmedByProvider: true,
-          // Completes only once BOTH sides have confirmed a cash job — the
-          // stylist saying so alone is exactly the one-sided claim the double
-          // confirmation exists to prevent.
-          status: completes ? 'completed' : current.status,
-        },
-      });
-      if (completes) {
-        await tx.providerProfile.update({
-          where: { id: providerProfileId },
-          data: { completedCount: { increment: 1 } },
-        });
-        await tx.payment.create({
-          data: {
-            bookingId,
-            provider: 'cash',
-            status: 'released',
-            amountUsdCents: current.priceUsdCents,
-          },
-        });
-        const referral = await tx.referral.findFirst({
-          where: { referredUserId: current.clientId, status: 'pending' },
-          include: { agent: { select: { userId: true } } },
-        });
-        if (referral) {
-          const claimed = await tx.referral.updateMany({
-            where: { id: referral.id, status: 'pending' },
-            data: { status: 'paid' },
-          });
-          if (claimed.count === 1) {
-            const rates = await walletRates(this.settings);
-            await tx.walletTransaction.create({
-              data: {
-                userId: referral.agent.userId,
-                type: 'referral_coin',
-                // Keep the wallet credit aligned with the Commission row that
-                // was created when this invite was linked.
-                coins: referral.coinsAwarded,
-                usdCents: referral.coinsAwarded * rates.coinUsdCents,
-                reference: `First completed booking ${current.reference}`,
-              },
-            });
-          }
-        }
-      }
-    });
-    await this.notifyClient(bookingId, booking.clientId);
+  /** The stylist says the client did not pay: no fee for this job, and staff can see the report. */
+  async reportNonPayment(
+    bookingId: string,
+    providerProfileId: string,
+    note?: string,
+  ): Promise<void> {
+    const before = await this.requireOwnBooking(bookingId, providerProfileId);
+    await this.lifecycle.reportNonPayment(bookingId, providerProfileId, note);
+    if (!before.nonPaymentReportedAt) await this.notifyClient(bookingId, before.clientId);
   }
 
   async setAvailability(
@@ -674,95 +532,6 @@ export class ProviderService {
       select: { acceptingBookings: true },
     });
     return updated;
-  }
-
-  async getSubscription(providerProfileId: string): Promise<ProviderSubscriptionDto> {
-    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
-      where: { id: providerProfileId },
-      select: { subscriptionPriceUsdCents: true, subscriptionPaidUntil: true },
-    });
-    const paidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
-    return {
-      priceUsdCents: profile.subscriptionPriceUsdCents,
-      paidUntil,
-      active: isSubscriptionActive(paidUntil),
-    };
-  }
-
-  /**
-   * Creating a checkout only proves that a prompt was sent. The month is
-   * credited atomically once Paynow reports `paid`, through either its
-   * callback or the provider screen's `subscription/payment-status` poll.
-   */
-  async paySubscription(
-    providerProfileId: string,
-    input: PaySubscriptionInput,
-  ): Promise<PaySubscriptionResponse> {
-    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
-      where: { id: providerProfileId },
-      select: { subscriptionPriceUsdCents: true, subscriptionPaidUntil: true },
-    });
-    const amountUsdCents = profile.subscriptionPriceUsdCents;
-    const currentPaidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
-
-    const user = await this.prisma.user.findFirstOrThrow({
-      where: { providerProfile: { id: providerProfileId } },
-      select: { phone: true },
-    });
-    const payChannel = input.payChannel ?? 'ecocash';
-    const paymentPhone = payerPhoneFor(payChannel, input.payerPhone, user.phone);
-    const reference = `SUB-${providerProfileId}-${String(Date.now())}`;
-    const intent = await this.paymentGateway.createCheckout({
-      reference,
-      amountUsdCents,
-      description: 'Style Center monthly subscription',
-      channel: payChannel,
-      ...(paymentPhone ? { phone: paymentPhone } : {}),
-    });
-    await this.prisma.payment.create({
-      data: {
-        subscriptionProviderId: providerProfileId,
-        provider: intent.provider,
-        status: intent.status,
-        amountUsdCents,
-        externalRef: intent.externalRef,
-        reference,
-        channel: payChannel,
-        otpUrl: intent.otpUrl ?? null,
-      },
-    });
-    // The fake dev adapter settles instantly ('held'); Paynow returns
-    // 'pending' and is only credited once a poll or callback confirms it.
-    const paidNow = intent.status === 'held';
-    return {
-      paidUntil: paidNow
-        ? await applySubscriptionPayment(this.prisma, providerProfileId)
-        : currentPaidUntil,
-      pending: !paidNow,
-      ...(intent.checkoutUrl ? { checkoutUrl: intent.checkoutUrl } : {}),
-      ...(intent.instructions ? { instructions: intent.instructions } : {}),
-      ...(intent.action ? { action: intent.action } : {}),
-      reference,
-    };
-  }
-
-  /**
-   * Polls Paynow for an in-flight subscription payment and credits the month
-   * the moment it clears — the provider's screen calls this while waiting on
-   * the EcoCash prompt they were just sent.
-   */
-  async subscriptionPaymentStatus(
-    providerProfileId: string,
-  ): Promise<{ status: string; paidUntil: string | null; active: boolean }> {
-    const result = await this.paymentStatus.resolve({
-      subscriptionProviderId: providerProfileId,
-    });
-    const profile = await this.prisma.providerProfile.findUniqueOrThrow({
-      where: { id: providerProfileId },
-      select: { subscriptionPaidUntil: true },
-    });
-    const paidUntil = profile.subscriptionPaidUntil?.toISOString() ?? null;
-    return { status: result.status, paidUntil, active: isSubscriptionActive(paidUntil) };
   }
 
   /**
