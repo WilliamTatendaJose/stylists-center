@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Location from 'expo-location';
 import { applyVendorSchema, MAX_PREMISES_PHOTOS } from '@sc/shared';
 import { space } from '@sc/tokens';
-import { Button, Card, Screen, ScreenHeader, Text, TextField, useTheme } from '@sc/ui';
+import { Button, Card, Pressable, Screen, ScreenHeader, Text, TextField, useTheme } from '@sc/ui';
 import { useApplyVendor, useVendorMe } from '../../src/api/hooks/useMarket.js';
-import { useLocationPickerStore } from '../../src/state/index.js';
+import { useLocationPickerStore, useSessionStore } from '../../src/state/index.js';
+import { useAddressAutocomplete } from '../../src/location/useAddressAutocomplete.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { useBack } from '../../src/navigation/useBack.js';
@@ -20,6 +21,17 @@ const styles = StyleSheet.create({
   location: { padding: space.l, marginBottom: space.l },
   error: { marginBottom: space.m },
   footer: { gap: space.s },
+  // Same address suggestions as stylist sign-up (provider-setup.tsx).
+  searchingRow: { flexDirection: 'row', alignItems: 'center', gap: space.s, marginTop: space.s },
+  addressResults: { borderWidth: 1, borderRadius: 16, overflow: 'hidden', marginTop: space.s },
+  addressResult: {
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: space.l,
+    paddingVertical: space.s,
+    borderBottomWidth: 1,
+  },
+  addressResultLast: { borderBottomWidth: 0 },
 });
 
 /**
@@ -46,6 +58,12 @@ export default function VendorApply() {
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // Searching starts as the address is typed, as in stylist sign-up. Picking
+  // a suggestion fills the address and drops the pin; the map can still be
+  // used afterwards to move it onto the exact shop.
+  const sessionLocation = useSessionStore((s) => s.location);
+  const [addressQuery, setAddressQuery] = useState('');
+  const addressLookup = useAddressAutocomplete(addressQuery, pin ?? sessionLocation);
   const pickedLocation = useLocationPickerStore((s) => s.result);
   const clearPickedLocation = useLocationPickerStore((s) => s.clearResult);
 
@@ -197,9 +215,55 @@ export default function VendorApply() {
         <TextField
           label="Shop address"
           value={shopAddress}
-          onChangeText={setShopAddress}
-          placeholder="Street, suburb and city"
+          onChangeText={(value) => {
+            setShopAddress(value);
+            setAddressQuery(value);
+          }}
+          placeholder="Start typing your street or area"
         />
+        {addressLookup.status === 'searching' ? (
+          <View style={styles.searchingRow}>
+            <ActivityIndicator size="small" color={colors.accent} />
+            <Text variant="meta" color="neutral700">
+              Finding matching addresses…
+            </Text>
+          </View>
+        ) : null}
+        {addressLookup.suggestions.length > 0 ? (
+          <View
+            style={[
+              styles.addressResults,
+              { borderColor: colors.divider, backgroundColor: colors.bg },
+            ]}
+          >
+            {addressLookup.suggestions.map((suggestion, index) => (
+              <Pressable
+                key={suggestion.id}
+                accessibilityRole="button"
+                accessibilityLabel={`Use ${suggestion.label}`}
+                onPress={() => {
+                  setShopAddress(suggestion.label);
+                  setPin({ lat: suggestion.lat, lng: suggestion.lng });
+                  setAddressQuery('');
+                }}
+                style={[
+                  styles.addressResult,
+                  { borderColor: colors.divider },
+                  index === addressLookup.suggestions.length - 1 ? styles.addressResultLast : null,
+                ]}
+              >
+                <Text variant="body" numberOfLines={2}>
+                  {suggestion.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+        {addressLookup.status === 'not-found' ? (
+          <Text variant="metaSmall" color="neutral600" style={{ marginTop: space.s }}>
+            No match found. Use the map below to place your shop.
+          </Text>
+        ) : null}
       </View>
 
       <Card bordered style={styles.location}>
