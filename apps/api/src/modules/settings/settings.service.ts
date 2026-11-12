@@ -8,6 +8,7 @@ import {
   type PlatformSettings,
   SETTING_DEFINITIONS,
   SETTING_KEYS,
+  type SettingDefinition,
   type SettingKey,
   type SettingSource,
 } from '@sc/shared';
@@ -62,7 +63,7 @@ export class SettingsService {
   async list(): Promise<AdminSettingDto[]> {
     const saved = await this.saved(true);
     return SETTING_KEYS.map((key) => {
-      const def = SETTING_DEFINITIONS[key];
+      const def: SettingDefinition = SETTING_DEFINITIONS[key];
       const fallback = this.fallback(key);
       const row = saved.get(key);
       const source: SettingSource = row ? 'console' : fallback.source;
@@ -76,7 +77,9 @@ export class SettingsService {
         source,
         env: def.env,
         fallbackValue: fallback.value,
-        ...('min' in def ? { min: def.min, max: def.max } : { maxLength: def.maxLength }),
+        ...('min' in def
+          ? { min: def.min, max: def.max }
+          : { maxLength: def.maxLength, ...(def.options ? { options: [...def.options] } : {}) }),
         updatedAt: row ? row.updatedAt.toISOString() : null,
       };
     });

@@ -11,7 +11,7 @@ import { useWallet } from '../../src/api/hooks/useWallet.js';
 import { useBookingDraftStore } from '../../src/state/index.js';
 import { useBack } from '../../src/navigation/useBack.js';
 import { formatSlotLabel, isoFromHarareSlot } from '../../src/utils/bookingWhen.js';
-import { clientPrice, coinsToApply, formatClientPrice } from '../../src/utils/bookingPrice.js';
+import { clientPrice, coinsToApply } from '../../src/utils/bookingPrice.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { TimeoutError } from '../../src/api/errors.js';
 
@@ -40,7 +40,7 @@ export default function Payment() {
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [doneParams, setDoneParams] = useState<Record<string, string> | null>(null);
   const [useCoins, setUseCoins] = useState(false);
-  const { serviceFeeBps } = useAppConfig();
+  const { serviceFeeBps, serviceFeePaidBy } = useAppConfig();
   const { data: wallet } = useWallet();
 
   const { data: provider } = useProvider(providerId ?? undefined);
@@ -80,7 +80,11 @@ export default function Payment() {
   if (!providerId || !serviceId || !date || !time || !provider || !service) return null;
 
   const whenLabel = formatSlotLabel(date, time);
-  const { feeUsdCents, totalUsdCents } = clientPrice(service.priceUsdCents, serviceFeeBps);
+  const { feeUsdCents, totalUsdCents } = clientPrice(
+    service.priceUsdCents,
+    serviceFeeBps,
+    serviceFeePaidBy,
+  );
   const coinUsdCents = wallet?.coinUsdCents ?? 0;
   const coins = useCoins ? coinsToApply(wallet?.coins ?? 0, totalUsdCents, coinUsdCents) : 0;
   const coinsValueUsdCents = coins * coinUsdCents;
@@ -183,8 +187,8 @@ export default function Payment() {
             { label: 'Service', value: service.name },
             { label: 'When', value: whenLabel },
             { label: 'Stylist price', value: formatUsd(service.priceUsdCents) },
-            { label: 'Service fee', value: formatUsd(feeUsdCents) },
-            { label: 'Total', value: formatClientPrice(service.priceUsdCents, serviceFeeBps) },
+            ...(feeUsdCents > 0 ? [{ label: 'Service fee', value: formatUsd(feeUsdCents) }] : []),
+            { label: 'Total', value: formatUsd(totalUsdCents) },
             ...(coins > 0
               ? [{ label: `${String(coins)} coins`, value: `−${formatUsd(coinsValueUsdCents)}` }]
               : []),

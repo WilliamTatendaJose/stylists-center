@@ -78,3 +78,14 @@ describe('budget settings', () => {
     );
   });
 });
+
+describe('choice settings', () => {
+  it('accepts only the listed values for who pays the service fee', () => {
+    expect(parseSettingValue('serviceFeePaidBy', 'stylist')).toEqual({
+      ok: true,
+      value: 'stylist',
+    });
+    expect(parseSettingValue('serviceFeePaidBy', 'client')).toEqual({ ok: true, value: 'client' });
+    expect(parseSettingValue('serviceFeePaidBy', 'nobody').ok).toBe(false);
+  });
+});

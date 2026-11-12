@@ -88,12 +88,20 @@ export class BookingsService {
     // here. The fee is frozen now, from today's setting, so a later change
     // never rewrites what this client was shown.
     const config = this.settings ?? settingsFor(this.prisma);
-    const [serviceFeeBps, coinUsdCents] = await Promise.all([
+    const [serviceFeeBps, coinUsdCents, paidBy] = await Promise.all([
       config.get('serviceFeeBps'),
       config.get('coinUsdCents'),
+      config.get('serviceFeePaidBy'),
     ]);
+    // Who carries the fee is frozen too. The fee amount (and the stylist's
+    // bill) is the same either way; only the client's total differs.
+    const clientPaysFee = paidBy !== 'stylist';
     const serviceFeeUsdCents = feeCents(service.priceUsdCents, serviceFeeBps);
-    const clientTotal = clientTotalCents(service.priceUsdCents, serviceFeeBps);
+    const clientTotal = clientTotalCents(
+      service.priceUsdCents,
+      serviceFeeBps,
+      clientPaysFee ? 'client' : 'stylist',
+    );
     const coins = input.coins ?? 0;
     const maxCoins = maxCoinsForBooking(clientTotal, coinUsdCents);
     if (coins > maxCoins) {
@@ -157,6 +165,7 @@ export class BookingsService {
           priceUsdCents: service.priceUsdCents,
           serviceFeeUsdCents,
           serviceFeeBps,
+          clientPaysFee,
         },
       });
 

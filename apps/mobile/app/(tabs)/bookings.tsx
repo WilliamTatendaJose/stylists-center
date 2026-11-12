@@ -148,8 +148,8 @@ const BookingCard = memo(function BookingCard({
           <Text variant="metaSmall" color="neutral600">
             {paidInApp
               ? `Paid in the app · ${formatUsd(booking.priceUsdCents)}`
-              : booking.serviceFeeUsdCents > 0
-                ? `${formatUsd(booking.clientTotalUsdCents)} (includes ${formatUsd(booking.serviceFeeUsdCents)} service fee)`
+              : booking.clientTotalUsdCents > booking.priceUsdCents
+                ? `${formatUsd(booking.clientTotalUsdCents)} (includes ${formatUsd(booking.clientTotalUsdCents - booking.priceUsdCents)} service fee)`
                 : formatUsd(booking.clientTotalUsdCents)}
           </Text>
           {!paidInApp && booking.coinsUsed > 0 ? (

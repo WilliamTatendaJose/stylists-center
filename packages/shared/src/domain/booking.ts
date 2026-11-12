@@ -164,8 +164,11 @@ export function bookingAmounts(params: {
   priceUsdCents: number;
   serviceFeeUsdCents: number;
   coinsUsdCents: number;
+  /** False when the stylist carried the fee: the client paid the listed price. */
+  clientPaysFee?: boolean;
 }): { clientTotalUsdCents: number; amountDueUsdCents: number } {
-  const clientTotalUsdCents = params.priceUsdCents + params.serviceFeeUsdCents;
+  const clientTotalUsdCents =
+    params.priceUsdCents + (params.clientPaysFee === false ? 0 : params.serviceFeeUsdCents);
   const amountDueUsdCents =
     params.paymentMethod === 'ecocash'
       ? 0

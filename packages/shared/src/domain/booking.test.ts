@@ -183,6 +183,18 @@ describe('reference formatting', () => {
 });
 
 describe('bookingAmounts', () => {
+  it('leaves the fee out of the client total when the stylist carried it', () => {
+    expect(
+      bookingAmounts({
+        paymentMethod: 'cash',
+        priceUsdCents: 2000,
+        serviceFeeUsdCents: 60,
+        coinsUsdCents: 100,
+        clientPaysFee: false,
+      }),
+    ).toEqual({ clientTotalUsdCents: 2000, amountDueUsdCents: 1900 });
+  });
+
   it('adds the fee to the price and takes coins off what is paid in cash', () => {
     expect(
       bookingAmounts({

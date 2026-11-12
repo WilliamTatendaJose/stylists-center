@@ -767,6 +767,15 @@ export class ProviderService {
       serviceFeeUsdCents: true,
       coinsUsdCents: true,
     } as const;
+    // The fee is part of what the client handed over only when the client
+    // paid it (serviceFeePaidBy, frozen per booking as clientPaysFee).
+    const clientFee = async (where: Prisma.BookingWhereInput) =>
+      (
+        await this.prisma.booking.aggregate({
+          where: { ...where, clientPaysFee: true },
+          _sum: { serviceFeeUsdCents: true },
+        })
+      )._sum.serviceFeeUsdCents ?? 0;
     const orderSums = {
       totalUsdCents: true,
       deliveryChargeUsdCents: true,
@@ -782,6 +791,9 @@ export class ProviderService {
       feesOwedUsdCents,
       bookings,
       orders,
+      feeAll,
+      feeMonth,
+      feeUpcoming,
     ] = await Promise.all([
       this.prisma.booking.aggregate({ where: doneBooking, _sum: bookingSums }),
       this.prisma.booking.aggregate({
@@ -812,6 +824,9 @@ export class ProviderService {
         orderBy: { updatedAt: 'desc' },
         take: 100,
       }),
+      clientFee(doneBooking),
+      clientFee({ ...doneBooking, completedAt: { gte: monthStart } }),
+      clientFee({ providerId, paymentMethod: 'cash', status: 'confirmed' }),
     ]);
 
     interface BookingSum {
@@ -824,8 +839,8 @@ export class ProviderService {
       deliveryChargeUsdCents: number | null;
       coinsValueUsdCents: number | null;
     }
-    const bookingCash = (s: BookingSum) =>
-      Math.max(0, (s.priceUsdCents ?? 0) + (s.serviceFeeUsdCents ?? 0) - (s.coinsUsdCents ?? 0));
+    const bookingCash = (s: BookingSum, feesClientPaid: number) =>
+      Math.max(0, (s.priceUsdCents ?? 0) + feesClientPaid - (s.coinsUsdCents ?? 0));
     const orderCash = (s: OrderSum) =>
       Math.max(
         0,
@@ -892,9 +907,10 @@ export class ProviderService {
       .slice(0, 100);
 
     return {
-      receivedUsdCents: bookingCash(bookingsAll._sum) + orderCash(ordersAll._sum),
-      receivedThisMonthUsdCents: bookingCash(bookingsMonth._sum) + orderCash(ordersMonth._sum),
-      toCollectUsdCents: bookingCash(upcoming._sum),
+      receivedUsdCents: bookingCash(bookingsAll._sum, feeAll) + orderCash(ordersAll._sum),
+      receivedThisMonthUsdCents:
+        bookingCash(bookingsMonth._sum, feeMonth) + orderCash(ordersMonth._sum),
+      toCollectUsdCents: bookingCash(upcoming._sum, feeUpcoming),
       feesOwedUsdCents,
       jobs,
     };

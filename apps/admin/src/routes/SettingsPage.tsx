@@ -113,7 +113,8 @@ function SettingRow({ setting, canEdit }: { setting: AdminSettingDto; canEdit: b
         {!editing && (
           <div className="flex items-center gap-2">
             <span className="text-base font-semibold text-neutral-900 dark:text-dark-text">
-              {displaySetting(setting.kind, setting.value)}
+              {setting.options?.find((option) => option.value === setting.value)?.label ??
+                displaySetting(setting.kind, setting.value)}
             </span>
             {canEdit && (
               <Button
@@ -143,15 +144,32 @@ function SettingRow({ setting, canEdit }: { setting: AdminSettingDto; canEdit: b
       </div>
       {editing && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            aria-label={setting.label}
-            value={draft}
-            maxLength={setting.maxLength}
-            onChange={(e) => {
-              setDraft(e.target.value);
-            }}
-            className="w-64 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-accent focus:outline-none dark:border-dark-border dark:bg-white/5 dark:text-dark-text"
-          />
+          {setting.options ? (
+            <select
+              aria-label={setting.label}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+              }}
+              className="w-72 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-accent focus:outline-none dark:border-dark-border dark:bg-white/5 dark:text-dark-text"
+            >
+              {setting.options.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              aria-label={setting.label}
+              value={draft}
+              maxLength={setting.maxLength}
+              onChange={(e) => {
+                setDraft(e.target.value);
+              }}
+              className="w-64 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-900 focus:border-accent focus:outline-none dark:border-dark-border dark:bg-white/5 dark:text-dark-text"
+            />
+          )}
           {unit && <span className="text-sm text-neutral-500">{unit}</span>}
           <Button
             disabled={update.isPending}
