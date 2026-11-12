@@ -6,9 +6,13 @@ import { applyVendorSchema, MAX_PREMISES_PHOTOS } from '@sc/shared';
 import { space } from '@sc/tokens';
 import { Button, Card, Screen, ScreenHeader, Text, TextField, useTheme } from '@sc/ui';
 import { useApplyVendor, useVendorMe } from '../../src/api/hooks/useMarket.js';
+import { useLocationPickerStore } from '../../src/state/index.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { PhotoPicker } from '../../src/components/PhotoPicker.js';
 import { useBack } from '../../src/navigation/useBack.js';
+
+/** Tags map-picker results meant for this screen (see useLocationPickerStore). */
+const SHOP_PIN_PURPOSE = 'vendor-shop';
 
 const styles = StyleSheet.create({
   intro: { marginBottom: space.xl },
@@ -42,6 +46,31 @@ export default function VendorApply() {
   const [locating, setLocating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const pickedLocation = useLocationPickerStore((s) => s.result);
+  const clearPickedLocation = useLocationPickerStore((s) => s.clearResult);
+
+  // The map picker pops back to this screen (still mounted underneath) and
+  // leaves its result in the store; take only the pick made for the shop.
+  useEffect(() => {
+    if (pickedLocation?.purpose !== SHOP_PIN_PURPOSE) return;
+    setPin({ lat: pickedLocation.lat, lng: pickedLocation.lng });
+    // Fill the address from the map only if nothing was typed.
+    if (pickedLocation.areaName)
+      setShopAddress((typed) => typed.trim() || pickedLocation.areaName || '');
+    clearPickedLocation();
+  }, [pickedLocation, clearPickedLocation]);
+
+  const openMap = () => {
+    setError(null);
+    router.push({
+      pathname: '/map/pick-location',
+      params: {
+        purpose: SHOP_PIN_PURPOSE,
+        ...(shopAddress.trim() ? { q: shopAddress.trim() } : {}),
+        ...(pin ? { lat: String(pin.lat), lng: String(pin.lng) } : {}),
+      },
+    });
+  };
 
   // Prefill once from a previous application; never overwrite what is being typed.
   useEffect(() => {
@@ -177,20 +206,20 @@ export default function VendorApply() {
         <Text variant="cardTitle">Where is your shop?</Text>
         <Text variant="meta" color="neutral700" style={{ marginTop: space.xs }}>
           {pin
-            ? 'Location saved. Buyers will see how far you are.'
-            : 'Stand at your shop and save the location so buyers can find you.'}
+            ? `Pinned at ${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)}. Buyers will see how far you are.`
+            : 'Find your address on the map and move the pin onto your shop, or stand at your shop and use your current location.'}
         </Text>
         <Button
-          label={
-            locating
-              ? 'Finding you…'
-              : pin
-                ? 'Update to my current location'
-                : 'Use my current location'
-          }
-          variant="secondary"
+          label={pin ? 'Move the pin on the map' : 'Find on the map'}
           block
           style={{ marginTop: space.m }}
+          onPress={openMap}
+        />
+        <Button
+          label={locating ? 'Finding you…' : 'Use my current location'}
+          variant="secondary"
+          block
+          style={{ marginTop: space.s }}
           disabled={locating}
           onPress={() => {
             void pinCurrentLocation();

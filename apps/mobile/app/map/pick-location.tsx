@@ -62,7 +62,12 @@ const styles = StyleSheet.create({
  * after this screen pops, not before it mounts.
  */
 export default function PickLocation() {
-  const { lat: latParam, lng: lngParam } = useLocalSearchParams<{ lat?: string; lng?: string }>();
+  const {
+    lat: latParam,
+    lng: lngParam,
+    q: queryParam,
+    purpose,
+  } = useLocalSearchParams<{ lat?: string; lng?: string; q?: string; purpose?: string }>();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const sessionLocation = useSessionStore((s) => s.location);
@@ -87,7 +92,9 @@ export default function PickLocation() {
   const [areaName, setAreaName] = useState<string | null>(null);
   const [resolving, setResolving] = useState(false);
   const [locating, setLocating] = useState(false);
-  const [addressQuery, setAddressQuery] = useState('');
+  // A caller can hand over an address the person already typed, so they
+  // don't have to type it twice.
+  const [addressQuery, setAddressQuery] = useState(queryParam?.trim() ?? '');
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
@@ -161,8 +168,18 @@ export default function PickLocation() {
     }
   };
 
+  // With a typed address and no pin yet, search it straight away; the person
+  // then only has to nudge the pin. With a pin already set, keep it and just
+  // show the address in the search box.
+  const hasInitialPin = Number.isFinite(initialLat) && Number.isFinite(initialLng);
+  useEffect(() => {
+    if (!hasInitialPin && addressQuery) void searchAddress();
+    // Once, with what the screen was opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const confirm = () => {
-    setResult({ lat: picked[1], lng: picked[0], areaName });
+    setResult({ lat: picked[1], lng: picked[0], areaName, ...(purpose ? { purpose } : {}) });
     router.back();
   };
 

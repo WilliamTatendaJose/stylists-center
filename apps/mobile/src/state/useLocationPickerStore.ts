@@ -5,6 +5,13 @@ export interface PickedLocation {
   lng: number;
   /** Best-effort reverse-geocoded label for the tapped point. Null when the geocoder had nothing or failed. */
   areaName: string | null;
+  /**
+   * Which screen asked, from the picker's `purpose` param. Several screens
+   * can be mounted under the picker at once (My page under the vendor
+   * application, say), so each consumes only results meant for it.
+   * Undefined for the stylist area pickers, which predate this field.
+   */
+  purpose?: string;
 }
 
 /**
