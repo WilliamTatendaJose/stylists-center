@@ -40,7 +40,7 @@ export default function Payment() {
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [doneParams, setDoneParams] = useState<Record<string, string> | null>(null);
   const [useCoins, setUseCoins] = useState(false);
-  const { serviceFeeBps, serviceFeePaidBy } = useAppConfig();
+  const { serviceFeeBps, serviceFeePaidBy, coinUsdCents: configCoinUsdCents } = useAppConfig();
   const { data: wallet } = useWallet();
 
   const { data: provider } = useProvider(providerId ?? undefined);
@@ -85,7 +85,7 @@ export default function Payment() {
     serviceFeeBps,
     serviceFeePaidBy,
   );
-  const coinUsdCents = wallet?.coinUsdCents ?? 0;
+  const coinUsdCents = wallet?.coinUsdCents ?? configCoinUsdCents;
   // Only coins that can be spent count: expired coins and agent earnings can't pay for a booking.
   const spendable = wallet?.spendableCoins ?? 0;
   const coins = useCoins ? coinsToApply(spendable, totalUsdCents, coinUsdCents) : 0;
@@ -228,14 +228,16 @@ export default function Payment() {
             }}
           />
         </View>
-      ) : spendable > 0 && coinsForAll > 0 ? (
-        // Coins only pay for a whole booking, so say how far off they are.
+      ) : coinsForAll > 0 ? (
+        // Always offered, so people know they can pay with coins. Coins only
+        // pay for a whole booking, so say how far off the balance is.
         <View style={styles.section}>
           <Text variant="sectionLabel" style={styles.sectionLabel}>
             Coins
           </Text>
           <Text variant="body" color="neutral700">
-            You have {spendable} coins. This booking takes {coinsForAll} coins to pay with coins.
+            Pay with {coinsForAll} coins: you have {spendable}. Coins pay for the whole booking, so
+            you need {coinsForAll - spendable} more to use them here.
           </Text>
         </View>
       ) : null}

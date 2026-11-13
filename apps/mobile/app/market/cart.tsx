@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import {
   formatUsd,
+  coinsToCover,
   coinsToPayInFull,
   orderAmountDueUsdCents,
   orderServiceFeeUsdCents,
@@ -162,10 +163,14 @@ export default function Cart() {
   // server enforces the same rule.
   // Only spendable coins (not expired, not agent earnings) can pay for an order.
   const coinsAvailable = wallet?.spendableCoins ?? 0;
-  const coinUsdCents = wallet?.coinUsdCents ?? 0;
   // The marketplace commission, shown as a service fee when the buyer pays
   // it (console setting). The server works it out the same way.
-  const { marketplaceFeeBps, marketplaceFeePaidBy } = useAppConfig();
+  const {
+    marketplaceFeeBps,
+    marketplaceFeePaidBy,
+    coinUsdCents: configCoinUsdCents,
+  } = useAppConfig();
+  const coinUsdCents = wallet?.coinUsdCents ?? configCoinUsdCents;
   const planWith = (startingCoins: number) => {
     let coinsLeft = startingCoins;
     return groups.map((group) => {
@@ -198,6 +203,10 @@ export default function Cart() {
   const plan = planWith(useCoins ? coinsAvailable : 0);
   // Whether the coins could pay for at least one whole order.
   const coinsCoverAnOrder = planWith(coinsAvailable).some((p) => p.coins > 0);
+  // Coins the cheapest order would take, to say how far off the balance is.
+  const coinsForCheapestOrder = Math.min(
+    ...planWith(0).map((p) => coinsToCover(p.due, coinUsdCents)),
+  );
   const totalDue = plan.reduce((n, p) => n + p.due, 0);
   const totalDelivery = plan.reduce((n, p) => n + p.delivery, 0);
   const totalServiceFee = plan.reduce((n, p) => n + p.serviceFee, 0);
@@ -508,6 +517,13 @@ export default function Cart() {
               setUseCoins((current) => !current);
             }}
           />
+        ) : Number.isFinite(coinsForCheapestOrder) && coinsForCheapestOrder > 0 ? (
+          // Always mentioned, so people know coins can pay for an order.
+          <Text variant="body" color="neutral700" style={styles.sectionLabel}>
+            Pay with coins: {groups.length > 1 ? 'your cheapest order takes' : 'this order takes'}{' '}
+            {coinsForCheapestOrder} coins and you have {coinsAvailable}. Coins pay for whole orders
+            only.
+          </Text>
         ) : null}
       </View>
 
