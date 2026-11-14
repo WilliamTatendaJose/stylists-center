@@ -151,6 +151,34 @@ describe('per-km delivery', () => {
     expect(effectiveDeliveryPerKmUsdCents(80, 50)).toBe(80);
   });
 
+  it('charges a flat fee for the first km, then per km', async () => {
+    const { deliveryChargeForTariff, effectiveDeliveryTariff, formatDeliveryTariff } =
+      await import('./order.js');
+    const tariff = { flatFeeUsdCents: 200, flatKm: 3, perKmUsdCents: 50 };
+    expect(deliveryChargeForTariff(0.4, tariff)).toBe(200);
+    expect(deliveryChargeForTariff(3, tariff)).toBe(200);
+    // 4.1 km bills as 5 km: 2 km beyond the flat 3.
+    expect(deliveryChargeForTariff(4.1, tariff)).toBe(300);
+    // No flat part: plain per km, as before.
+    expect(deliveryChargeForTariff(4.1, { flatFeeUsdCents: 0, flatKm: 0, perKmUsdCents: 50 })).toBe(
+      250,
+    );
+    expect(formatDeliveryTariff(tariff)).toBe('$2.00 for the first 3 km, then $0.50 per km');
+    expect(formatDeliveryTariff({ flatFeeUsdCents: 0, flatKm: 0, perKmUsdCents: 50 })).toBe(
+      '$0.50 per km',
+    );
+    expect(formatDeliveryTariff({ flatFeeUsdCents: 0, flatKm: 2, perKmUsdCents: 50 })).toBe(
+      'Free for the first 2 km, then $0.50 per km',
+    );
+    // A shop's own values win; unset ones fall back to the standard.
+    expect(
+      effectiveDeliveryTariff(
+        { deliveryFlatFeeUsdCents: 300, deliveryFlatKm: null, deliveryPerKmUsdCents: 0 },
+        tariff,
+      ),
+    ).toEqual({ flatFeeUsdCents: 300, flatKm: 3, perKmUsdCents: 50 });
+  });
+
   it('measures straight-line distance', async () => {
     const { distanceKmBetween } = await import('./order.js');
     // 0.01 degrees of latitude is about 1.11 km.

@@ -617,6 +617,10 @@ model VendorApplication {
   deliveryChargeUsdCents Int             @default(0)
   /// The shop's delivery rate per km; 0 uses the standard rate (setting deliveryPerKmUsdCents).
   deliveryPerKmUsdCents  Int             @default(0)
+  /// The shop's flat delivery fee; null uses the standard fee (setting deliveryFlatFeeUsdCents).
+  deliveryFlatFeeUsdCents Int?
+  /// Km the shop's flat fee covers; null uses the standard distance (setting deliveryFlatKm).
+  deliveryFlatKm         Int?
   deliveryAreas          String[]        @default([])
   collectionAddress      String?
   collectionHours        String?

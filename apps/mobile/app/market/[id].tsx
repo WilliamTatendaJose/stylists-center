@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { BadgeCheck } from 'lucide-react-native';
 import {
+  formatDeliveryTariff,
   formatCoinPrice,
   formatUsd,
   MAX_ORDER_ITEM_QUANTITY,
@@ -88,6 +89,8 @@ export default function ProductDetail() {
         delivers: product.delivers,
         deliveryChargeUsdCents: product.deliveryChargeUsdCents,
         deliveryPerKmUsdCents: product.deliveryPerKmUsdCents,
+        deliveryFlatFeeUsdCents: product.deliveryFlatFeeUsdCents,
+        deliveryFlatKm: product.deliveryFlatKm,
       },
     );
     setAdded(true);
@@ -185,9 +188,11 @@ export default function ProductDetail() {
         </Text>
         <Text variant="meta" color="neutral700">
           {product.delivers
-            ? `Delivery: ${formatUsd(product.deliveryPerKmUsdCents)} per km${
-                product.deliveryAreas.length ? ` · ${product.deliveryAreas.join(', ')}` : ''
-              }`
+            ? `Delivery: ${formatDeliveryTariff({
+                flatFeeUsdCents: product.deliveryFlatFeeUsdCents,
+                flatKm: product.deliveryFlatKm,
+                perKmUsdCents: product.deliveryPerKmUsdCents,
+              })}${product.deliveryAreas.length ? ` · ${product.deliveryAreas.join(', ')}` : ''}`
             : 'Collection only. This shop does not deliver.'}
         </Text>
       </View>

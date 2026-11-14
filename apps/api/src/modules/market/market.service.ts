@@ -15,9 +15,10 @@ import {
   isOrderCompleted,
   billableDeliveryKm,
   coinsToCover,
-  deliveryChargeUsdCents as deliveryChargeFor,
+  deliveryChargeForTariff,
   distanceKmBetween,
-  effectiveDeliveryPerKmUsdCents,
+  effectiveDeliveryTariff,
+  type DeliveryTariff,
   type DeliveryQuoteDto,
   orderServiceFeeUsdCents,
   orderTotalUsdCents,
@@ -70,7 +71,8 @@ const PRODUCT_COLUMNS = Prisma.sql`
   pr.tint, pr.initials, COALESCE(pr."profileImageUrl", pr."portfolioImageUrls"[1]) AS "providerImageUrl", pr.verified, pr."areaName",
   COALESCE(va."collectionHours", pr."workingHoursLabel") AS "pickupHours",
   COALESCE(va."collectionAddress", va."shopAddress") AS "pickupAddress",
-  va.delivers, va."deliveryChargeUsdCents", va."deliveryPerKmUsdCents", va."deliveryAreas",
+  va.delivers, va."deliveryChargeUsdCents", va."deliveryPerKmUsdCents",
+  va."deliveryFlatFeeUsdCents", va."deliveryFlatKm", va."deliveryAreas",
   pr."ratingAvg" AS "sellerRatingAvg", pr."completedCount" AS "sellerCompletedCount"`;
 
 @Injectable()
@@ -206,7 +208,7 @@ export class MarketService {
     `;
     const row = rows[0];
     if (!row) throw new NotFoundException('Product not found');
-    return toProductDetail(row, await this.standardDeliveryRate());
+    return toProductDetail(row, await this.standardDeliveryTariff());
   }
 
   /**
@@ -235,10 +237,10 @@ export class MarketService {
     }
     const coinUsdCents = coins > 0 ? await this.setting('coinUsdCents') : 0;
     const settings = this.settings ?? settingsFor(this.prisma);
-    const [marketplaceFeeBps, marketplaceFeePaidBy, standardDeliveryPerKm] = await Promise.all([
+    const [marketplaceFeeBps, marketplaceFeePaidBy, standardDelivery] = await Promise.all([
       settings.get('marketplaceFeeBps'),
       settings.get('marketplaceFeePaidBy'),
-      settings.get('deliveryPerKmUsdCents'),
+      this.standardDeliveryTariff(),
     ]);
     const deliveryPoint =
       fulfilment === 'delivery' &&
@@ -353,7 +355,7 @@ export class MarketService {
       let deliveryDistanceKm: number | null = null;
       if (fulfilment === 'delivery') {
         if (deliveryPoint) {
-          const quote = deliveryQuote(seller, deliveryPoint, standardDeliveryPerKm);
+          const quote = deliveryQuote(seller, deliveryPoint, standardDelivery);
           deliveryChargeUsdCents = quote.chargeUsdCents;
           deliveryDistanceKm = quote.distanceKm;
         } else {
@@ -792,11 +794,18 @@ export class MarketService {
     if (seller?.vendor?.status !== 'approved' || !seller.vendor.delivers) {
       throw new BadRequestException("This shop doesn't deliver");
     }
-    return deliveryQuote(seller, point, await this.standardDeliveryRate());
+    return deliveryQuote(seller, point, await this.standardDeliveryTariff());
   }
 
-  private async standardDeliveryRate(): Promise<number> {
-    return (this.settings ?? settingsFor(this.prisma)).get('deliveryPerKmUsdCents');
+  /** The console's standard delivery tariff, for shops that haven't set their own. */
+  private async standardDeliveryTariff(): Promise<DeliveryTariff> {
+    const settings = this.settings ?? settingsFor(this.prisma);
+    const [flatFeeUsdCents, flatKm, perKmUsdCents] = await Promise.all([
+      settings.get('deliveryFlatFeeUsdCents'),
+      settings.get('deliveryFlatKm'),
+      settings.get('deliveryPerKmUsdCents'),
+    ]);
+    return { flatFeeUsdCents, flatKm, perKmUsdCents };
   }
 
   private async setting(key: 'coinUsdCents'): Promise<number> {
@@ -851,8 +860,9 @@ export class MarketService {
 }
 
 /**
- * Per-km delivery from the shop (its pin, or the stylist's location when it
- * has none) to a point: straight-line km, rounded up, at least 1 km.
+ * Delivery from the shop (its pin, or the stylist's location when it has
+ * none) to a point: the flat fee covers the first km, then per km;
+ * straight-line km, rounded up, at least 1 km.
  */
 function deliveryQuote(
   seller: {
@@ -862,21 +872,33 @@ function deliveryQuote(
       shopLat: number | null;
       shopLng: number | null;
       deliveryPerKmUsdCents: number;
+      deliveryFlatFeeUsdCents: number | null;
+      deliveryFlatKm: number | null;
     } | null;
   },
   point: { lat: number; lng: number },
-  standardRate: number,
+  standard: DeliveryTariff,
 ): DeliveryQuoteDto {
   const shop =
     seller.vendor?.shopLat != null && seller.vendor.shopLng != null
       ? { lat: seller.vendor.shopLat, lng: seller.vendor.shopLng }
       : { lat: seller.latitude, lng: seller.longitude };
   const km = billableDeliveryKm(distanceKmBetween(shop, point));
-  const perKmUsdCents = effectiveDeliveryPerKmUsdCents(
-    seller.vendor?.deliveryPerKmUsdCents ?? 0,
-    standardRate,
+  const tariff = effectiveDeliveryTariff(
+    {
+      deliveryFlatFeeUsdCents: seller.vendor?.deliveryFlatFeeUsdCents ?? null,
+      deliveryFlatKm: seller.vendor?.deliveryFlatKm ?? null,
+      deliveryPerKmUsdCents: seller.vendor?.deliveryPerKmUsdCents ?? 0,
+    },
+    standard,
   );
-  return { distanceKm: km, perKmUsdCents, chargeUsdCents: deliveryChargeFor(km, perKmUsdCents) };
+  return {
+    distanceKm: km,
+    perKmUsdCents: tariff.perKmUsdCents,
+    flatFeeUsdCents: tariff.flatFeeUsdCents,
+    flatKm: tariff.flatKm,
+    chargeUsdCents: deliveryChargeForTariff(km, tariff),
+  };
 }
 
 /** The checkout response, rebuilt from a stored order so a replayed request gets the same answer. */

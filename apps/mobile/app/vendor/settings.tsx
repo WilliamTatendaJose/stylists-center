@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import { formatUsd, vendorFulfilmentSchema } from '@sc/shared';
+import {
+  deliveryChargeForTariff,
+  effectiveDeliveryTariff,
+  formatDeliveryTariff,
+  formatUsd,
+  vendorFulfilmentSchema,
+} from '@sc/shared';
 import { space } from '@sc/tokens';
 import {
   Button,
@@ -50,8 +56,19 @@ export default function VendorSettings() {
   const application = vendorMe?.application ?? null;
 
   const [delivers, setDelivers] = useState(false);
-  const { deliveryPerKmUsdCents: standardPerKm } = useAppConfig();
+  const {
+    deliveryPerKmUsdCents: standardPerKm,
+    deliveryFlatFeeUsdCents: standardFlatFee,
+    deliveryFlatKm: standardFlatKm,
+  } = useAppConfig();
+  const standardTariff = {
+    flatFeeUsdCents: standardFlatFee,
+    flatKm: standardFlatKm,
+    perKmUsdCents: standardPerKm,
+  };
   const [charge, setCharge] = useState('');
+  const [flatFee, setFlatFee] = useState('');
+  const [flatKm, setFlatKm] = useState('');
   const [areas, setAreas] = useState('');
   const [collectionAddress, setCollectionAddress] = useState('');
   const [collectionHours, setCollectionHours] = useState('');
@@ -67,6 +84,12 @@ export default function VendorSettings() {
         ? (application.deliveryPerKmUsdCents / 100).toFixed(2)
         : '',
     );
+    setFlatFee(
+      application.deliveryFlatFeeUsdCents !== null
+        ? (application.deliveryFlatFeeUsdCents / 100).toFixed(2)
+        : '',
+    );
+    setFlatKm(application.deliveryFlatKm !== null ? String(application.deliveryFlatKm) : '');
     setAreas(application.deliveryAreas.join(', '));
     setCollectionAddress(application.collectionAddress ?? application.shopAddress);
     setCollectionHours(application.collectionHours ?? '');
@@ -80,8 +103,22 @@ export default function VendorSettings() {
     );
   }
 
+  // Empty fields use the standard values from the console.
+  const centsOrNull = (text: string) =>
+    text.trim() === '' ? null : Math.round(Number(text.trim()) * 100);
+  const kmOrNull = (text: string) => (text.trim() === '' ? null : Number(text.trim()));
   const typedRate = Math.round(Number(charge || '0') * 100);
-  const ratePreview = Number.isFinite(typedRate) && typedRate > 0 ? typedRate : standardPerKm;
+  const typedFlatFee = centsOrNull(flatFee);
+  const typedFlatKm = kmOrNull(flatKm);
+  const previewTariff = effectiveDeliveryTariff(
+    {
+      deliveryPerKmUsdCents: Number.isFinite(typedRate) ? typedRate : 0,
+      deliveryFlatFeeUsdCents:
+        typedFlatFee !== null && Number.isFinite(typedFlatFee) ? typedFlatFee : null,
+      deliveryFlatKm: typedFlatKm !== null && Number.isInteger(typedFlatKm) ? typedFlatKm : null,
+    },
+    standardTariff,
+  );
 
   const save = () => {
     setError(null);
@@ -90,9 +127,19 @@ export default function VendorSettings() {
       setError('Enter the delivery rate per km in dollars, for example 0.50.');
       return;
     }
+    if (typedFlatFee !== null && (!Number.isFinite(typedFlatFee) || typedFlatFee < 0)) {
+      setError('Enter the flat delivery fee in dollars, for example 2.00.');
+      return;
+    }
+    if (typedFlatKm !== null && (!Number.isInteger(typedFlatKm) || typedFlatKm < 0)) {
+      setError('Enter the km the flat fee covers as a whole number, for example 3.');
+      return;
+    }
     const parsed = vendorFulfilmentSchema.safeParse({
       delivers,
       deliveryPerKmUsdCents: delivers ? chargeCents : 0,
+      deliveryFlatFeeUsdCents: delivers ? typedFlatFee : null,
+      deliveryFlatKm: delivers ? typedFlatKm : null,
       deliveryAreas: delivers ? parseAreas(areas) : [],
       collectionAddress: collectionAddress.trim() || null,
       collectionHours: collectionHours.trim() || null,
@@ -160,16 +207,35 @@ export default function VendorSettings() {
         <View style={styles.section}>
           <View style={styles.field}>
             <TextField
-              label="Delivery rate per km (USD)"
+              label="Flat delivery fee (USD)"
+              value={flatFee}
+              onChangeText={setFlatFee}
+              keyboardType="decimal-pad"
+              placeholder={(standardFlatFee / 100).toFixed(2)}
+            />
+          </View>
+          <View style={styles.field}>
+            <TextField
+              label="Km covered by the flat fee"
+              value={flatKm}
+              onChangeText={setFlatKm}
+              keyboardType="number-pad"
+              placeholder={String(standardFlatKm)}
+            />
+          </View>
+          <View style={styles.field}>
+            <TextField
+              label="Rate per km after that (USD)"
               value={charge}
               onChangeText={setCharge}
               keyboardType="decimal-pad"
               placeholder={(standardPerKm / 100).toFixed(2)}
             />
             <Text variant="metaSmall" color="neutral600">
-              Buyers pay this for each km from your shop to their delivery point (rounded up, at
-              least 1 km): 4 km at {formatUsd(ratePreview)} is {formatUsd(ratePreview * 4)}. Leave
-              it empty to use the standard {formatUsd(standardPerKm)} per km.
+              Buyers pay {formatDeliveryTariff(previewTariff)}, measured from your shop to their
+              delivery point (rounded up to whole km): 5 km costs{' '}
+              {formatUsd(deliveryChargeForTariff(5, previewTariff))}. Leave a field empty to use the
+              standard: {formatDeliveryTariff(standardTariff)}.
             </Text>
           </View>
           <TextField

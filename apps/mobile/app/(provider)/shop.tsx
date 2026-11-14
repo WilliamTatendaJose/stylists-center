@@ -3,6 +3,8 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Package, ShoppingBag } from 'lucide-react-native';
 import {
+  effectiveDeliveryTariff,
+  formatDeliveryTariff,
   formatUsd,
   isOrderCompleted,
   ORDER_STATUS_LABELS,
@@ -38,6 +40,7 @@ import {
   useVendorOrders,
 } from '../../src/api/hooks/useMarket.js';
 import { useStartOrderConversation } from '../../src/api/hooks/useChat.js';
+import { useAppConfig } from '../../src/api/hooks/useAppConfig.js';
 import { describeError } from '../../src/api/errorMessage.js';
 import { MarketBrowse } from '../../src/components/MarketBrowse.js';
 import { cartItemCount, useCartStore } from '../../src/state/index.js';
@@ -300,6 +303,7 @@ export function ShopScreen({ standalone = false }: { standalone?: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [showAllOrderHistory, setShowAllOrderHistory] = useState(false);
   const [pickupNotes, setPickupNotes] = useState<Record<string, string>>({});
+  const config = useAppConfig();
   const isInProgress = (order: ProviderOrderDto) =>
     order.status !== 'cancelled' && !isOrderCompleted(order.status);
   const incomingOrders = orders?.filter(isInProgress) ?? [];
@@ -548,11 +552,13 @@ export function ShopScreen({ standalone = false }: { standalone?: boolean }) {
             <Text variant="cardTitle">Delivery and collection</Text>
             <Text variant="meta" color="neutral700" style={styles.meta}>
               {vendor?.delivers
-                ? `You deliver (${
-                    vendor.deliveryPerKmUsdCents > 0
-                      ? `${formatUsd(vendor.deliveryPerKmUsdCents)} per km`
-                      : 'standard rate per km'
-                  }) to ${vendor.deliveryAreas.join(', ')}.`
+                ? `You deliver (${formatDeliveryTariff(
+                    effectiveDeliveryTariff(vendor, {
+                      flatFeeUsdCents: config.deliveryFlatFeeUsdCents,
+                      flatKm: config.deliveryFlatKm,
+                      perKmUsdCents: config.deliveryPerKmUsdCents,
+                    }),
+                  )}) to ${vendor.deliveryAreas.join(', ')}.`
                 : 'You do not deliver. Buyers collect from your shop.'}
             </Text>
             <Button

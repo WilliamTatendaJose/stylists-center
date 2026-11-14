@@ -43,8 +43,11 @@ export const productDetailSchema = productRowSchema.extend({
   pickupHours: z.string(),
   pickupAddress: z.string(),
   deliveryChargeUsdCents: z.number().int(),
-  /** Delivery rate per km (the shop's own, or the standard rate). */
+  /** Delivery rate per km after the flat distance (the shop's own, or the standard rate). */
   deliveryPerKmUsdCents: z.number().int(),
+  /** Flat delivery fee and the km it covers (the shop's own, or the standard values). */
+  deliveryFlatFeeUsdCents: z.number().int(),
+  deliveryFlatKm: z.number().int(),
   /** Free-text places the vendor delivers to, as they wrote them. */
   deliveryAreas: z.array(z.string()),
 });
@@ -179,6 +182,8 @@ export const deliveryQuoteSchema = z.object({
   /** Whole km charged (rounded up, at least 1). */
   distanceKm: z.number(),
   perKmUsdCents: z.number().int(),
+  flatFeeUsdCents: z.number().int(),
+  flatKm: z.number().int(),
   chargeUsdCents: z.number().int(),
 });
 export type DeliveryQuoteDto = z.infer<typeof deliveryQuoteSchema>;

@@ -188,6 +188,8 @@ describe('vendor applications', () => {
     const settings = {
       delivers: true,
       deliveryPerKmUsdCents: 60,
+      deliveryFlatFeeUsdCents: 150,
+      deliveryFlatKm: 3,
       deliveryAreas: ['Avondale', 'Borrowdale', 'Avondale'],
       collectionAddress: '12 Julius Nyerere Way',
       collectionHours: 'Mon-Sat 8-5',
@@ -203,6 +205,8 @@ describe('vendor applications', () => {
       expect(saved).toMatchObject({
         delivers: true,
         deliveryPerKmUsdCents: 60,
+        deliveryFlatFeeUsdCents: 150,
+        deliveryFlatKm: 3,
         // Duplicates collapse.
         deliveryAreas: ['Avondale', 'Borrowdale'],
         collectionHours: 'Mon-Sat 8-5',

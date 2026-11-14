@@ -18,6 +18,8 @@ export const appConfigSchema = z.object({
   serviceFeeBps: z.number().int(),
   /** 'client' adds the fee to the client's price; 'stylist' leaves the listed price. */
   serviceFeePaidBy: z.enum(['client', 'stylist']),
+  deliveryFlatFeeUsdCents: z.number().int(),
+  deliveryFlatKm: z.number().int(),
   deliveryPerKmUsdCents: z.number().int(),
   marketplaceFeePaidBy: z.enum(['client', 'vendor']),
   marketplaceFeeBps: z.number().int(),
