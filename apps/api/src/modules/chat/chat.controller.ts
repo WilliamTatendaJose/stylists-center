@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -13,7 +14,12 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { ChatService } from './chat.service';
-import { MessagesQueryDto, SendMessageDto, StartConversationDto } from './dto';
+import {
+  MessagesQueryDto,
+  ReportConversationDto,
+  SendMessageDto,
+  StartConversationDto,
+} from './dto';
 import {
   MAX_CHAT_ATTACHMENTS,
   MAX_CHAT_ATTACHMENT_BYTES,
@@ -38,6 +44,30 @@ export class ChatController {
   @Post('orders/:orderId')
   startForOrder(@Param('orderId') orderId: string, @CurrentUser() user: { id: string }) {
     return this.chat.getOrCreateByOrder(orderId, user.id);
+  }
+
+  @Get(':id/safety')
+  safety(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.chat.safety(id, user.id);
+  }
+
+  @Post(':id/block')
+  block(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.chat.block(id, user.id);
+  }
+
+  @Delete(':id/block')
+  unblock(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.chat.unblock(id, user.id);
+  }
+
+  @Post(':id/report')
+  report(
+    @Param('id') id: string,
+    @CurrentUser() user: { id: string },
+    @Body() dto: ReportConversationDto,
+  ) {
+    return this.chat.report(id, user.id, dto);
   }
 
   @Get(':id/messages')

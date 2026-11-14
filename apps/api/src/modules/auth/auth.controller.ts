@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Patch,
   Post,
@@ -57,6 +58,14 @@ export class MeController {
   @Get()
   me(@CurrentUser() user: { id: string }) {
     return this.auth.me(user.id);
+  }
+
+  /** Deletes the signed-in account (Play Store and App Store requirement). */
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Delete()
+  deleteAccount(@CurrentUser() user: { id: string }) {
+    return this.auth.deleteOwnAccount(user.id);
   }
 
   @UseGuards(JwtAuthGuard)

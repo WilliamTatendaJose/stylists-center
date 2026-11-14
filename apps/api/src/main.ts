@@ -37,6 +37,9 @@ async function bootstrap() {
       '.well-known/assetlinks.json',
       { path: 'provider-share/:id', method: RequestMethod.GET },
       { path: 'invite/:code', method: RequestMethod.GET },
+      // Public legal and account-deletion pages linked from the store listings.
+      { path: 'legal/:key', method: RequestMethod.GET },
+      { path: 'delete-account', method: RequestMethod.GET },
       // Stored upload URLs are origin-relative /uploads/<name> (see
       // UploadsController), so this path must not move with the API version.
       { path: 'uploads/:name', method: RequestMethod.GET },

@@ -114,6 +114,9 @@ describe('ChatService', () => {
   });
 
   afterAll(async () => {
+    const ids = [clientId, otherClientId, providerUserId];
+    await prisma.userBlock.deleteMany({ where: { blockerId: { in: ids } } });
+    await prisma.report.deleteMany({ where: { reporterId: { in: ids } } });
     await prisma.message.deleteMany({ where: { conversation: { providerUserId } } });
     await prisma.conversation.deleteMany({ where: { providerUserId } });
     await prisma.providerProfile.delete({ where: { id: providerId } });
@@ -335,5 +338,38 @@ describe('ChatService', () => {
     } finally {
       await prisma.order.delete({ where: { id: order.id } });
     }
+  });
+
+  it('blocking stops messages both ways until unblocked', async () => {
+    const conversation = await chat.getOrCreateByProvider(clientId, providerId);
+    expect(await chat.block(conversation.id, clientId)).toEqual({
+      blockedByMe: true,
+      blockedMe: false,
+    });
+    expect(await chat.safety(conversation.id, providerUserId)).toEqual({
+      blockedByMe: false,
+      blockedMe: true,
+    });
+    await expect(chat.sendMessage(conversation.id, clientId, { text: 'hi' })).rejects.toThrow(
+      'Unblock them',
+    );
+    await expect(chat.sendMessage(conversation.id, providerUserId, { text: 'hi' })).rejects.toThrow(
+      "can't send messages",
+    );
+
+    await chat.unblock(conversation.id, clientId);
+    await expect(
+      chat.sendMessage(conversation.id, providerUserId, { text: 'back again' }),
+    ).resolves.toMatchObject({ text: 'back again' });
+  });
+
+  it('reports the other person in the chat, and only participants can', async () => {
+    const conversation = await chat.getOrCreateByProvider(clientId, providerId);
+    await chat.report(conversation.id, providerUserId, { reason: 'misconduct' });
+    const report = await prisma.report.findFirstOrThrow({ where: { reporterId: providerUserId } });
+    expect(report).toMatchObject({ reportedId: clientId, reason: 'misconduct' });
+    await expect(
+      chat.report(conversation.id, otherClientId, { reason: 'other' }),
+    ).rejects.toThrow();
   });
 });

@@ -41,6 +41,7 @@ import { RoleSwitcher } from '../src/components/RoleSwitcher.js';
 import { NotificationPreferences } from '../src/components/NotificationPreferences.js';
 import { PasswordSecurity } from '../src/components/PasswordSecurity.js';
 import { HelpAndLegal } from '../src/components/HelpAndLegal.js';
+import { DeleteAccount } from '../src/components/DeleteAccount.js';
 
 const VERIFICATION_LABEL: Record<'unverified' | 'pending' | 'verified', string> = {
   verified: 'Verified professional',
@@ -336,6 +337,7 @@ export default function Profile() {
             Sign out
           </Text>
         </Pressable>
+        <DeleteAccount />
       </Screen>
 
       <Sheet open={editOpen} onClose={() => setEditOpen(false)}>
