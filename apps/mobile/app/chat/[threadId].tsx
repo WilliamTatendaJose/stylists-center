@@ -36,6 +36,11 @@ import { describeError } from '../../src/api/errorMessage.js';
 import { useMe } from '../../src/api/hooks/useMe.js';
 import { apiAssetUrl } from '../../src/api/client.js';
 import { ServerConnectionPanel } from '../../src/components/ServerConnectionPanel.js';
+import {
+  BlockedNotice,
+  ChatSafetyMenu,
+  useChatSafety,
+} from '../../src/components/ChatSafetyMenu.js';
 
 const MAX_ATTACHMENTS = 5;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -205,6 +210,8 @@ export default function Chat() {
   } = useConversationMessages(conversationId);
   useChatRealtime(conversationId);
   const sendMessage = useSendMessage(conversationId);
+  const { data: chatSafety } = useChatSafety(conversationId);
+  const chatBlocked = (chatSafety?.blockedByMe ?? false) || (chatSafety?.blockedMe ?? false);
 
   const visibleMessages = useMemo(() => {
     const query = messageQuery.trim().toLocaleLowerCase();
@@ -505,6 +512,7 @@ export default function Chat() {
               <Search size={21} color={colors.text} />
             )}
           </Pressable>
+          <ChatSafetyMenu conversationId={conversationId} name={conversation.counterpartyName} />
         </View>
       }
       footer={
@@ -549,24 +557,31 @@ export default function Chat() {
               {sendError}
             </Text>
           ) : null}
-          <Composer
-            value={draft}
-            onChange={setDraft}
-            onSend={send}
-            disabled={sendMessage.isPending}
-            canSendWithoutText={queuedAttachments.length > 0}
-            leading={
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Attach files"
-                disabled={sendMessage.isPending || queuedAttachments.length >= MAX_ATTACHMENTS}
-                onPress={() => void pickAttachments()}
-                style={[styles.attachButton, { borderColor: colors.divider }]}
-              >
-                <Paperclip size={20} strokeWidth={1.8} color={colors.text} />
-              </Pressable>
-            }
-          />
+          {chatBlocked ? (
+            <BlockedNotice
+              blockedByMe={chatSafety?.blockedByMe ?? false}
+              name={conversation.counterpartyName}
+            />
+          ) : (
+            <Composer
+              value={draft}
+              onChange={setDraft}
+              onSend={send}
+              disabled={sendMessage.isPending}
+              canSendWithoutText={queuedAttachments.length > 0}
+              leading={
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Attach files"
+                  disabled={sendMessage.isPending || queuedAttachments.length >= MAX_ATTACHMENTS}
+                  onPress={() => void pickAttachments()}
+                  style={[styles.attachButton, { borderColor: colors.divider }]}
+                >
+                  <Paperclip size={20} strokeWidth={1.8} color={colors.text} />
+                </Pressable>
+              }
+            />
+          )}
         </View>
       }
     >

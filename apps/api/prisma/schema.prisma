@@ -1135,3 +1135,15 @@ model FeeReminder {
 
   @@unique([statementId, kind])
 }
+
+/// One person has blocked another: neither can message the other until the
+/// blocker unblocks. Store requirement for apps where users talk to each other.
+model UserBlock {
+  id        String   @id @default(uuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}

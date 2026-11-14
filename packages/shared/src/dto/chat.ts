@@ -78,3 +78,16 @@ export const startConversationSchema = z.object({
   providerId: z.uuid(),
 });
 export type StartConversationInput = z.infer<typeof startConversationSchema>;
+
+/** Whether the people in a chat have blocked each other (either way stops messages). */
+export const chatSafetySchema = z.object({
+  blockedByMe: z.boolean(),
+  blockedMe: z.boolean(),
+});
+export type ChatSafetyDto = z.infer<typeof chatSafetySchema>;
+
+/** `POST /v1/conversations/:id/report` — reports the other person in the chat. */
+export const reportConversationSchema = z.object({
+  reason: z.enum(['misconduct', 'safety', 'other']),
+});
+export type ReportConversationInput = z.infer<typeof reportConversationSchema>;

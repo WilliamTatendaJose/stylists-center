@@ -59,6 +59,11 @@ describe('AuthService Firebase exchange', () => {
   const getAccountStatus = vi.fn(() =>
     Promise.resolve<'active' | 'disabled' | 'missing'>('active'),
   );
+  const resolveAccount = vi.fn((uid: string | null) =>
+    Promise.resolve(uid ? { uid, status: 'active' as const } : null),
+  );
+  const disableAccount = vi.fn(() => Promise.resolve());
+  const deleteAccount = vi.fn(() => Promise.resolve());
 
   beforeAll(async () => {
     prisma = new PrismaService(config);
@@ -66,6 +71,9 @@ describe('AuthService Firebase exchange', () => {
     const firebaseIdentity = {
       verifyIdToken,
       getAccountStatus,
+      resolveAccount,
+      disableAccount,
+      deleteAccount,
     } as unknown as FirebaseIdentityService;
     auth = new AuthService(
       prisma,
@@ -253,6 +261,25 @@ describe('AuthService Firebase exchange', () => {
       selectedAccountType: 'provider',
       onboardingComplete: false,
       hasProviderProfile: false,
+    });
+  });
+
+  describe('deleting your own account', () => {
+    it('removes personal data and the sign-in, and keeps an anonymised row', async () => {
+      await auth.exchangeFirebaseToken('firebase-id-token');
+      const userId = (
+        await prisma.user.findUniqueOrThrow({ where: { firebaseUid: verifiedIdentity.uid } })
+      ).id;
+      deleteAccount.mockClear();
+      await expect(auth.deleteOwnAccount(userId)).resolves.toEqual({ ok: true });
+      const row = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+      expect(row).toMatchObject({ email: null, phone: null, firebaseUid: null });
+      expect(row.deletedAt).not.toBeNull();
+      expect(row.displayName).toMatch(/^Deleted user/);
+      expect(disableAccount).toHaveBeenCalledWith(verifiedIdentity.uid);
+      expect(deleteAccount).toHaveBeenCalledWith(verifiedIdentity.uid);
+      // Asking twice is harmless.
+      await expect(auth.deleteOwnAccount(userId)).resolves.toEqual({ ok: true });
     });
   });
 });

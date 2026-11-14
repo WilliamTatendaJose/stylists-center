@@ -146,6 +146,15 @@ const config: ExpoConfig = {
     // (plan risk R8) — foreground-only, deliberately, so the app never
     // declares Play Store's background-location policy at all.
     permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
+    // Added by libraries but never used: photos come from the system picker
+    // (no camera), nothing records audio, and nothing draws over other apps.
+    // Play review asks for a reason for each of these, and the Data safety
+    // form would have to declare them, so they are removed from the manifest.
+    blockedPermissions: [
+      'android.permission.CAMERA',
+      'android.permission.RECORD_AUDIO',
+      'android.permission.SYSTEM_ALERT_WINDOW',
+    ],
     // App Links counterpart to ios.associatedDomains above — same shared
     // links (a provider profile, a referral invite), verified against
     // assetlinks.json instead of apple-app-site-association. autoVerify is
@@ -202,6 +211,8 @@ const config: ExpoConfig = {
       'expo-image-picker',
       {
         photosPermission: 'Allow Style Center to choose photos for your profile and shop items.',
+        cameraPermission: false,
+        microphonePermission: false,
       },
     ],
     [

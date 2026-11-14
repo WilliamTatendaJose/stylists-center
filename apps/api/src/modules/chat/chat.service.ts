@@ -8,9 +8,11 @@ import {
   CHAT_MESSAGES_DEFAULT_LIMIT,
   deriveInitials,
   deriveTint,
+  type ChatSafetyDto,
   type ConversationDto,
   type MessageDto,
   type MessagesQuery,
+  type ReportConversationInput,
   type SendMessageInput,
 } from '@sc/shared';
 import { Prisma } from '../../generated/prisma';
@@ -311,6 +313,7 @@ export class ChatService {
     });
     if (!conversation) throw new NotFoundException('Conversation not found');
     this.assertParticipant(conversation, viewerId);
+    await this.assertNotBlocked(viewerId, this.counterpartyOf(conversation, viewerId));
 
     const text = input.text.trim();
     if (!text && files.length === 0) {
@@ -363,6 +366,94 @@ export class ChatService {
     });
 
     return dto;
+  }
+
+  /** Whether either person in the chat has blocked the other. */
+  async safety(conversationId: string, viewerId: string): Promise<ChatSafetyDto> {
+    const conversation = await this.participantConversation(conversationId, viewerId);
+    const other = this.counterpartyOf(conversation, viewerId);
+    const blocks = await this.prisma.userBlock.findMany({
+      where: {
+        OR: [
+          { blockerId: viewerId, blockedId: other },
+          { blockerId: other, blockedId: viewerId },
+        ],
+      },
+      select: { blockerId: true },
+    });
+    return {
+      blockedByMe: blocks.some((b) => b.blockerId === viewerId),
+      blockedMe: blocks.some((b) => b.blockerId === other),
+    };
+  }
+
+  /** Blocks the other person: no more messages either way until unblocked. */
+  async block(conversationId: string, viewerId: string): Promise<ChatSafetyDto> {
+    const conversation = await this.participantConversation(conversationId, viewerId);
+    const other = this.counterpartyOf(conversation, viewerId);
+    await this.prisma.userBlock.upsert({
+      where: { blockerId_blockedId: { blockerId: viewerId, blockedId: other } },
+      update: {},
+      create: { blockerId: viewerId, blockedId: other },
+    });
+    return this.safety(conversationId, viewerId);
+  }
+
+  async unblock(conversationId: string, viewerId: string): Promise<ChatSafetyDto> {
+    const conversation = await this.participantConversation(conversationId, viewerId);
+    const other = this.counterpartyOf(conversation, viewerId);
+    await this.prisma.userBlock.deleteMany({ where: { blockerId: viewerId, blockedId: other } });
+    return this.safety(conversationId, viewerId);
+  }
+
+  /** Reports the other person in the chat to staff (the console's reports queue). */
+  async report(
+    conversationId: string,
+    viewerId: string,
+    input: ReportConversationInput,
+  ): Promise<void> {
+    const conversation = await this.participantConversation(conversationId, viewerId);
+    await this.prisma.report.create({
+      data: {
+        reporterId: viewerId,
+        reportedId: this.counterpartyOf(conversation, viewerId),
+        reason: input.reason,
+      },
+    });
+  }
+
+  private async participantConversation(conversationId: string, viewerId: string) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+    });
+    if (!conversation) throw new NotFoundException('Conversation not found');
+    this.assertParticipant(conversation, viewerId);
+    return conversation;
+  }
+
+  private counterpartyOf(
+    conversation: { clientId: string; providerUserId: string },
+    viewerId: string,
+  ): string {
+    return conversation.clientId === viewerId ? conversation.providerUserId : conversation.clientId;
+  }
+
+  private async assertNotBlocked(viewerId: string, otherId: string): Promise<void> {
+    const block = await this.prisma.userBlock.findFirst({
+      where: {
+        OR: [
+          { blockerId: viewerId, blockedId: otherId },
+          { blockerId: otherId, blockedId: viewerId },
+        ],
+      },
+    });
+    if (block) {
+      throw new ForbiddenException(
+        block.blockerId === viewerId
+          ? 'You blocked this person. Unblock them to send a message.'
+          : "You can't send messages in this chat.",
+      );
+    }
   }
 
   private assertParticipant(

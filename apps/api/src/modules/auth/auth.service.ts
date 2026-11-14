@@ -50,6 +50,60 @@ export class AuthService {
     private readonly userLifecycle: UserLifecycleService,
   ) {}
 
+  /**
+   * The signed-in person deletes their own account (store requirement): the
+   * same clean-up staff use. Personal data, photos and sign-in are removed;
+   * the anonymised row stays so the other side's bookings, orders and the
+   * ledgers still add up. Refused while a booking or order is still open,
+   * because the other person is relying on it.
+   */
+  async deleteOwnAccount(userId: string): Promise<{ ok: true }> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: { providerProfile: { select: { id: true } } },
+    });
+    if (user.deletedAt) return { ok: true };
+    const providerId = user.providerProfile?.id;
+    const openBookings = await this.prisma.booking.count({
+      where: {
+        status: { in: ['awaiting_provider', 'confirmed'] },
+        OR: [{ clientId: userId }, ...(providerId ? [{ providerId }] : [])],
+      },
+    });
+    if (openBookings > 0) {
+      throw new ConflictException(
+        'You have open bookings. Finish or cancel them before deleting your account.',
+      );
+    }
+    const openOrders = await this.prisma.order.count({
+      where: {
+        status: { in: ['reserved', 'ready_for_collection', 'out_for_delivery'] },
+        OR: [{ buyerId: userId }, ...(providerId ? [{ providerId }] : [])],
+      },
+    });
+    if (openOrders > 0) {
+      throw new ConflictException(
+        'You have open shop orders. Finish or cancel them before deleting your account.',
+      );
+    }
+
+    const firebaseAccount = await this.firebaseIdentity.resolveAccount(
+      user.firebaseUid,
+      user.email,
+    );
+    const uid = firebaseAccount?.uid ?? null;
+    if (uid && uid !== user.firebaseUid) {
+      await this.prisma.user.update({ where: { id: userId }, data: { firebaseUid: uid } });
+    }
+    if (uid) await this.firebaseIdentity.disableAccount(uid);
+    await this.userLifecycle.tombstone(userId, !uid);
+    if (uid) {
+      await this.firebaseIdentity.deleteAccount(uid);
+      await this.userLifecycle.releaseFirebaseUid(userId);
+    }
+    return { ok: true };
+  }
+
   async exchangeFirebaseToken(
     idToken: string,
     // Accepted by the DTO while older installed builds are upgraded. Account
