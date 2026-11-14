@@ -9,6 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { color, radius, space } from '@sc/tokens';
 import { useTheme } from '../theme.js';
 
@@ -70,6 +71,10 @@ const styles = StyleSheet.create({
  */
 export function Sheet({ open, onClose, children }: SheetProps) {
   const { colors } = useTheme();
+  // Android draws apps edge to edge, and a Modal does too: without the
+  // bottom inset the sheet's last row (often its Cancel button) sat under
+  // the system navigation bar and could not be tapped.
+  const { bottom: bottomInset } = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(OFFSCREEN_Y)).current;
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   // The Modal must stay mounted through the close animation — dropping it
@@ -132,7 +137,7 @@ export function Sheet({ open, onClose, children }: SheetProps) {
             <Animated.View
               style={[
                 styles.sheet,
-                { backgroundColor: colors.bg },
+                { backgroundColor: colors.bg, paddingBottom: space.l + 20 + bottomInset },
                 { transform: [{ translateY }] },
               ]}
             >
