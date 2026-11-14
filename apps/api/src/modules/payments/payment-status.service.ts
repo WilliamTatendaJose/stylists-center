@@ -6,6 +6,7 @@ import {
   type PaymentGatewayPort,
 } from './payment-gateway.port';
 import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
+import { PushService } from '../notifications/push.service';
 import { recordAgentSubscriptionPaymentStatus } from '../wallet/agent-subscription-payment';
 import { FeeLedgerService } from '../fees/fee-ledger.service';
 import { recordFeePaymentStatus } from './fee-payment';
@@ -50,6 +51,7 @@ export class PaymentStatusService {
     private readonly prisma: PrismaService,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGatewayPort,
     @Optional() private readonly feeLedger?: FeeLedgerService,
+    @Optional() private readonly push?: PushService,
   ) {}
 
   async resolve(subject: PaymentSubject): Promise<PaymentStatusResult> {
@@ -82,12 +84,16 @@ export class PaymentStatusService {
     if (polled === payment.status) return { status: payment.status, changed: false };
 
     if (subject.agentId && payment.reference) {
-      return recordAgentSubscriptionPaymentStatus(this.prisma, {
-        agentId: subject.agentId,
-        reference: payment.reference,
-        status: polled,
-        ...(payment.externalRef ? { externalRef: payment.externalRef } : {}),
-      });
+      return recordAgentSubscriptionPaymentStatus(
+        this.prisma,
+        {
+          agentId: subject.agentId,
+          reference: payment.reference,
+          status: polled,
+          ...(payment.externalRef ? { externalRef: payment.externalRef } : {}),
+        },
+        this.push,
+      );
     }
 
     if (subject.feeProviderId && payment.reference) {

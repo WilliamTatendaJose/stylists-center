@@ -1,5 +1,6 @@
 import type { Prisma } from '../../generated/prisma';
 import { insertOnce } from './coin-ledger';
+import type { AgentEarning } from './agent-earning';
 
 /**
  * Pays the recruiting agent their reward for a recruited agent, once that
@@ -19,27 +20,27 @@ export async function awardRecruitmentReward(
   tx: Prisma.TransactionClient,
   recruitUserId: string,
   coinUsdCents: number,
-): Promise<boolean> {
+): Promise<AgentEarning | null> {
   const recruit = await tx.agent.findUnique({
     where: { userId: recruitUserId },
     select: { verificationStatus: true, subscriptionPaidUntil: true },
   });
   if (recruit?.verificationStatus !== 'verified' || !recruit.subscriptionPaidUntil) {
-    return false;
+    return null;
   }
   const referral = await tx.referral.findUnique({
     where: { referredUserId: recruitUserId },
     include: { agent: { select: { userId: true, status: true } } },
   });
   if (referral?.status !== 'pending' || referral.agent.status !== 'active') {
-    return false;
+    return null;
   }
   const claimed = await tx.referral.updateMany({
     where: { id: referral.id, status: 'pending' },
     data: { status: 'paid' },
   });
-  if (claimed.count !== 1) return false;
-  return insertOnce(tx, {
+  if (claimed.count !== 1) return null;
+  const inserted = await insertOnce(tx, {
     userId: referral.agent.userId,
     type: 'referral_coin',
     pool: 'agent',
@@ -49,4 +50,12 @@ export async function awardRecruitmentReward(
     dedupeKey: `recruit_reward:${referral.id}`,
     reference: `Recruited agent ${referral.referredName}`,
   });
+  return inserted
+    ? {
+        agentUserId: referral.agent.userId,
+        coins: referral.coinsAwarded,
+        fromName: referral.referredName,
+        kind: 'recruit',
+      }
+    : null;
 }

@@ -12,6 +12,7 @@ import {
   spendCoins,
 } from './coin-ledger';
 import { awardRecruitmentReward } from './recruitment';
+import type { AgentEarning } from './agent-earning';
 
 type Ref = { bookingId: string } | { orderId: string };
 
@@ -60,7 +61,7 @@ export class RewardsHooksService {
   async onOrderCompleted(
     tx: Prisma.TransactionClient,
     input: { orderId: string; buyerId: string; productTotalUsdCents: number },
-  ): Promise<void> {
+  ): Promise<AgentEarning | null> {
     const s = await this.rates();
     const now = new Date();
     // Clients and agents have separate rates (settings), so each is worked
@@ -79,18 +80,18 @@ export class RewardsHooksService {
       });
     }
     // Agents only start earning from a minimum purchase (setting).
-    if (input.productTotalUsdCents < s.agentMinPurchaseUsd * 100) return;
+    if (input.productTotalUsdCents < s.agentMinPurchaseUsd * 100) return null;
     const agentCoins = rewardCoinsForSpend(
       input.productTotalUsdCents,
       s.agentRewardSpendUsdPerCoin,
     );
-    if (agentCoins <= 0) return;
+    if (agentCoins <= 0) return null;
 
     const referral = await tx.referral.findUnique({
       where: { referredUserId: input.buyerId },
       include: { agent: true },
     });
-    if (!referral) return;
+    if (!referral) return null;
     const { agent } = referral;
     const subscribed = (agent.subscriptionPaidUntil?.getTime() ?? 0) > now.getTime();
     const withinAttribution =
@@ -102,9 +103,9 @@ export class RewardsHooksService {
       !subscribed ||
       !withinAttribution
     ) {
-      return;
+      return null;
     }
-    await insertOnce(tx, {
+    const inserted = await insertOnce(tx, {
       userId: agent.userId,
       type: 'referral_purchase',
       pool: 'agent',
@@ -113,14 +114,25 @@ export class RewardsHooksService {
       dedupeKey: `referral_purchase:${input.orderId}`,
       reference: `Purchase by ${referral.referredName}`,
     });
+    return inserted
+      ? {
+          agentUserId: agent.userId,
+          coins: agentCoins,
+          fromName: referral.referredName,
+          kind: 'purchase',
+        }
+      : null;
   }
 
   /**
    * A recruited agent may now qualify (verified and paid their first
    * subscription): pay the recruiter. Safe to call at any time.
    */
-  async onAgentMilestone(tx: Prisma.TransactionClient, agentUserId: string): Promise<void> {
-    await awardRecruitmentReward(tx, agentUserId, (await this.rates()).coinUsdCents);
+  async onAgentMilestone(
+    tx: Prisma.TransactionClient,
+    agentUserId: string,
+  ): Promise<AgentEarning | null> {
+    return awardRecruitmentReward(tx, agentUserId, (await this.rates()).coinUsdCents);
   }
 
   /**

@@ -223,8 +223,15 @@ describe('RewardsHooksService', () => {
         },
       });
       const input = { orderId: `o-${uid()}`, buyerId: buyer, productTotalUsdCents: 4500 };
-      await inTx((tx) => hooks.onOrderCompleted(tx, input));
-      await inTx((tx) => hooks.onOrderCompleted(tx, input));
+      // The first completion reports the agent's earning (for the push); a
+      // repeat earns nothing, so it reports nothing and nobody is told twice.
+      expect(await inTx((tx) => hooks.onOrderCompleted(tx, input))).toEqual({
+        agentUserId: agent.userId,
+        coins: 4,
+        fromName: 'Buyer A',
+        kind: 'purchase',
+      });
+      expect(await inTx((tx) => hooks.onOrderCompleted(tx, input))).toBeNull();
 
       expect(await rows(buyer)).toMatchObject([
         { type: 'purchase_reward', pool: 'spend', coins: 4 },

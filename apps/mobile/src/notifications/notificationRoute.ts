@@ -44,6 +44,7 @@ export function notificationRoute(data: unknown): string | null {
     case 'agent.subscription':
       return '/agent-subscription';
     case 'wallet.cashout.paid':
+    case 'agent.earned':
       return '/(tabs)/wallet';
     default:
       return null;
