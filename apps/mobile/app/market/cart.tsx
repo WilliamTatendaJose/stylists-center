@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Minus, Plus, Trash2 } from 'lucide-react-native';
 import {
+  formatDeliveryTariff,
   formatUsd,
   coinsToCover,
   coinsToPayInFull,
@@ -97,9 +98,13 @@ function deliveryTitle(
   if (quote) {
     return `Deliver to me — ${formatUsd(quote.chargeUsdCents)} (${String(quote.distanceKm)} km)`;
   }
-  return group.deliveryPerKmUsdCents > 0
-    ? `Deliver to me — ${formatUsd(group.deliveryPerKmUsdCents)} per km`
-    : 'Deliver to me — charged per km';
+  return group.deliveryPerKmUsdCents > 0 || group.deliveryFlatFeeUsdCents > 0
+    ? `Deliver to me — ${formatDeliveryTariff({
+        flatFeeUsdCents: group.deliveryFlatFeeUsdCents,
+        flatKm: group.deliveryFlatKm,
+        perKmUsdCents: group.deliveryPerKmUsdCents,
+      })}`
+    : 'Deliver to me — charged by distance';
 }
 
 export default function Cart() {

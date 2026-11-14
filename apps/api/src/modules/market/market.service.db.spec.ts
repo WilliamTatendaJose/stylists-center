@@ -258,6 +258,8 @@ describe('MarketService against the database', () => {
       expect(await market.quoteDelivery(providerId, point)).toEqual({
         distanceKm: 3,
         perKmUsdCents: 50,
+        flatFeeUsdCents: 0,
+        flatKm: 0,
         chargeUsdCents: 150,
       });
       const created = await market.createOrder(buyerId, {
@@ -292,6 +294,37 @@ describe('MarketService against the database', () => {
         await prisma.vendorApplication.update({
           where: { providerId },
           data: { deliveryPerKmUsdCents: 0 },
+        });
+      }
+
+      // A shop's flat fee covers its first km, then the per-km rate applies:
+      // $2 for the first 2 km, then 1 more km at the standard 50c.
+      await prisma.vendorApplication.update({
+        where: { providerId },
+        data: { deliveryFlatFeeUsdCents: 200, deliveryFlatKm: 2 },
+      });
+      try {
+        expect(await market.quoteDelivery(providerId, point)).toEqual({
+          distanceKm: 3,
+          perKmUsdCents: 50,
+          flatFeeUsdCents: 200,
+          flatKm: 2,
+          chargeUsdCents: 250,
+        });
+        const flat = await market.createOrder(buyerId, {
+          providerId,
+          checkoutKey: checkoutKey('flat-fee'),
+          fulfilment: 'delivery',
+          deliveryAddress: '12 Samora Machel Ave',
+          deliveryLat: point.lat,
+          deliveryLng: point.lng,
+          items: [{ productId, quantity: 1 }],
+        });
+        expect(flat).toMatchObject({ deliveryChargeUsdCents: 250 });
+      } finally {
+        await prisma.vendorApplication.update({
+          where: { providerId },
+          data: { deliveryFlatFeeUsdCents: null, deliveryFlatKm: null },
         });
       }
     });

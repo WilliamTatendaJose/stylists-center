@@ -33,6 +33,8 @@ export function toVendorApplicationDto(row: VendorApplication): VendorApplicatio
     delivers: row.delivers,
     deliveryChargeUsdCents: row.deliveryChargeUsdCents,
     deliveryPerKmUsdCents: row.deliveryPerKmUsdCents,
+    deliveryFlatFeeUsdCents: row.deliveryFlatFeeUsdCents,
+    deliveryFlatKm: row.deliveryFlatKm,
     deliveryAreas: row.deliveryAreas,
     collectionAddress: row.collectionAddress,
     collectionHours: row.collectionHours,
@@ -155,6 +157,11 @@ export class VendorsService {
       data: {
         delivers: input.delivers,
         deliveryPerKmUsdCents: input.deliveryPerKmUsdCents,
+        // Left out by app versions without these fields: keep what's saved.
+        ...(input.deliveryFlatFeeUsdCents !== undefined
+          ? { deliveryFlatFeeUsdCents: input.deliveryFlatFeeUsdCents }
+          : {}),
+        ...(input.deliveryFlatKm !== undefined ? { deliveryFlatKm: input.deliveryFlatKm } : {}),
         deliveryAreas: [...new Set(input.deliveryAreas)],
         collectionAddress: input.collectionAddress?.length ? input.collectionAddress : null,
         collectionHours: input.collectionHours?.length ? input.collectionHours : null,

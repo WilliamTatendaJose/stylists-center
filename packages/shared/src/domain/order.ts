@@ -1,4 +1,5 @@
 import { feeCents } from './fees.js';
+import { formatUsd } from './money.js';
 /**
  * Marketplace orders (handoff screens 15-18).
  *
@@ -166,6 +167,64 @@ export function effectiveDeliveryPerKmUsdCents(shopRate: number, standardRate: n
 export function deliveryChargeUsdCents(distanceKm: number, perKmUsdCents: number): number {
   if (!Number.isFinite(distanceKm) || perKmUsdCents <= 0) return 0;
   return billableDeliveryKm(distanceKm) * perKmUsdCents;
+}
+
+/**
+ * How a shop charges for delivery: a flat fee that covers the first
+ * `flatKm` km, then `perKmUsdCents` for every km after that.
+ */
+export interface DeliveryTariff {
+  flatFeeUsdCents: number;
+  flatKm: number;
+  perKmUsdCents: number;
+}
+
+/**
+ * The tariff a shop actually charges: each part is the shop's own value when
+ * it set one, otherwise the standard value (console settings). A shop's flat
+ * fee and flat distance are null until it sets them; its per-km rate is 0.
+ */
+export function effectiveDeliveryTariff(
+  shop: {
+    deliveryFlatFeeUsdCents: number | null;
+    deliveryFlatKm: number | null;
+    deliveryPerKmUsdCents: number;
+  },
+  standard: DeliveryTariff,
+): DeliveryTariff {
+  return {
+    flatFeeUsdCents: Math.max(0, shop.deliveryFlatFeeUsdCents ?? standard.flatFeeUsdCents),
+    flatKm: Math.max(0, shop.deliveryFlatKm ?? standard.flatKm),
+    perKmUsdCents: effectiveDeliveryPerKmUsdCents(
+      shop.deliveryPerKmUsdCents,
+      standard.perKmUsdCents,
+    ),
+  };
+}
+
+/**
+ * Delivery charge for a distance under a tariff: the flat fee, plus the
+ * per-km rate for each whole km beyond the flat distance (km rounded up,
+ * at least 1).
+ */
+export function deliveryChargeForTariff(distanceKm: number, tariff: DeliveryTariff): number {
+  if (!Number.isFinite(distanceKm)) return 0;
+  const extraKm = Math.max(0, billableDeliveryKm(distanceKm) - Math.max(0, tariff.flatKm));
+  return Math.max(0, tariff.flatFeeUsdCents) + extraKm * Math.max(0, tariff.perKmUsdCents);
+}
+
+/** "$2.00 for the first 3 km, then $0.50 per km", or "$0.50 per km" with no flat part. */
+export function formatDeliveryTariff(tariff: DeliveryTariff): string {
+  const perKm = `${formatUsd(tariff.perKmUsdCents)} per km`;
+  if (tariff.flatKm <= 0) {
+    return tariff.flatFeeUsdCents > 0 ? `${formatUsd(tariff.flatFeeUsdCents)} + ${perKm}` : perKm;
+  }
+  const km = `${String(tariff.flatKm)} km`;
+  const flat =
+    tariff.flatFeeUsdCents > 0
+      ? `${formatUsd(tariff.flatFeeUsdCents)} for the first ${km}`
+      : `Free for the first ${km}`;
+  return tariff.perKmUsdCents > 0 ? `${flat}, then ${perKm}` : flat;
 }
 
 /** Whole km charged for a delivery: rounded up, at least 1. */

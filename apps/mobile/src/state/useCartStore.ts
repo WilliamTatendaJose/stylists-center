@@ -29,6 +29,9 @@ export interface CartLine {
   deliveryChargeUsdCents?: number;
   /** Delivery rate per km, shown until the delivery point is picked. */
   deliveryPerKmUsdCents?: number;
+  /** Flat delivery fee and the km it covers, shown with the per-km rate. */
+  deliveryFlatFeeUsdCents?: number;
+  deliveryFlatKm?: number;
 }
 
 export interface CartState {
@@ -145,6 +148,8 @@ export interface CartGroup {
   deliveryChargeUsdCents: number;
   /** 0 on lines saved before per-km delivery. */
   deliveryPerKmUsdCents: number;
+  deliveryFlatFeeUsdCents: number;
+  deliveryFlatKm: number;
   lines: CartLine[];
 }
 
@@ -162,6 +167,8 @@ export function groupCartBySeller(lines: readonly CartLine[]): CartGroup[] {
         delivers: line.delivers ?? false,
         deliveryChargeUsdCents: line.deliveryChargeUsdCents ?? 0,
         deliveryPerKmUsdCents: line.deliveryPerKmUsdCents ?? 0,
+        deliveryFlatFeeUsdCents: line.deliveryFlatFeeUsdCents ?? 0,
+        deliveryFlatKm: line.deliveryFlatKm ?? 0,
         lines: [],
       };
       groups.set(line.providerId, group);

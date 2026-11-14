@@ -3,7 +3,8 @@ import {
   canCollectOrder,
   canVendorCancelOrder,
   dispatchedStatusFor,
-  effectiveDeliveryPerKmUsdCents,
+  effectiveDeliveryTariff,
+  type DeliveryTariff,
   orderAmountDueUsdCents,
   type OrderRowDto,
   type ProductDetailDto,
@@ -35,6 +36,8 @@ export interface ProductGeoRow {
   delivers: boolean;
   deliveryChargeUsdCents: number;
   deliveryPerKmUsdCents: number;
+  deliveryFlatFeeUsdCents: number | null;
+  deliveryFlatKm: number | null;
   deliveryAreas: string[];
   distanceKm: number;
 }
@@ -63,18 +66,25 @@ export function toProductRow(row: ProductGeoRow): ProductRowDto {
 
 export function toProductDetail(
   row: ProductGeoRow,
-  standardDeliveryPerKmUsdCents: number,
+  standardDelivery: DeliveryTariff,
 ): ProductDetailDto {
+  const tariff = effectiveDeliveryTariff(
+    {
+      deliveryFlatFeeUsdCents: row.deliveryFlatFeeUsdCents,
+      deliveryFlatKm: row.deliveryFlatKm,
+      deliveryPerKmUsdCents: row.deliveryPerKmUsdCents,
+    },
+    standardDelivery,
+  );
   return {
     ...toProductRow(row),
     description: row.description,
     pickupHours: row.pickupHours,
     pickupAddress: row.pickupAddress,
     deliveryChargeUsdCents: row.deliveryChargeUsdCents,
-    deliveryPerKmUsdCents: effectiveDeliveryPerKmUsdCents(
-      row.deliveryPerKmUsdCents,
-      standardDeliveryPerKmUsdCents,
-    ),
+    deliveryPerKmUsdCents: tariff.perKmUsdCents,
+    deliveryFlatFeeUsdCents: tariff.flatFeeUsdCents,
+    deliveryFlatKm: tariff.flatKm,
     deliveryAreas: row.deliveryAreas,
   };
 }
