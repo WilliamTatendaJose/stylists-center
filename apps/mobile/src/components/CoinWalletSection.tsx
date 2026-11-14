@@ -35,11 +35,9 @@ export function CoinWalletSection({ hideWhenEmpty = false }: CoinWalletSectionPr
   if (!wallet) return null;
   if (hideWhenEmpty && wallet.coins === 0 && !wallet.isVerifiedAgent) return null;
 
-  // Only offer a cash-out (or nudge toward the agent subscription that
-  // unlocks one) once the amount passes the console's minimum: a "Cash out
-  // $0.00" button, or a prompt to pay $5 to unlock 30c, just invites a
-  // request that would be refused.
-  const overMinimum = canCashOut(wallet.cashOutableUsdCents, wallet.cashOutMinUsdCents);
+  // Only nudge toward the agent subscription when what it would unlock is
+  // over the console's minimum cash-out: a prompt to pay to unlock 30c just
+  // invites a request that would be refused.
   const unlockableOverMinimum = canCashOut(
     wallet.cashOutableUsdCents + wallet.lockedAgentCoins * wallet.coinUsdCents,
     wallet.cashOutMinUsdCents,
@@ -87,25 +85,23 @@ export function CoinWalletSection({ hideWhenEmpty = false }: CoinWalletSectionPr
           cash them out.
         </Text>
       ) : null}
-      {overMinimum || cashOut.isPending || cashOut.isSuccess ? (
-        <Button
-          label={
-            cashOut.isPending ? 'Submitting…' : `Cash out ${formatUsd(wallet.cashOutableUsdCents)}`
-          }
-          block
-          style={styles.action}
-          disabled={!wallet.canCashOut || cashOut.isPending}
-          onPress={() => {
-            setError(null);
-            cashOut.mutate(undefined, {
-              // A cash-out that failed silently looks the same as one that
-              // worked, and that is the one thing a withdrawal can't leave unclear.
-              onError: (reason) =>
-                setError(describeError(reason, "Couldn't submit that cash-out. Try again.")),
-            });
-          }}
-        />
-      ) : null}
+      <Button
+        label={
+          cashOut.isPending ? 'Submitting…' : `Cash out ${formatUsd(wallet.cashOutableUsdCents)}`
+        }
+        block
+        style={styles.action}
+        disabled={!wallet.canCashOut || cashOut.isPending}
+        onPress={() => {
+          setError(null);
+          cashOut.mutate(undefined, {
+            // A cash-out that failed silently looks the same as one that
+            // worked, and that is the one thing a withdrawal can't leave unclear.
+            onError: (reason) =>
+              setError(describeError(reason, "Couldn't submit that cash-out. Try again.")),
+          });
+        }}
+      />
       <Text
         variant="metaSmall"
         color={error ? colors.accent700 : 'neutral600'}
