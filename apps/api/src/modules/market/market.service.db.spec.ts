@@ -483,7 +483,7 @@ describe('MarketService against the database', () => {
       });
 
     it('takes a delivery order from packed to delivered and charges commission on products only', async () => {
-      const onCompleted = vi.spyOn(rewards, 'onOrderCompleted').mockResolvedValue();
+      const onCompleted = vi.spyOn(rewards, 'onOrderCompleted').mockResolvedValue(null);
       const created = await place('delivery', 2);
 
       const packed = await market.markOrderReady(created.id, providerId);
@@ -527,7 +527,7 @@ describe('MarketService against the database', () => {
     });
 
     it('charges and rewards once when the buyer and the vendor confirm at the same time', async () => {
-      const onCompleted = vi.spyOn(rewards, 'onOrderCompleted').mockResolvedValue();
+      const onCompleted = vi.spyOn(rewards, 'onOrderCompleted').mockResolvedValue(null);
       const created = await place('delivery');
       await market.markOrderReady(created.id, providerId);
 
@@ -544,7 +544,7 @@ describe('MarketService against the database', () => {
     });
 
     it('is a no-op to complete an order twice', async () => {
-      const onCompleted = vi.spyOn(rewards, 'onOrderCompleted').mockResolvedValue();
+      const onCompleted = vi.spyOn(rewards, 'onOrderCompleted').mockResolvedValue(null);
       const created = await place('collection');
       await market.completeVendorOrder(created.id, providerId);
       await market.completeVendorOrder(created.id, providerId);

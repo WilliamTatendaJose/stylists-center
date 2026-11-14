@@ -65,6 +65,7 @@ describe('notificationRoute', () => {
     expect(notificationRoute({ type: 'vendor.reviewed', status: 'approved' })).toBe('/vendor/shop');
     expect(notificationRoute({ type: 'agent.subscription' })).toBe('/agent-subscription');
     expect(notificationRoute({ type: 'wallet.cashout.paid' })).toBe('/(tabs)/wallet');
+    expect(notificationRoute({ type: 'agent.earned' })).toBe('/(tabs)/wallet');
   });
 
   it('just opens the app for a test notification', () => {

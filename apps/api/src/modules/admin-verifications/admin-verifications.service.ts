@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Optional } from '@nestjs/common';
 import {
   verificationStatusSchema,
   type AdminVerificationRowDto,
@@ -9,6 +9,8 @@ import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImageStorageService } from '../provider/image-storage.service';
 import { awardRecruitmentReward } from '../rewards/recruitment';
+import { notifyAgentEarning, type AgentEarning } from '../rewards/agent-earning';
+import { PushService } from '../notifications/push.service';
 import { settingsFor } from '../settings/settings.service';
 import type { Paged } from '@sc/shared';
 import { toPage, type PageRequest } from '../../common/paging';
@@ -26,6 +28,7 @@ export class AdminVerificationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly images: ImageStorageService,
+    @Optional() private readonly push?: PushService,
   ) {}
 
   async list(input: {
@@ -71,6 +74,7 @@ export class AdminVerificationsService {
     const decisionMade = input.verificationStatus !== 'pending';
     const coinUsdCents = await settingsFor(this.prisma).get('coinUsdCents');
 
+    let recruiterEarning: AgentEarning | null = null;
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id },
@@ -97,7 +101,7 @@ export class AdminVerificationsService {
       // A recruited agent who has already paid is complete once verified;
       // whichever of verification and first payment lands last pays the recruiter.
       if (input.verificationStatus === 'verified') {
-        await awardRecruitmentReward(tx, id, coinUsdCents);
+        recruiterEarning = await awardRecruitmentReward(tx, id, coinUsdCents);
       }
       if (user.providerProfile) {
         await tx.providerProfile.update({
@@ -110,6 +114,7 @@ export class AdminVerificationsService {
         include: VERIFICATION_USER_INCLUDE,
       });
     });
+    notifyAgentEarning(this.push, recruiterEarning);
     if (decisionMade) {
       await Promise.all(documentUrls.map((url) => this.images.remove(url)));
     }

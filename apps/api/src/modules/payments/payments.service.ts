@@ -20,6 +20,7 @@ import { FAILURE_STATUSES, voidUnpaidSubject } from './void-unpaid';
 import { Inject, Optional } from '@nestjs/common';
 import { recordFeePaymentStatus } from './fee-payment';
 import { offeredChannels } from './pay-channels';
+import { PushService } from '../notifications/push.service';
 import { recordAgentSubscriptionPaymentStatus } from '../wallet/agent-subscription-payment';
 
 @Injectable()
@@ -29,6 +30,7 @@ export class PaymentsService {
     private readonly config: ConfigService<Env, true>,
     @Inject(PAYMENT_GATEWAY) private readonly gateway: PaymentGatewayPort,
     @Optional() private readonly feeLedger?: FeeLedgerService,
+    @Optional() private readonly push?: PushService,
   ) {}
 
   /** What the payment screens should offer: the live gateway's channels, narrowed by PAYMENT_CHANNELS. */
@@ -154,12 +156,16 @@ export class PaymentsService {
     if (agentPayment?.agentId) {
       if (agentPayment.amountUsdCents !== amountUsdCents)
         throw new ForbiddenException(`${label} callback amount mismatch`);
-      await recordAgentSubscriptionPaymentStatus(this.prisma, {
-        agentId: agentPayment.agentId,
-        reference,
-        status,
-        ...(confirmation.externalRef ? { externalRef: confirmation.externalRef } : {}),
-      });
+      await recordAgentSubscriptionPaymentStatus(
+        this.prisma,
+        {
+          agentId: agentPayment.agentId,
+          reference,
+          status,
+          ...(confirmation.externalRef ? { externalRef: confirmation.externalRef } : {}),
+        },
+        this.push,
+      );
       return;
     }
 

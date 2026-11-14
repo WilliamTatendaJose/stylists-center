@@ -50,6 +50,7 @@ import {
   toProviderOrder,
   type ProductGeoRow,
 } from './mappers';
+import { notifyAgentEarning, type AgentEarning } from '../rewards/agent-earning';
 
 /**
  * Only approved vendors' products are sold, and a restricted vendor's stock
@@ -690,7 +691,8 @@ export class MarketService {
    * the loser gets `false` and nothing is charged twice.
    */
   private async completeOrder(orderId: string, fromStatuses: OrderStatus[]): Promise<boolean> {
-    return this.prisma.$transaction(async (tx) => {
+    let earning: AgentEarning | null = null;
+    const completed = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
       const claimed = await tx.order.updateMany({
         where: { id: orderId, status: { in: fromStatuses } },
@@ -712,13 +714,16 @@ export class MarketService {
         orderId,
         productTotalUsdCents: order.totalUsdCents,
       });
-      await this.rewards.onOrderCompleted(tx, {
+      earning = await this.rewards.onOrderCompleted(tx, {
         orderId,
         buyerId: order.buyerId,
         productTotalUsdCents: order.totalUsdCents,
       });
       return true;
     });
+    // After commit: the referring agent hears about coins that really landed.
+    if (completed) notifyAgentEarning(this.push, earning);
+    return completed;
   }
 
   /** Cancelled orders restore their stock and coins and never owe commission. */

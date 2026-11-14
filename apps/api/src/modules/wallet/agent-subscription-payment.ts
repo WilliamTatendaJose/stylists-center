@@ -6,6 +6,8 @@ import {
 } from '@sc/shared';
 import type { PrismaService } from '../prisma/prisma.service';
 import { awardRecruitmentReward } from '../rewards/recruitment';
+import { notifyAgentEarning, type AgentEarning } from '../rewards/agent-earning';
+import type { PushService } from '../notifications/push.service';
 import { settingsFor } from '../settings/settings.service';
 
 interface RecordAgentSubscriptionStatusInput {
@@ -33,10 +35,13 @@ const FINAL_FAILURE_STATUSES = new Set(['failed', 'refunded', 'disputed']);
 export async function recordAgentSubscriptionPaymentStatus(
   prisma: PrismaService,
   input: RecordAgentSubscriptionStatusInput,
+  /** Tells the recruiter about a reward this payment completes, after commit. */
+  push?: PushService,
 ): Promise<{ status: string; changed: boolean }> {
   // Read before the transaction so the settings query doesn't hold it open.
   const settings = await settingsFor(prisma).all();
-  return prisma.$transaction(async (tx) => {
+  let recruiterEarning: AgentEarning | null = null;
+  const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${input.reference}))`;
 
     const prior = await tx.payment.findFirst({
@@ -81,11 +86,13 @@ export async function recordAgentSubscriptionPaymentStatus(
           ),
         },
       });
-      await awardRecruitmentReward(tx, agent.userId, settings.coinUsdCents);
+      recruiterEarning = await awardRecruitmentReward(tx, agent.userId, settings.coinUsdCents);
     }
 
     return { status: input.status, changed: true };
   });
+  notifyAgentEarning(push, recruiterEarning);
+  return result;
 }
 
 export function toAgentSubscriptionDto(
