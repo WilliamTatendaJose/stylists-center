@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet } from 'react-native';
-import { formatInHarare, formatUsd } from '@sc/shared';
+import { canCashOut, formatInHarare, formatUsd } from '@sc/shared';
 import { space } from '@sc/tokens';
 import { Button, Card, RuleList, Text, useTheme } from '@sc/ui';
 import { useCashOut, useWallet } from '../api/hooks/useWallet.js';
@@ -35,13 +35,23 @@ export function CoinWalletSection({ hideWhenEmpty = false }: CoinWalletSectionPr
   if (!wallet) return null;
   if (hideWhenEmpty && wallet.coins === 0 && !wallet.isVerifiedAgent) return null;
 
+  // Only offer a cash-out (or nudge toward the agent subscription that
+  // unlocks one) once the amount passes the console's minimum: a "Cash out
+  // $0.00" button, or a prompt to pay $5 to unlock 30c, just invites a
+  // request that would be refused.
+  const overMinimum = canCashOut(wallet.cashOutableUsdCents, wallet.cashOutMinUsdCents);
+  const unlockableOverMinimum = canCashOut(
+    wallet.cashOutableUsdCents + wallet.lockedAgentCoins * wallet.coinUsdCents,
+    wallet.cashOutMinUsdCents,
+  );
+
   const cashOutNote = error
     ? error
     : cashOut.isSuccess
       ? `Submitted. Paid to your EcoCash number within ${String(wallet.cashOutPayoutDays)} days of staff approving it.`
       : wallet.nextCashOutAt
         ? `You can cash out again on ${formatInHarare(wallet.nextCashOutAt, 'd MMM yyyy')}.`
-        : wallet.cashOutableCoins > 0
+        : wallet.cashOutableCoins > 0 || wallet.lockedAgentCoins > 0
           ? `Cash-out needs more than ${formatUsd(wallet.cashOutMinUsdCents)}, once every ${String(wallet.cashOutIntervalDays)} days. Paid to your EcoCash number within ${String(wallet.cashOutPayoutDays)} days of approval.`
           : 'Coins you earn from bookings and purchases can be spent but not cashed out.';
 
@@ -71,29 +81,31 @@ export function CoinWalletSection({ hideWhenEmpty = false }: CoinWalletSectionPr
             : []),
         ]}
       />
-      {wallet.lockedAgentCoins > 0 ? (
+      {wallet.lockedAgentCoins > 0 && unlockableOverMinimum ? (
         <Text variant="metaSmall" color={colors.accent700} style={styles.note}>
           {String(wallet.lockedAgentCoins)} agent coins are waiting. Pay your agent subscription to
           cash them out.
         </Text>
       ) : null}
-      <Button
-        label={
-          cashOut.isPending ? 'Submitting…' : `Cash out ${formatUsd(wallet.cashOutableUsdCents)}`
-        }
-        block
-        style={styles.action}
-        disabled={!wallet.canCashOut || cashOut.isPending}
-        onPress={() => {
-          setError(null);
-          cashOut.mutate(undefined, {
-            // A cash-out that failed silently looks the same as one that
-            // worked, and that is the one thing a withdrawal can't leave unclear.
-            onError: (reason) =>
-              setError(describeError(reason, "Couldn't submit that cash-out. Try again.")),
-          });
-        }}
-      />
+      {overMinimum || cashOut.isPending || cashOut.isSuccess ? (
+        <Button
+          label={
+            cashOut.isPending ? 'Submitting…' : `Cash out ${formatUsd(wallet.cashOutableUsdCents)}`
+          }
+          block
+          style={styles.action}
+          disabled={!wallet.canCashOut || cashOut.isPending}
+          onPress={() => {
+            setError(null);
+            cashOut.mutate(undefined, {
+              // A cash-out that failed silently looks the same as one that
+              // worked, and that is the one thing a withdrawal can't leave unclear.
+              onError: (reason) =>
+                setError(describeError(reason, "Couldn't submit that cash-out. Try again.")),
+            });
+          }}
+        />
+      ) : null}
       <Text
         variant="metaSmall"
         color={error ? colors.accent700 : 'neutral600'}
