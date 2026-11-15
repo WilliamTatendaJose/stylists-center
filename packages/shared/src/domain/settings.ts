@@ -290,6 +290,20 @@ export const SETTING_DEFINITIONS = {
     min: 1,
     max: 720,
   },
+  clientPurchaseRewards: {
+    kind: 'text',
+    label: 'Clients earn coins on marketplace purchases',
+    help: 'On: clients earn coins on completed marketplace orders as well as completed bookings (same rate). Off: clients earn on bookings only. Agents earn on referred purchases either way. Applies to orders completed from now on.',
+    group: 'Wallet and rewards',
+    env: 'CLIENT_PURCHASE_REWARDS',
+    public: true,
+    default: 'on',
+    maxLength: 3,
+    options: [
+      { value: 'on', label: 'On (bookings and marketplace purchases)' },
+      { value: 'off', label: 'Off (bookings only)' },
+    ],
+  },
   rewardSpendUsdPerCoin: {
     kind: 'usd',
     label: 'Client spend per reward coin',
