@@ -5,6 +5,7 @@ import { space } from '@sc/tokens';
 import { Button, Card, RuleList, Text, useTheme } from '@sc/ui';
 import { useCashOut, useWallet } from '../api/hooks/useWallet.js';
 import { describeError } from '../api/errorMessage.js';
+import { useAppConfig } from '../api/hooks/useAppConfig.js';
 
 const styles = StyleSheet.create({
   card: { padding: space.l },
@@ -30,6 +31,7 @@ export function CoinWalletSection({ hideWhenEmpty = false }: CoinWalletSectionPr
   const { colors } = useTheme();
   const { data: wallet } = useWallet();
   const cashOut = useCashOut();
+  const { clientPurchaseRewards } = useAppConfig();
   const [error, setError] = useState<string | null>(null);
 
   if (!wallet) return null;
@@ -51,7 +53,9 @@ export function CoinWalletSection({ hideWhenEmpty = false }: CoinWalletSectionPr
         ? `You can cash out again on ${formatInHarare(wallet.nextCashOutAt, 'd MMM yyyy')}.`
         : wallet.cashOutableCoins > 0 || wallet.lockedAgentCoins > 0
           ? `Cash-out needs more than ${formatUsd(wallet.cashOutMinUsdCents)}, once every ${String(wallet.cashOutIntervalDays)} days. Paid to your EcoCash number within ${String(wallet.cashOutPayoutDays)} days of approval.`
-          : 'Coins you earn from bookings and purchases can be spent but not cashed out.';
+          : clientPurchaseRewards === 'off'
+            ? 'Coins you earn from bookings can be spent but not cashed out.'
+            : 'Coins you earn from bookings and purchases can be spent but not cashed out.';
 
   return (
     <Card bordered style={styles.card}>

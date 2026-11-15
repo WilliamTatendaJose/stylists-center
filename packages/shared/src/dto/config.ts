@@ -28,6 +28,8 @@ export const appConfigSchema = z.object({
   completionAutoConfirmHours: z.number().int(),
   nonPaymentReportHours: z.number().int(),
   rewardSpendUsdPerCoin: z.number().int(),
+  /** Whether clients earn coins on marketplace purchases too ('off': bookings only). */
+  clientPurchaseRewards: z.enum(['on', 'off']),
   agentRewardSpendUsdPerCoin: z.number().int(),
   agentMinPurchaseUsd: z.number().int(),
   cashOutPayoutDays: z.number().int(),

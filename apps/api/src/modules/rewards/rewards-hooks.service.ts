@@ -66,7 +66,11 @@ export class RewardsHooksService {
     const now = new Date();
     // Clients and agents have separate rates (settings), so each is worked
     // out on its own; rounding down means a small purchase can earn nothing.
-    const coins = rewardCoinsForSpend(input.productTotalUsdCents, s.rewardSpendUsdPerCoin);
+    // Console switch: clients can be limited to earning on bookings only.
+    const coins =
+      s.clientPurchaseRewards === 'off'
+        ? 0
+        : rewardCoinsForSpend(input.productTotalUsdCents, s.rewardSpendUsdPerCoin);
     if (coins > 0) {
       await insertOnce(tx, {
         userId: input.buyerId,

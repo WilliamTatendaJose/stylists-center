@@ -241,6 +241,37 @@ describe('RewardsHooksService', () => {
       ]);
     });
 
+    it('pays clients nothing on purchases when the console turns it off, but still pays the agent', async () => {
+      const bookingsOnly = new RewardsHooksService(
+        prisma,
+        new SettingsService(undefined, {
+          CLIENT_PURCHASE_REWARDS: 'off',
+          AGENT_MIN_PURCHASE_USD: '0',
+        }),
+      );
+      const agent = await makeAgent('Agent Switch');
+      const buyer = await makeUser('Buyer Switch');
+      await prisma.referral.create({
+        data: {
+          agentId: agent.agentId,
+          referredUserId: buyer,
+          referredName: 'Buyer Switch',
+          coinsAwarded: 6,
+        },
+      });
+      await inTx((tx) =>
+        bookingsOnly.onOrderCompleted(tx, {
+          orderId: `o-${uid()}`,
+          buyerId: buyer,
+          productTotalUsdCents: 4500,
+        }),
+      );
+      expect(await rows(buyer)).toHaveLength(0);
+      expect(await rows(agent.userId)).toMatchObject([
+        { type: 'referral_purchase', pool: 'agent', coins: 4 },
+      ]);
+    });
+
     it('uses the separate client and agent rates, rounding each down', async () => {
       // Clients: 1 coin per $20. Agents: 1 coin per $5.
       const custom = new RewardsHooksService(
