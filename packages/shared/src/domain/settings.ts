@@ -108,6 +108,17 @@ export const SETTING_DEFINITIONS = {
     min: 1,
     max: 366,
   },
+  smartMatchMaxOffers: {
+    kind: 'count',
+    label: 'Stylists offered each request',
+    help: 'A smart-match request goes to at most this many available stylists, nearest first. Asking again ("search wider") offers it to the nearest ones in the bigger area. Lower keeps busy areas from flooding every stylist; higher reaches more of them.',
+    group: 'Requests',
+    env: 'SMART_MATCH_MAX_OFFERS',
+    public: false,
+    default: 25,
+    min: 1,
+    max: 500,
+  },
   budgetMinUsd: {
     kind: 'usd',
     label: 'Smallest request budget',

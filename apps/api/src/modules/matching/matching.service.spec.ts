@@ -224,6 +224,30 @@ describe('MatchingService', () => {
     expect(offerJobs).toHaveLength(2);
   });
 
+  it('offers a request only to the nearest stylists, up to the console cap', async () => {
+    const capped = new MatchingService(
+      prisma,
+      new GeoRepository(prisma),
+      new SocketEmitterService(),
+      new PushService(prisma, new ConfigService<Env, true>(BASE_ENV)),
+      queue as unknown as Queue,
+      new SettingsService(undefined, { SMART_MATCH_MAX_OFFERS: '1' }),
+    );
+    const created = await capped.createMatch(clientId, {
+      categoryId,
+      budget: { mode: 'flex' },
+      radiusKm: 3,
+      location: CLIENT_LOCATION,
+    });
+    // Two stylists are in range; only the nearer one is offered the request.
+    expect(created.fanOutCount).toBe(1);
+    const offers = await prisma.matchOffer.findMany({
+      where: { matchRequestId: created.id },
+      select: { provider: { select: { displayName: true } } },
+    });
+    expect(offers.map((o) => o.provider.displayName)).toEqual(['MatchNear1']);
+  });
+
   it('getMatch for a viewer answers only the client who made the request', async () => {
     const created = await createTestMatch();
     expect((await matching.getMatch(created.id, clientId)).id).toBe(created.id);
