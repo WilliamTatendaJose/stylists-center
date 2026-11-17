@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { UploadedImageDto } from '@sc/shared';
@@ -9,6 +9,7 @@ import {
   thumbnailName,
   type ObjectStorage,
 } from '../storage/object-storage';
+import { UploadAccessService } from '../storage/upload-access.service';
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -70,9 +71,16 @@ const IMAGE_CONTENT_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/
 export class ImageStorageService {
   private readonly logger = new Logger(ImageStorageService.name);
 
-  constructor(@Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage) {}
+  constructor(
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    @Optional() private readonly access?: UploadAccessService,
+  ) {}
 
-  async save(file: UploadedImageFile | undefined): Promise<UploadedImageDto> {
+  /**
+   * `ownerId` is recorded so the uploader, and only the uploader, can later
+   * make this object private (by submitting it as an identity document).
+   */
+  async save(file: UploadedImageFile | undefined, ownerId?: string): Promise<UploadedImageDto> {
     if (!file?.buffer.length) throw new BadRequestException('Choose an image to upload');
     if (file.size > MAX_IMAGE_BYTES || file.buffer.length > MAX_IMAGE_BYTES) {
       throw new BadRequestException('Image must be 5 MB or smaller');
@@ -85,6 +93,7 @@ export class ImageStorageService {
 
     const filename = `${randomUUID()}.${extension}`;
     await this.storage.put(filename, file.buffer, IMAGE_CONTENT_TYPES[extension]);
+    await this.access?.record(filename, ownerId);
     await this.storeThumbnail(filename, file.buffer);
     return { url: `${UPLOAD_URL_PREFIX}${filename}` };
   }

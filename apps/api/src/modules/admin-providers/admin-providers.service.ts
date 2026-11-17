@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { type AdminProviderRowDto, type UpdateProviderAdminInput } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import { DOCUMENT_LINK_SECONDS, UploadAccessService } from '../storage/upload-access.service';
 import { ImageStorageService } from '../provider/image-storage.service';
 import type { Paged } from '@sc/shared';
 import { toPage, type PageRequest } from '../../common/paging';
@@ -31,7 +32,12 @@ export class AdminProvidersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly images: ImageStorageService,
+    @Optional() private readonly uploadAccess?: UploadAccessService,
   ) {}
+
+  /** Identity documents are private uploads: staff get short-lived signed links. */
+  private readonly signDocument = (url: string | null): string | null =>
+    this.uploadAccess ? this.uploadAccess.sign(url, DOCUMENT_LINK_SECONDS) : url;
 
   async list(input: {
     verified?: boolean | undefined;
@@ -61,7 +67,11 @@ export class AdminProvidersService {
       }),
       this.prisma.providerProfile.count({ where: searched }),
     ]);
-    return toPage(providers.map(toRow), total, input.page);
+    return toPage(
+      providers.map((provider) => toRow(provider, this.signDocument)),
+      total,
+      input.page,
+    );
   }
 
   async get(id: string): Promise<AdminProviderRowDto> {
@@ -69,7 +79,7 @@ export class AdminProvidersService {
       where: { id },
       include: PROVIDER_INCLUDE,
     });
-    return toRow(provider);
+    return toRow(provider, this.signDocument);
   }
 
   async update(id: string, input: UpdateProviderAdminInput): Promise<AdminProviderRowDto> {
@@ -126,11 +136,14 @@ export class AdminProvidersService {
     if (decisionMade) {
       await Promise.all(documentUrls.map((url) => this.images.remove(url)));
     }
-    return toRow(updated);
+    return toRow(updated, this.signDocument);
   }
 }
 
-function toRow(provider: ProviderWithRelations): AdminProviderRowDto {
+function toRow(
+  provider: ProviderWithRelations,
+  sign: (url: string | null) => string | null = (url) => url,
+): AdminProviderRowDto {
   return {
     id: provider.id,
     userId: provider.userId,
@@ -140,8 +153,8 @@ function toRow(provider: ProviderWithRelations): AdminProviderRowDto {
     categoryName: provider.category.name,
     verified: provider.verified,
     verificationStatus: provider.user.verificationStatus,
-    verificationIdDocumentUrl: provider.user.verificationIdDocumentUrl,
-    verificationSelfieImageUrl: provider.user.verificationSelfieImageUrl,
+    verificationIdDocumentUrl: sign(provider.user.verificationIdDocumentUrl),
+    verificationSelfieImageUrl: sign(provider.user.verificationSelfieImageUrl),
     verificationNote: provider.user.verificationNote,
     verificationSubmittedAt: provider.user.verificationSubmittedAt?.toISOString() ?? null,
     avatarImageUrl: provider.user.avatarImageUrl,

@@ -1,4 +1,13 @@
-import { Controller, Get, Inject, NotFoundException, Param, Query, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Inject,
+  NotFoundException,
+  Optional,
+  Param,
+  Query,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import {
   OBJECT_STORAGE,
@@ -7,8 +16,11 @@ import {
   type ObjectStorage,
   type StoredObjectLocation,
 } from './object-storage';
+import { UploadAccessService } from './upload-access.service';
 
 const IMAGE_NAME = /\.(?:jpe?g|png|webp)$/i;
+/** Private objects may be cached by the viewer's own client briefly, never by a shared cache. */
+const PRIVATE_MAX_AGE_SECONDS = 300;
 
 /**
  * Serves `/uploads/<name>` — the URL shape already stored in Postgres and
@@ -19,15 +31,24 @@ const IMAGE_NAME = /\.(?:jpe?g|png|webp)$/i;
  */
 @Controller('uploads')
 export class UploadsController {
-  constructor(@Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage) {}
+  constructor(
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    @Optional() private readonly access?: UploadAccessService,
+  ) {}
 
   @Get(':name')
   async serve(
     @Param('name') name: string,
     @Res() response: Response,
     @Query('variant') variant?: string,
+    @Query('exp') exp?: string,
+    @Query('sig') sig?: string,
   ): Promise<void> {
     if (!STORED_OBJECT_NAME.test(name)) throw new NotFoundException();
+    // Private objects (ID documents, selfies, chat files) need the signed link
+    // the API handed out; without it they look exactly like a missing object.
+    const isPrivate = (await this.access?.isPrivate(name)) ?? false;
+    if (isPrivate && !this.access?.verify(name, exp, sig)) throw new NotFoundException();
     const location =
       variant === 'thumb' ? await this.locateThumbnail(name) : await this.storage.locate(name);
     if (!location) throw new NotFoundException();
@@ -42,12 +63,21 @@ export class UploadsController {
     if (location.kind === 'redirect') {
       // Cache the redirect for less time than the link lives, so a cached
       // redirect never points at an expired signature.
-      const maxAge = Math.max(0, location.expiresInSeconds - 300);
+      const maxAge = Math.min(
+        Math.max(0, location.expiresInSeconds - 300),
+        isPrivate ? PRIVATE_MAX_AGE_SECONDS : Infinity,
+      );
       response.setHeader('Cache-Control', `private, max-age=${String(maxAge)}`);
       response.redirect(302, location.url);
       return;
     }
-    response.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    response.setHeader(
+      'Cache-Control',
+      // Never let a shared cache (CDN, proxy) keep a copy of a private object.
+      isPrivate
+        ? `private, max-age=${String(PRIVATE_MAX_AGE_SECONDS)}`
+        : 'public, max-age=31536000, immutable',
+    );
     response.sendFile(location.path);
   }
 

@@ -9,6 +9,9 @@ import { ImageStorageService } from '../provider/image-storage.service';
 import { LocalDiskStorage } from '../storage/object-storage';
 import { TrustService } from '../trust/trust.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { UploadAccessService } from '../storage/upload-access.service';
+import { VerificationSubmissionDto } from './dto';
+import { randomUUID } from 'node:crypto';
 import type { Env } from '../../config/env';
 
 const TEST_DATABASE_URL = process.env.DATABASE_URL ?? 'postgresql://sc:sc@localhost:5433/sc_test';
@@ -301,6 +304,50 @@ describe('AuthService Firebase exchange', () => {
       selectedAccountType: 'provider',
       onboardingComplete: false,
       hasProviderProfile: false,
+    });
+  });
+
+  describe('identity documents are private uploads', () => {
+    it('makes submitted documents private and returns them only as signed links', async () => {
+      const access = new UploadAccessService(prisma, config);
+      const withAccess = new AuthService(
+        prisma,
+        new JwtService(),
+        config,
+        new TrustService(prisma),
+        { verifyIdToken } as unknown as FirebaseIdentityService,
+        new UserLifecycleService(prisma, new ImageStorageService(new LocalDiskStorage('uploads'))),
+        access,
+      );
+      const tokens = await withAccess.exchangeFirebaseToken('firebase-id-token');
+      const { id } = await withAccess.verifyAccessToken(tokens.accessToken);
+      const idDoc = `${randomUUID()}.jpg`;
+      const selfie = `${randomUUID()}.jpg`;
+      const someoneElses = `${randomUUID()}.jpg`;
+      await access.record(idDoc, id);
+      await access.record(selfie, id);
+      await access.record(someoneElses, randomUUID());
+      try {
+        const result = await withAccess.submitVerification(id, {
+          idDocumentUrl: `/uploads/${idDoc}`,
+          selfieImageUrl: `/uploads/${someoneElses}`,
+        });
+        expect(await access.isPrivate(idDoc)).toBe(true);
+        // Another user's (public) upload cannot be hidden by submitting it.
+        expect(await access.isPrivate(someoneElses)).toBe(false);
+        expect(result.idDocumentUrl).toMatch(
+          new RegExp(`^/uploads/${idDoc}\\?exp=\\d+&sig=[\\w-]+$`),
+        );
+
+        // The app pre-fills the form with those signed links; resubmitting must still validate.
+        const parsed = VerificationSubmissionDto.schema.parse({
+          idDocumentUrl: result.idDocumentUrl,
+          selfieImageUrl: `/uploads/${selfie}`,
+        });
+        expect(parsed.idDocumentUrl).toBe(`/uploads/${idDoc}`);
+      } finally {
+        await prisma.upload.deleteMany({ where: { name: { in: [idDoc, selfie, someoneElses] } } });
+      }
     });
   });
 

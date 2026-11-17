@@ -2,6 +2,9 @@ import { NotFoundException } from '@nestjs/common';
 import type { Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
 import type { ObjectStorage, StoredObjectLocation } from './object-storage';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../config/env';
+import { UploadAccessService } from './upload-access.service';
 import { UploadsController } from './uploads.controller';
 
 const NAME = '3a6f010d-1d13-4a06-a747-0ae1b4be35d0.png';
@@ -85,6 +88,38 @@ describe('UploadsController', () => {
     const image = harness({ kind: 'file', path: `/data/${NAME}` });
     await image.controller.serve(NAME, image.res);
     expect(image.response.setHeader).not.toHaveBeenCalledWith('Content-Disposition', 'attachment');
+  });
+
+  describe('private objects (ID documents, chat files)', () => {
+    const access = new UploadAccessService(
+      { upload: { findUnique: () => Promise.resolve({ private: true }) } } as never,
+      new ConfigService<Env, true>({
+        JWT_ACCESS_SECRET: 'test-access-secret-at-least-32-characters-long',
+      } as Env),
+    );
+    function privateHarness() {
+      const h = harness({ kind: 'file', path: `/data/${NAME}` });
+      const storage = (h.controller as unknown as { storage: ObjectStorage }).storage;
+      return { ...h, controller: new UploadsController(storage, access) };
+    }
+
+    it('look missing without a valid signed link', async () => {
+      const { controller, response, res } = privateHarness();
+      await expect(controller.serve(NAME, res)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(
+        controller.serve(NAME, res, undefined, '9999999999', 'forged'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(response.sendFile).not.toHaveBeenCalled();
+    });
+
+    it('are served for a signed link, and never to a shared cache', async () => {
+      const { controller, response, res } = privateHarness();
+      const query = new URL(access.sign(`/uploads/${NAME}`, 3600), 'https://api.example')
+        .searchParams;
+      await controller.serve(NAME, res, undefined, query.get('exp') ?? '', query.get('sig') ?? '');
+      expect(response.sendFile).toHaveBeenCalledWith(`/data/${NAME}`);
+      expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, max-age=300');
+    });
   });
 
   it('404s on a missing object', async () => {

@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -26,6 +27,7 @@ import { TrustService } from '../trust/trust.service';
 import type { Env } from '../../config/env';
 import { FirebaseIdentityService, type FirebaseIdentity } from './firebase-identity.service';
 import { UserLifecycleService } from './user-lifecycle.service';
+import { DOCUMENT_LINK_SECONDS, UploadAccessService } from '../storage/upload-access.service';
 
 const ACCESS_TOKEN_TTL = '15m';
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -48,6 +50,7 @@ export class AuthService {
     private readonly trust: TrustService,
     private readonly firebaseIdentity: FirebaseIdentityService,
     private readonly userLifecycle: UserLifecycleService,
+    @Optional() private readonly uploadAccess?: UploadAccessService,
   ) {}
 
   /**
@@ -440,10 +443,13 @@ export class AuthService {
         verificationSubmittedAt: true,
       },
     });
+    // Private uploads: the owner gets short-lived signed links to their own documents.
+    const sign = (url: string | null) =>
+      this.uploadAccess ? this.uploadAccess.sign(url, DOCUMENT_LINK_SECONDS) : url;
     return {
       status: user.verificationStatus,
-      idDocumentUrl: user.verificationIdDocumentUrl,
-      selfieImageUrl: user.verificationSelfieImageUrl,
+      idDocumentUrl: sign(user.verificationIdDocumentUrl),
+      selfieImageUrl: sign(user.verificationSelfieImageUrl),
       note: user.verificationNote,
       submittedAt: user.verificationSubmittedAt?.toISOString() ?? null,
     };
@@ -476,6 +482,8 @@ export class AuthService {
         data: { verificationStatus: 'pending' },
       });
     });
+    // From here on the documents are only reachable through signed links.
+    await this.uploadAccess?.markPrivate([input.idDocumentUrl, input.selfieImageUrl], userId);
     return this.getVerification(userId);
   }
   async setActiveRole(userId: string, role: ActiveRole): Promise<Me> {
