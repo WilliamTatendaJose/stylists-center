@@ -11,6 +11,8 @@ import * as Updates from 'expo-updates';
  *
  * Builds made before the native module was added still run this: the SDK
  * detects the missing native side and reports JavaScript errors only.
+ * Session Replay is native too, so it records only on builds that include
+ * Sentry's native module (the next store build onward).
  */
 const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim();
 
@@ -25,6 +27,23 @@ if (sentryEnabled) {
     // One session in five is timed, for slow-screen data within the free plan.
     tracesSampleRate: 0.2,
     sendDefaultPii: false,
+    // Session Replay: a short screen recording attached to an error, so a
+    // crash report shows what the person tapped before it. Only sessions
+    // that hit an error are kept (replays count against the Sentry plan),
+    // plus a small sample of ordinary sessions to spot confusing screens.
+    replaysOnErrorSampleRate: 1.0,
+    replaysSessionSampleRate: 0.02,
+    integrations: [
+      Sentry.mobileReplayIntegration({
+        // Chats, wallet amounts, phone numbers, addresses and ID photos must
+        // never leave the phone: every piece of text and every image is
+        // replaced by a block in the recording, so a replay shows layout and
+        // taps only.
+        maskAllText: true,
+        maskAllImages: true,
+        maskAllVectors: true,
+      }),
+    ],
   });
 }
 
