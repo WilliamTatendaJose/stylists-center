@@ -8,6 +8,7 @@ import type {
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { getSocket } from '../../realtime/socket.js';
+import { useFocusPolling, useRefetchOnRefocus } from '../../hooks/useFocusPolling.js';
 
 export const PROVIDER_JOBS_KEY = ['provider', 'jobs'] as const;
 
@@ -21,11 +22,18 @@ export const PROVIDER_JOBS_KEY = ['provider', 'jobs'] as const;
 const JOBS_POLL_MS = 30_000;
 
 export function useProviderJobs() {
-  return useQuery({
+  // Sockets (useProviderJobsRealtime) invalidate this query whenever an offer
+  // or booking lands, wherever the stylist is in the app; the poll is only the
+  // safety net for a missed event, so it needs to run just while the screen
+  // is visible.
+  const poll = useFocusPolling(JOBS_POLL_MS);
+  const query = useQuery({
     queryKey: PROVIDER_JOBS_KEY,
     queryFn: () => apiFetch<ProviderJobsDto>('/v1/provider/jobs'),
-    refetchInterval: JOBS_POLL_MS,
+    refetchInterval: poll.refetchInterval,
   });
+  useRefetchOnRefocus(poll, query);
+  return query;
 }
 
 /** `GET /v1/provider/earnings` — the Earnings tab's released/pending totals and the ledger entries behind them. */

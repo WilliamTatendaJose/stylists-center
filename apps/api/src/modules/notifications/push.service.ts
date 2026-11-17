@@ -10,6 +10,9 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 const MAX_MESSAGES_PER_REQUEST = 100;
 
+/** Expo normally answers in well under a second; never hold a socket open longer than this. */
+const EXPO_TIMEOUT_MS = 10_000;
+
 /** Expo's own tag for "this token belongs to an app that is no longer installed". */
 const DEVICE_NOT_REGISTERED = 'DeviceNotRegistered';
 
@@ -154,6 +157,7 @@ export class PushService {
           ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(EXPO_TIMEOUT_MS),
       });
 
       if (!res.ok) {
@@ -221,6 +225,7 @@ export class PushService {
             ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
           },
           body: JSON.stringify({ ids: ids.slice(i, i + MAX_RECEIPTS_PER_REQUEST) }),
+          signal: AbortSignal.timeout(EXPO_TIMEOUT_MS),
         });
         if (!res.ok) {
           this.logger.warn(`Expo receipts request failed: ${String(res.status)}`);

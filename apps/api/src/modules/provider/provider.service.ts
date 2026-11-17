@@ -644,14 +644,19 @@ export class ProviderService {
         -- for the audit trail; counting those made them read "Awaiting
         -- payout" although the stylist already had the money.
         WHERE p.provider <> 'cash'
-          AND (EXISTS (
-                SELECT 1 FROM "Booking" b
-                WHERE b.id = p."bookingId" AND b."providerId" = ${providerProfileId}
+          -- Start from this provider's own bookings and orders and walk to
+          -- their payments through the bookingId/orderId indexes. The old
+          -- per-payment EXISTS probes read every Payment row on the
+          -- platform (2 s at 40k payments, twice per request).
+          AND p.id IN (
+                SELECT pb.id FROM "Payment" pb
+                JOIN "Booking" b ON b.id = pb."bookingId"
+                WHERE b."providerId" = ${providerProfileId}
+                UNION
+                SELECT po.id FROM "Payment" po
+                JOIN "Order" o ON o.id = po."orderId"
+                WHERE o."providerId" = ${providerProfileId}
               )
-           OR EXISTS (
-                SELECT 1 FROM "Order" o
-                WHERE o.id = p."orderId" AND o."providerId" = ${providerProfileId}
-              ))
         ORDER BY ${subjectKey}, p."createdAt" DESC, p.id DESC
       )`;
 

@@ -323,6 +323,114 @@ describe('ProviderService management', () => {
     expect(paid.paidOutUsdCents).toBe(paid.releasedUsdCents);
   });
 
+  it("earnings count this stylist's booking and order payments and no one else's", async () => {
+    const stamp = String(Date.now());
+    const before = await provider.getEarnings(providerId);
+
+    // A second stylist with an ordinary order and payment of their own.
+    const otherUser = await prisma.user.create({
+      data: {
+        phone: `+263773${String(Math.floor(Math.random() * 900000) + 100000)}`,
+        displayName: 'Other Stylist',
+        activeRole: 'provider',
+        cityId,
+      },
+    });
+    const other = await prisma.providerProfile.create({
+      data: {
+        userId: otherUser.id,
+        displayName: 'Other Stylist',
+        tint: '#222222',
+        initials: 'OS',
+        categoryId,
+        areaName: 'Elsewhere',
+        latitude: -17.8,
+        longitude: 31.03,
+        cityId,
+        workingHoursLabel: 'Weekdays',
+      },
+    });
+    const service = await prisma.service.create({
+      data: { providerId, name: 'Earnings service', durationMinutes: 60, priceUsdCents: 700 },
+    });
+    try {
+      const startsAt = new Date(Date.now() + 90 * 24 * 60 * 60_000);
+      const booking = await prisma.booking.create({
+        data: {
+          reference: `SC-PB${stamp}`,
+          clientId: buyerId,
+          providerId,
+          serviceId: service.id,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 60_000),
+          paymentMethod: 'ecocash',
+          priceUsdCents: 700,
+          status: 'confirmed',
+        },
+      });
+      const mineOrder = await prisma.order.create({
+        data: {
+          reference: `PO-${stamp}-M`,
+          buyerId,
+          providerId,
+          paymentMethod: 'ecocash',
+          totalUsdCents: 400,
+        },
+      });
+      const theirOrder = await prisma.order.create({
+        data: {
+          reference: `PO-${stamp}-T`,
+          buyerId,
+          providerId: other.id,
+          paymentMethod: 'ecocash',
+          totalUsdCents: 9000,
+        },
+      });
+      await prisma.payment.createMany({
+        data: [
+          { bookingId: booking.id, provider: 'fake-ecocash', status: 'held', amountUsdCents: 700 },
+          { orderId: mineOrder.id, provider: 'fake-ecocash', status: 'held', amountUsdCents: 400 },
+          // Not this stylist's, and a direct cash row: neither may count.
+          {
+            orderId: theirOrder.id,
+            provider: 'fake-ecocash',
+            status: 'held',
+            amountUsdCents: 9000,
+          },
+          { orderId: mineOrder.id, provider: 'cash', status: 'released', amountUsdCents: 123 },
+        ],
+      });
+
+      const after = await provider.getEarnings(providerId);
+      expect(after.pendingUsdCents - before.pendingUsdCents).toBe(1100);
+      expect(after.releasedUsdCents).toBe(before.releasedUsdCents);
+      const kinds = after.entries
+        .filter((entry) =>
+          [`SC-PB${stamp}`, `PO-${stamp}-M`, `PO-${stamp}-T`].includes(entry.reference),
+        )
+        .map((entry) => [entry.reference, entry.kind]);
+      expect(kinds).toHaveLength(2);
+      expect(kinds).toEqual(
+        expect.arrayContaining([
+          [`SC-PB${stamp}`, 'booking'],
+          [`PO-${stamp}-M`, 'order'],
+        ]),
+      );
+    } finally {
+      await prisma.payment.deleteMany({
+        where: {
+          OR: [{ order: { providerId: other.id } }, { booking: { serviceId: service.id } }],
+        },
+      });
+      await prisma.orderItem.deleteMany({ where: { order: { providerId: other.id } } });
+      await prisma.order.deleteMany({ where: { providerId: other.id } });
+      await prisma.booking.deleteMany({ where: { serviceId: service.id } });
+      await prisma.service.delete({ where: { id: service.id } });
+      await prisma.providerProfile.delete({ where: { id: other.id } });
+      await prisma.user.delete({ where: { id: otherUser.id } });
+    }
+  });
+
   describe('booking job actions', () => {
     const HOUR = 60 * 60_000;
     let serviceId: string;

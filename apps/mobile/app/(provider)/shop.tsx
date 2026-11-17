@@ -776,6 +776,7 @@ export function ShopScreen({ standalone = false }: { standalone?: boolean }) {
                     label={product.imageUrls.length ? undefined : 'No photo'}
                     radius={12}
                     style={styles.inventoryImage}
+                    thumbnail
                   />
                   <View style={styles.grow}>
                     <Text variant="bodyStrong">{product.name}</Text>

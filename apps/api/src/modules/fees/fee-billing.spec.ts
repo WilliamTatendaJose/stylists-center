@@ -291,6 +291,41 @@ describe('fee billing', () => {
   });
 
   describe('hiding restricted providers', () => {
+    it('shares the hidden-provider list between requests instead of recomputing it each time', async () => {
+      const fresh = new FeeStandingService(prisma, settings);
+      const queries = vi.spyOn(prisma, '$queryRaw');
+      try {
+        // Concurrent first requests share one computation.
+        const [first, second] = await Promise.all([
+          fresh.restrictedProviderIds(),
+          fresh.restrictedProviderIds(),
+        ]);
+        expect(second).toEqual(first);
+        const afterFirst = queries.mock.calls.length;
+        expect(afterFirst).toBeGreaterThan(0);
+
+        // Later requests inside the window touch no table at all.
+        expect(await fresh.restrictedProviderIds()).toEqual(first);
+        expect(queries.mock.calls.length).toBe(afterFirst);
+
+        // An explicit clock is for callers that need the exact answer for that instant.
+        await fresh.restrictedProviderIds(new Date());
+        expect(queries.mock.calls.length).toBe(afterFirst * 2);
+
+        // After the window the list is recomputed.
+        const now = Date.now();
+        const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 31_000);
+        try {
+          await fresh.restrictedProviderIds();
+        } finally {
+          clock.mockRestore();
+        }
+        expect(queries.mock.calls.length).toBe(afterFirst * 3);
+      } finally {
+        queries.mockRestore();
+      }
+    });
+
     it('leaves them out of search, smart match and the map, and marks their page unavailable', async () => {
       const good = await makeProvider('Visible Stylist');
       const bad = await makeProvider('Paused Stylist');
