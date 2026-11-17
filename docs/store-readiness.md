@@ -48,16 +48,17 @@ stylist near Harare with services, and a shop with a product. Enter both sets of
 
 **Data safety form:**
 
-| Data                                            | Collected | Shared                          | Why                                                           | Optional |
-| ----------------------------------------------- | --------- | ------------------------------- | ------------------------------------------------------------- | -------- |
-| Name, email, phone                              | Yes       | No                              | Account, communication                                        | No       |
-| Precise location                                | Yes       | No                              | Finding nearby stylists; live trip location (foreground only) | Yes      |
-| Photos                                          | Yes       | No                              | Profile, portfolio, products, ID verification                 | Yes      |
-| Messages (in-app chat, attachments)             | Yes       | No                              | Talking to stylists/shops                                     | Yes      |
-| Purchase history (bookings, orders)             | Yes       | No                              | App functionality                                             | No       |
-| Financial info (mobile money number at payment) | Yes       | Yes, with the payment processor | Payments                                                      | Yes      |
-| ID document and selfie                          | Yes       | No                              | Verifying stylists and agents                                 | Yes      |
-| Device push token                               | Yes       | No                              | Notifications                                                 | Yes      |
+| Data                                                                            | Collected | Shared                          | Why                                                           | Optional |
+| ------------------------------------------------------------------------------- | --------- | ------------------------------- | ------------------------------------------------------------- | -------- |
+| Name, email, phone                                                              | Yes       | No                              | Account, communication                                        | No       |
+| Precise location                                                                | Yes       | No                              | Finding nearby stylists; live trip location (foreground only) | Yes      |
+| Photos                                                                          | Yes       | No                              | Profile, portfolio, products, ID verification                 | Yes      |
+| Messages (in-app chat, attachments)                                             | Yes       | No                              | Talking to stylists/shops                                     | Yes      |
+| Purchase history (bookings, orders)                                             | Yes       | No                              | App functionality                                             | No       |
+| Financial info (mobile money number at payment)                                 | Yes       | Yes, with the payment processor | Payments                                                      | Yes      |
+| ID document and selfie                                                          | Yes       | No                              | Verifying stylists and agents                                 | Yes      |
+| Device push token                                                               | Yes       | No                              | Notifications                                                 | Yes      |
+| Crash logs and diagnostics (Sentry: errors, performance, masked screen replays) | Yes       | No (Sentry processes it for us) | App stability and fixing bugs                                 | No       |
 
 Also declare: data is encrypted in transit (HTTPS), users can request deletion (link `/delete-account`),
 and no data is sold.
