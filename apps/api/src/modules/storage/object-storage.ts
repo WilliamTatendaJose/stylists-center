@@ -161,7 +161,14 @@ export class S3Storage implements ObjectStorage {
     // which avoids paying a HEAD request on every image view.
     const url = await getSignedUrl(
       this.client,
-      new GetObjectCommand({ Bucket: this.options.bucket, Key: name }),
+      new GetObjectCommand({
+        Bucket: this.options.bucket,
+        Key: name,
+        // Same rule as the local route: only images render inline.
+        ...(/\.(?:jpe?g|png|webp)$/i.test(name)
+          ? {}
+          : { ResponseContentDisposition: 'attachment' }),
+      }),
       { expiresIn: DOWNLOAD_LINK_SECONDS },
     );
     return { kind: 'redirect', url, expiresInSeconds: DOWNLOAD_LINK_SECONDS };

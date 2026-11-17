@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { ProviderGuard } from './provider.guard';
 import { CurrentProvider } from './current-provider.decorator';
 import { ProviderService } from './provider.service';
@@ -48,8 +49,11 @@ export class ProviderController {
 
   @Post('images')
   @UseInterceptors(FileInterceptor('image', { limits: { files: 1, fileSize: MAX_IMAGE_BYTES } }))
-  uploadImage(@UploadedFile() file: UploadedImageFile | undefined) {
-    return this.images.save(file);
+  uploadImage(
+    @CurrentUser() user: { id: string },
+    @UploadedFile() file: UploadedImageFile | undefined,
+  ) {
+    return this.images.save(file, user.id);
   }
 
   @Get('jobs')

@@ -286,8 +286,9 @@ export class WalletService {
       });
       const held = (pool: 'cash' | 'agent') =>
         Math.max(0, pools.find((p) => p.pool === pool)?._sum.coins ?? 0);
+      // Coins for bookings/orders that can still be cancelled stay behind.
       const candidates: { pool: 'cash' | 'agent'; coins: number }[] = [
-        { pool: 'cash', coins: held('cash') },
+        { pool: 'cash', coins: Math.max(0, held('cash') - balance.pendingCash) },
         { pool: 'agent', coins: agentActive ? held('agent') : 0 },
       ];
       const rows = candidates.filter((row) => row.coins > 0);

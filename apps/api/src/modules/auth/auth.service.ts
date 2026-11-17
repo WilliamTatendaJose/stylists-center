@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -26,6 +27,7 @@ import { TrustService } from '../trust/trust.service';
 import type { Env } from '../../config/env';
 import { FirebaseIdentityService, type FirebaseIdentity } from './firebase-identity.service';
 import { UserLifecycleService } from './user-lifecycle.service';
+import { DOCUMENT_LINK_SECONDS, UploadAccessService } from '../storage/upload-access.service';
 
 const ACCESS_TOKEN_TTL = '15m';
 const REFRESH_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -48,6 +50,7 @@ export class AuthService {
     private readonly trust: TrustService,
     private readonly firebaseIdentity: FirebaseIdentityService,
     private readonly userLifecycle: UserLifecycleService,
+    @Optional() private readonly uploadAccess?: UploadAccessService,
   ) {}
 
   /**
@@ -274,8 +277,32 @@ export class AuthService {
     if (user.deletedAt || user.disabledAt) {
       throw new UnauthorizedException('Session no longer valid');
     }
+    // A ban bumps tokenVersion so live access tokens stop working, but the
+    // new access token below is signed with the *current* version — without
+    // this check the app's automatic refresh-on-401 let a banned user straight
+    // back in. Same rule as sign-in (exchangeFirebaseToken).
+    if (await this.trust.findActiveBan(user.id)) {
+      await this.prisma.refreshToken.updateMany({
+        where: { familyId: record.familyId },
+        data: { revoked: true },
+      });
+      throw new UnauthorizedException('Session no longer valid');
+    }
 
-    await this.prisma.refreshToken.update({ where: { id: record.id }, data: { revoked: true } });
+    // Conditional on `revoked: false` so two concurrent refreshes with the same
+    // token cannot both rotate it: exactly one wins, the other is treated as
+    // the replay it is.
+    const { count } = await this.prisma.refreshToken.updateMany({
+      where: { id: record.id, revoked: false },
+      data: { revoked: true },
+    });
+    if (count !== 1) {
+      await this.prisma.refreshToken.updateMany({
+        where: { familyId: record.familyId },
+        data: { revoked: true },
+      });
+      throw new UnauthorizedException('Refresh token reuse detected — session revoked');
+    }
 
     const refreshTokenRawNew = generateRefreshTokenRaw();
     await this.prisma.refreshToken.create({
@@ -416,10 +443,13 @@ export class AuthService {
         verificationSubmittedAt: true,
       },
     });
+    // Private uploads: the owner gets short-lived signed links to their own documents.
+    const sign = (url: string | null) =>
+      this.uploadAccess ? this.uploadAccess.sign(url, DOCUMENT_LINK_SECONDS) : url;
     return {
       status: user.verificationStatus,
-      idDocumentUrl: user.verificationIdDocumentUrl,
-      selfieImageUrl: user.verificationSelfieImageUrl,
+      idDocumentUrl: sign(user.verificationIdDocumentUrl),
+      selfieImageUrl: sign(user.verificationSelfieImageUrl),
       note: user.verificationNote,
       submittedAt: user.verificationSubmittedAt?.toISOString() ?? null,
     };
@@ -452,6 +482,8 @@ export class AuthService {
         data: { verificationStatus: 'pending' },
       });
     });
+    // From here on the documents are only reachable through signed links.
+    await this.uploadAccess?.markPrivate([input.idDocumentUrl, input.selfieImageUrl], userId);
     return this.getVerification(userId);
   }
   async setActiveRole(userId: string, role: ActiveRole): Promise<Me> {

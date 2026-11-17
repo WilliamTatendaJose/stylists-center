@@ -7,6 +7,7 @@ import {
 } from '@sc/shared';
 import type { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
+import { DOCUMENT_LINK_SECONDS, UploadAccessService } from '../storage/upload-access.service';
 import { ImageStorageService } from '../provider/image-storage.service';
 import { awardRecruitmentReward } from '../rewards/recruitment';
 import { notifyAgentEarning, type AgentEarning } from '../rewards/agent-earning';
@@ -29,7 +30,12 @@ export class AdminVerificationsService {
     private readonly prisma: PrismaService,
     private readonly images: ImageStorageService,
     @Optional() private readonly push?: PushService,
+    @Optional() private readonly uploadAccess?: UploadAccessService,
   ) {}
+
+  /** Identity documents are private uploads: staff get short-lived signed links. */
+  private readonly signDocument = (url: string | null): string | null =>
+    this.uploadAccess ? this.uploadAccess.sign(url, DOCUMENT_LINK_SECONDS) : url;
 
   async list(input: {
     status?: VerificationStatus | undefined;
@@ -59,7 +65,11 @@ export class AdminVerificationsService {
       }),
       this.prisma.user.count({ where }),
     ]);
-    return toPage(users.map(toRow), total, input.page);
+    return toPage(
+      users.map((user) => toRow(user, this.signDocument)),
+      total,
+      input.page,
+    );
   }
 
   async review(id: string, input: ReviewVerificationInput): Promise<AdminVerificationRowDto> {
@@ -118,11 +128,14 @@ export class AdminVerificationsService {
     if (decisionMade) {
       await Promise.all(documentUrls.map((url) => this.images.remove(url)));
     }
-    return toRow(updated);
+    return toRow(updated, this.signDocument);
   }
 }
 
-function toRow(user: UserWithVerification): AdminVerificationRowDto {
+function toRow(
+  user: UserWithVerification,
+  sign: (url: string | null) => string | null = (url) => url,
+): AdminVerificationRowDto {
   return {
     id: user.id,
     displayName: user.displayName,
@@ -130,8 +143,8 @@ function toRow(user: UserWithVerification): AdminVerificationRowDto {
     activeRole: user.activeRole,
     hasProviderProfile: Boolean(user.providerProfile),
     verificationStatus: user.verificationStatus,
-    idDocumentUrl: user.verificationIdDocumentUrl,
-    selfieImageUrl: user.verificationSelfieImageUrl,
+    idDocumentUrl: sign(user.verificationIdDocumentUrl),
+    selfieImageUrl: sign(user.verificationSelfieImageUrl),
     note: user.verificationNote,
     submittedAt: user.verificationSubmittedAt?.toISOString() ?? null,
   };

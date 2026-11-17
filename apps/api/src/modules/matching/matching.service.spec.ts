@@ -224,6 +224,14 @@ describe('MatchingService', () => {
     expect(offerJobs).toHaveLength(2);
   });
 
+  it('getMatch for a viewer answers only the client who made the request', async () => {
+    const created = await createTestMatch();
+    expect((await matching.getMatch(created.id, clientId)).id).toBe(created.id);
+    await expect(
+      matching.getMatch(created.id, providerUserIds[0] ?? 'someone-else'),
+    ).rejects.toThrow('Match not found');
+  });
+
   it('acceptOffer transitions the offer and the match, and getMatch then returns it', async () => {
     const created = await createTestMatch();
     const accepted = await matching.acceptOffer(created.id);

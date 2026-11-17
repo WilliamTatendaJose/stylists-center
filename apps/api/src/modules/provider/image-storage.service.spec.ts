@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { crc32, deflateSync } from 'node:zlib';
 import sharp from 'sharp';
 import { describe, expect, it, vi } from 'vitest';
 import type { ObjectStorage } from '../storage/object-storage';
@@ -42,6 +43,30 @@ describe('createThumbnail', () => {
   it('never upscales a small image', async () => {
     const meta = await sharp(await createThumbnail(await solidJpeg(100, 50))).metadata();
     expect([meta.width, meta.height]).toEqual([100, 50]);
+  });
+
+  it('refuses to decode an image whose header claims an enormous size (decompression bomb)', async () => {
+    // A tiny PNG whose IHDR declares 20000x20000 (400 MP).
+    const chunk = (type: string, data: Buffer) => {
+      const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+      const length = Buffer.alloc(4);
+      length.writeUInt32BE(data.length);
+      const crc = Buffer.alloc(4);
+      crc.writeUInt32BE(crc32(body));
+      return Buffer.concat([length, body, crc]);
+    };
+    const ihdr = Buffer.alloc(13);
+    ihdr.writeUInt32BE(20_000, 0);
+    ihdr.writeUInt32BE(20_000, 4);
+    ihdr.writeUInt8(8, 8); // bit depth
+    ihdr.writeUInt8(2, 9); // truecolour
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      chunk('IHDR', ihdr),
+      chunk('IDAT', deflateSync(Buffer.alloc(0))),
+      chunk('IEND', Buffer.alloc(0)),
+    ]);
+    await expect(createThumbnail(png)).rejects.toThrow(/pixel limit/i);
   });
 
   it('applies EXIF orientation to the pixels', async () => {

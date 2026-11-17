@@ -90,6 +90,14 @@ export class RealtimeGateway implements OnGatewayInit, OnGatewayConnection {
     @MessageBody() payload: { matchId: string },
     @ConnectedSocket() socket: Socket,
   ) {
+    // Only the requesting client: the room carries the match's offers and
+    // state, and any signed-in user could otherwise join any match's room.
+    const { userId } = socket.data as SocketData;
+    const match = await this.prisma.matchRequest.findUnique({
+      where: { id: payload.matchId },
+      select: { clientId: true },
+    });
+    if (match?.clientId !== userId) throw new WsException('Forbidden match');
     await socket.join(`match:${payload.matchId}`);
     return getMatchRequestDto(this.prisma, payload.matchId);
   }

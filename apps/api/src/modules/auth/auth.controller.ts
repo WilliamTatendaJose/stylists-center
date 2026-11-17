@@ -98,8 +98,11 @@ export class MeController {
   @UseGuards(JwtAuthGuard)
   @Post('images')
   @UseInterceptors(FileInterceptor('image', { limits: { files: 1, fileSize: MAX_IMAGE_BYTES } }))
-  uploadImage(@UploadedFile() file: UploadedImageFile | undefined) {
-    return this.images.save(file);
+  uploadImage(
+    @CurrentUser() user: { id: string },
+    @UploadedFile() file: UploadedImageFile | undefined,
+  ) {
+    return this.images.save(file, user.id);
   }
 
   @UseGuards(JwtAuthGuard)

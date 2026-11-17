@@ -1158,3 +1158,22 @@ model UserBlock {
   @@unique([blockerId, blockedId])
   @@index([blockedId])
 }
+
+/// One row per object stored under /uploads/<name> since this table existed:
+/// who uploaded it, and whether it is private. A private object (an identity
+/// document, a selfie, a chat attachment) is served only through a short-lived
+/// signed link that the API hands to the people allowed to see it; anything
+/// else (profile and product photos) stays a plain public URL. Objects from
+/// before this table have no row and stay public, except the identity
+/// documents and chat files the migration backfilled.
+model Upload {
+  /// The stored object name, e.g. `3a6f…d0.jpg` (no `/uploads/` prefix).
+  name      String   @id
+  /// Uploader's user id. Only the uploader can make an object private, so
+  /// nobody can hide someone else's public photo by submitting its URL.
+  ownerId   String?
+  private   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([ownerId])
+}
