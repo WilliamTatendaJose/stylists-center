@@ -19,6 +19,9 @@ import { pesepayLedgerStatus } from './pesepay-status';
 import { assertChannelOffered } from './pay-channels';
 import { toLocalPhone } from './phone-format';
 
+/** Pesepay normally answers within a few seconds; give up before a user's request does. */
+const GATEWAY_TIMEOUT_MS = 20_000;
+
 const LIVE_BASE_URL = 'https://api.pesepay.com/api/payments-engine';
 const SANDBOX_BASE_URL = 'https://api.test.sandbox.pesepay.com/payments-engine';
 
@@ -302,12 +305,20 @@ export class PesepayAdapter implements PaymentGatewayPort {
         ...(requestBody === undefined
           ? {}
           : { body: JSON.stringify({ payload: this.encrypt(requestBody, creds.encryptionKey) }) }),
+        // A gateway that accepts the connection and never answers must not
+        // hold the request (and its database connection) open indefinitely.
+        signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
       });
     } catch {
       throw new ServiceUnavailableException('Pesepay could not be reached');
     }
 
-    const text = await response.text();
+    let text: string;
+    try {
+      text = await response.text();
+    } catch {
+      throw new ServiceUnavailableException('Pesepay could not be reached');
+    }
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);

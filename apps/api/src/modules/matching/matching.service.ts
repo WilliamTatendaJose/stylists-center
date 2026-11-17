@@ -113,22 +113,19 @@ export class MatchingService {
     });
 
     const respondBy = new Date(Date.now() + OFFER_RESPONSE_TTL_SECONDS * 1000);
-    const offers = await Promise.all(
-      providers.map((p) =>
-        this.prisma.matchOffer.create({
-          data: {
-            matchRequestId: matchId,
-            providerId: p.id,
-            state: 'offered',
-            quoteUsdCents:
-              p.priceDisplay === 'from'
-                ? (p.fromPriceUsdCents ?? 0)
-                : (p.minServicePriceUsdCents ?? 0),
-            respondBy,
-          },
-        }),
-      ),
-    );
+    // One INSERT for every offer rather than one round trip per provider: a
+    // busy category in a big city fans out to hundreds of stylists, and
+    // hundreds of concurrent creates would queue behind the connection pool.
+    const offers = await this.prisma.matchOffer.createManyAndReturn({
+      data: providers.map((p) => ({
+        matchRequestId: matchId,
+        providerId: p.id,
+        state: 'offered' as const,
+        quoteUsdCents:
+          p.priceDisplay === 'from' ? (p.fromPriceUsdCents ?? 0) : (p.minServicePriceUsdCents ?? 0),
+        respondBy,
+      })),
+    });
 
     await this.prisma.matchRequest.update({
       where: { id: matchId },
@@ -140,13 +137,15 @@ export class MatchingService {
       { matchId },
       { delay: MATCH_REQUEST_TTL_SECONDS * 1000, jobId: expireJobId(matchId) },
     );
-    for (const offer of offers) {
-      await this.queue.add(
-        'offerTimeout',
-        { offerId: offer.id },
-        { delay: OFFER_RESPONSE_TTL_SECONDS * 1000, jobId: offerTimeoutJobId(offer.id) },
-      );
-    }
+    await Promise.all(
+      offers.map((offer) =>
+        this.queue.add(
+          'offerTimeout',
+          { offerId: offer.id },
+          { delay: OFFER_RESPONSE_TTL_SECONDS * 1000, jobId: offerTimeoutJobId(offer.id) },
+        ),
+      ),
+    );
 
     if (providers.length > 0) {
       const category = await this.prisma.category.findUnique({ where: { id: match.categoryId } });
@@ -155,11 +154,12 @@ export class MatchingService {
           ? { mode: 'fixed', amountUsd: (match.budgetAmountUsdCents ?? 0) / 100 }
           : { mode: 'flex' },
       );
-      for (const provider of providers) {
-        const profile = await this.prisma.providerProfile.findUnique({
-          where: { id: provider.id },
-        });
-        if (!profile) continue;
+      // One query for every notified stylist instead of one per stylist.
+      const profiles = await this.prisma.providerProfile.findMany({
+        where: { id: { in: providers.map((p) => p.id) } },
+        select: { id: true, userId: true },
+      });
+      for (const profile of profiles) {
         this.socketEmitter.emitToUser(profile.userId, 'match.offered', {
           matchId,
           categoryName: category?.name ?? '',

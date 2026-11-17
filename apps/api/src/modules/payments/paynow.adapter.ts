@@ -18,6 +18,9 @@ import type {
 import { assertChannelOffered } from './pay-channels';
 import { toLocalPhone } from './phone-format';
 
+/** Paynow normally answers within a few seconds; give up before a user's request does. */
+const GATEWAY_TIMEOUT_MS = 20_000;
+
 const INITIATE_URL = 'https://www.paynow.co.zw/interface/initiatetransaction';
 const MOBILE_INITIATE_URL = 'https://www.paynow.co.zw/interface/remotetransaction';
 
@@ -308,11 +311,19 @@ export class PaynowAdapter implements PaymentGatewayPort {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
         body,
+        // A gateway that accepts the connection and never answers must not
+        // hold the request (and its database connection) open indefinitely.
+        signal: AbortSignal.timeout(GATEWAY_TIMEOUT_MS),
       });
     } catch {
       throw new ServiceUnavailableException('Paynow could not be reached');
     }
-    const payload = await response.text();
+    let payload: string;
+    try {
+      payload = await response.text();
+    } catch {
+      throw new ServiceUnavailableException('Paynow could not be reached');
+    }
     if (!response.ok) throw new ServiceUnavailableException('Paynow rejected the request');
     return Object.fromEntries(
       [...new URLSearchParams(payload)].map(([key, value]) => [key.toLowerCase(), value]),
