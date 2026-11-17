@@ -30,6 +30,9 @@ export const appConfigSchema = z.object({
   rewardSpendUsdPerCoin: z.number().int(),
   /** Whether clients earn coins on marketplace purchases too ('off': bookings only). */
   clientPurchaseRewards: z.enum(['on', 'off']),
+  /** 'on': the store app sells the agent subscription through Google Play / App Store billing. */
+  storeBilling: z.enum(['on', 'off']),
+  storeSubscriptionProductId: z.string(),
   agentRewardSpendUsdPerCoin: z.number().int(),
   agentMinPurchaseUsd: z.number().int(),
   cashOutPayoutDays: z.number().int(),

@@ -126,6 +126,23 @@ export const envSchema = z
     EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
     /** Sentry project DSN for error and performance reporting; unset turns it off (src/instrument.ts). */
     SENTRY_DSN: z.string().optional(),
+    /**
+     * Google Play Billing (agent subscription). The service account JSON of a
+     * Google Cloud account linked in Play Console with permission to view and
+     * manage orders and subscriptions. Unset: store purchases are refused.
+     */
+    GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: z.string().optional(),
+    /** Defaults to the app's package, zw.co.stylistscenter.app. */
+    GOOGLE_PLAY_PACKAGE_NAME: z.string().optional(),
+    /** Shared secret in the Pub/Sub push URL (?token=) for Play's real-time notifications. */
+    GOOGLE_PLAY_RTDN_TOKEN: z.string().optional(),
+    /** App Store Server API key (In-App Purchase key from App Store Connect). Unset: iOS purchases are refused. */
+    APPLE_IAP_ISSUER_ID: z.string().optional(),
+    APPLE_IAP_KEY_ID: z.string().optional(),
+    /** The .p8 key contents; literal \n sequences are accepted. */
+    APPLE_IAP_PRIVATE_KEY: z.string().optional(),
+    /** Defaults to the app's bundle id, zw.co.stylistscenter.app. */
+    APPLE_BUNDLE_ID: z.string().optional(),
     // Where Expo's push API lives. A variable rather than a constant purely so
     // tests can point it at a local stub instead of the internet.
     EXPO_PUSH_API_URL: z.url().default('https://exp.host/--/api/v2/push/send'),

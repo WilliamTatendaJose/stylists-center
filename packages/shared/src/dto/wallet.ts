@@ -131,3 +131,16 @@ export const claimReferralSchema = z.object({
   referralCode: z.string().trim().toUpperCase().min(3).max(32),
 });
 export type ClaimReferralInput = z.infer<typeof claimReferralSchema>;
+
+/**
+ * `POST /v1/wallet/agent-subscription/store-purchase`: a Google Play or App
+ * Store subscription the app just bought (or restored). The server checks it
+ * with the store before it counts.
+ */
+export const storePurchaseSchema = z.object({
+  platform: z.enum(['android', 'ios']),
+  productId: z.string().min(1).max(100),
+  /** Android: the purchase token. iOS: the transaction id. */
+  token: z.string().min(1).max(4096),
+});
+export type StorePurchaseInput = z.infer<typeof storePurchaseSchema>;
