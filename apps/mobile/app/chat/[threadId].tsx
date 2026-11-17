@@ -428,6 +428,8 @@ export default function Chat() {
                     label={attachment.name}
                     radius={12}
                     style={styles.attachmentImage}
+                    // The small server copy in the thread; tapping opens the original.
+                    thumbnail
                   />
                 ) : (
                   <FileText
