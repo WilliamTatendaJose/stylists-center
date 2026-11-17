@@ -688,6 +688,93 @@ describe('RewardsHooksService', () => {
       await expect(wallet.cashOut(stylist)).rejects.toThrow('You can cash out again on');
     });
 
+    it('holds back coins for a booking the client can still cancel, so they cannot be cashed out and returned', async () => {
+      const client = await makeUser('Client C2');
+      const stylist = await makeUser('Stylist C2');
+      await earn(client, 120, new Date(Date.now() + 100 * DAY));
+      const category = await prisma.category.create({ data: { name: `rewards-hold-${uid()}` } });
+      const profile = await prisma.providerProfile.create({
+        data: {
+          userId: stylist,
+          displayName: 'Stylist C2',
+          tint: '#000000',
+          initials: 'SC',
+          categoryId: category.id,
+          areaName: 'Avondale',
+          latitude: -17.8,
+          longitude: 31.03,
+          cityId,
+          workingHoursLabel: 'Mon-Fri',
+        },
+      });
+      const service = await prisma.service.create({
+        data: { providerId: profile.id, name: 'Cut', durationMinutes: 60, priceUsdCents: 600 },
+      });
+      const startsAt = new Date(Date.now() + 3 * DAY);
+      const booking = await prisma.booking.create({
+        data: {
+          reference: `SC-HOLD-${uid()}`,
+          clientId: client,
+          providerId: profile.id,
+          serviceId: service.id,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + 60 * 60_000),
+          paymentMethod: 'cash',
+          priceUsdCents: 600,
+          status: 'confirmed',
+        },
+      });
+      try {
+        await inTx((tx) =>
+          hooks.redeemForBooking(tx, {
+            bookingId: booking.id,
+            clientId: client,
+            providerUserId: stylist,
+            coins: 60,
+          }),
+        );
+        const pending = await wallet.getWallet(stylist);
+        expect(pending).toMatchObject({
+          coins: 60,
+          cashOutableCoins: 0,
+          spendableCoins: 0,
+          canCashOut: false,
+        });
+        await expect(wallet.cashOut(stylist)).rejects.toThrow('Balance must exceed');
+
+        // Completed: the client can no longer take them back.
+        await prisma.booking.update({ where: { id: booking.id }, data: { status: 'completed' } });
+        expect(await wallet.getWallet(stylist)).toMatchObject({
+          cashOutableCoins: 60,
+          canCashOut: true,
+        });
+        expect((await wallet.cashOut(stylist)).amountUsdCents).toBe(600);
+      } finally {
+        await prisma.booking.delete({ where: { id: booking.id } });
+        await prisma.service.delete({ where: { id: service.id } });
+        await prisma.providerProfile.delete({ where: { id: profile.id } });
+        await prisma.category.delete({ where: { id: category.id } });
+      }
+    });
+
+    it('does not hold back coins whose booking was cancelled and refunded', async () => {
+      const client = await makeUser('Client C3');
+      const stylist = await makeUser('Stylist C3');
+      await earn(client, 120, new Date(Date.now() + 100 * DAY));
+      const bookingId = `b-${uid()}`;
+      await inTx((tx) =>
+        hooks.redeemForBooking(tx, {
+          bookingId,
+          clientId: client,
+          providerUserId: stylist,
+          coins: 60,
+        }),
+      );
+      await inTx((tx) => hooks.refundRedemption(tx, { bookingId }));
+      expect(await balance(stylist)).toMatchObject({ cashOutable: 0, pendingCash: 0 });
+      expect((await balance(client)).spendable).toBe(120);
+    });
+
     it('keeps agent earnings locked until the subscription is active', async () => {
       const agent = await makeAgent('Agent L', new Date(Date.now() - DAY));
       await prisma.walletTransaction.create({
