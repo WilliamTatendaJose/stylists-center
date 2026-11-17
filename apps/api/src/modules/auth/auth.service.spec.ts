@@ -212,6 +212,46 @@ describe('AuthService Firebase exchange', () => {
     await expect(auth.refresh(second.refreshToken)).rejects.toThrow('reuse detected');
   });
 
+  it('refuses to refresh a banned user, even with a refresh token issued before the ban', async () => {
+    const tokens = await auth.exchangeFirebaseToken('firebase-id-token');
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: TEST_EMAIL } });
+    // Written directly (not via TrustService) so this covers refresh tokens
+    // that a ban did not revoke, e.g. ones issued before this fix shipped.
+    await prisma.ban.create({ data: { userId: user.id, trigger: 'manual', reason: 'spec' } });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { tokenVersion: { increment: 1 } },
+    });
+    try {
+      await expect(auth.verifyAccessToken(tokens.accessToken)).rejects.toThrow();
+      await expect(auth.refresh(tokens.refreshToken)).rejects.toThrow('Session no longer valid');
+    } finally {
+      await prisma.ban.deleteMany({ where: { userId: user.id } });
+    }
+  });
+
+  it('revokes refresh tokens when staff ban the user', async () => {
+    const tokens = await auth.exchangeFirebaseToken('firebase-id-token');
+    const user = await prisma.user.findUniqueOrThrow({ where: { email: TEST_EMAIL } });
+    await new TrustService(prisma).banManually(user.id, 'spec');
+    try {
+      const live = await prisma.refreshToken.count({ where: { userId: user.id, revoked: false } });
+      expect(live).toBe(0);
+      await expect(auth.refresh(tokens.refreshToken)).rejects.toThrow();
+    } finally {
+      await prisma.ban.deleteMany({ where: { userId: user.id } });
+    }
+  });
+
+  it('lets only one of two concurrent refreshes with the same token succeed', async () => {
+    const first = await auth.exchangeFirebaseToken('firebase-id-token');
+    const results = await Promise.allSettled([
+      auth.refresh(first.refreshToken),
+      auth.refresh(first.refreshToken),
+    ]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  });
+
   it('selects account type after authentication and does not let legacy exchange input change it', async () => {
     const tokens = await auth.exchangeFirebaseToken('firebase-id-token');
     const { id } = await auth.verifyAccessToken(tokens.accessToken);

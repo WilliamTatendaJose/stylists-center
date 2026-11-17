@@ -274,8 +274,32 @@ export class AuthService {
     if (user.deletedAt || user.disabledAt) {
       throw new UnauthorizedException('Session no longer valid');
     }
+    // A ban bumps tokenVersion so live access tokens stop working, but the
+    // new access token below is signed with the *current* version — without
+    // this check the app's automatic refresh-on-401 let a banned user straight
+    // back in. Same rule as sign-in (exchangeFirebaseToken).
+    if (await this.trust.findActiveBan(user.id)) {
+      await this.prisma.refreshToken.updateMany({
+        where: { familyId: record.familyId },
+        data: { revoked: true },
+      });
+      throw new UnauthorizedException('Session no longer valid');
+    }
 
-    await this.prisma.refreshToken.update({ where: { id: record.id }, data: { revoked: true } });
+    // Conditional on `revoked: false` so two concurrent refreshes with the same
+    // token cannot both rotate it: exactly one wins, the other is treated as
+    // the replay it is.
+    const { count } = await this.prisma.refreshToken.updateMany({
+      where: { id: record.id, revoked: false },
+      data: { revoked: true },
+    });
+    if (count !== 1) {
+      await this.prisma.refreshToken.updateMany({
+        where: { familyId: record.familyId },
+        data: { revoked: true },
+      });
+      throw new UnauthorizedException('Refresh token reuse detected — session revoked');
+    }
 
     const refreshTokenRawNew = generateRefreshTokenRaw();
     await this.prisma.refreshToken.create({
