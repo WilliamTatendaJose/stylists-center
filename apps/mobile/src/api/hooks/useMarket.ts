@@ -30,8 +30,12 @@ import {
 } from '@sc/shared';
 import { apiFetch } from '../client.js';
 import { useSessionStore } from '../../state/index.js';
+import { useFocusPolling, useRefetchOnRefocus } from '../../hooks/useFocusPolling.js';
 
 const ORDERS_KEY = ['market', 'orders'] as const;
+
+/** How often a visible orders screen re-checks for status changes (no socket event covers these). */
+const ORDERS_POLL_MS = 30_000;
 
 /** Anything that changes stock invalidates the catalogue, so a sold-out item disappears without a manual refresh. */
 const PRODUCTS_KEY = ['market', 'products'] as const;
@@ -139,11 +143,17 @@ export function useReviewProduct() {
 }
 
 export function useMyOrders() {
-  return useQuery({
+  // There is no socket event for marketplace orders, so polling is how a
+  // buyer sees "ready for collection" while looking at the screen. It stops
+  // while the screen is hidden and catches up the moment it is shown again.
+  const poll = useFocusPolling(ORDERS_POLL_MS);
+  const query = useQuery({
     queryKey: ORDERS_KEY,
     queryFn: () => apiFetch<OrderRowDto[]>('/v1/market/orders'),
-    refetchInterval: 30_000,
+    refetchInterval: poll.refetchInterval,
   });
+  useRefetchOnRefocus(poll, query);
+  return query;
 }
 
 export function useCreateOrder() {
@@ -249,12 +259,15 @@ export function useDeleteProviderProduct() {
 
 /** The shop's incoming orders (`/v1/vendors/orders`). Works for a vendor-only shop as well as a stylist. */
 export function useVendorOrders(enabled = true) {
-  return useQuery({
+  const poll = useFocusPolling(ORDERS_POLL_MS);
+  const query = useQuery({
     enabled,
     queryKey: VENDOR_ORDERS_KEY,
     queryFn: () => apiFetch<ProviderOrderDto[]>('/v1/vendors/orders'),
-    refetchInterval: 30_000,
+    refetchInterval: poll.refetchInterval,
   });
+  useRefetchOnRefocus(poll, query);
+  return query;
 }
 
 function useVendorOrderAction<Variables>(
