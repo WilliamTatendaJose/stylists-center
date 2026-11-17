@@ -15,8 +15,8 @@ export class MatchingController {
   }
 
   @Get(':id')
-  get(@Param('id') id: string) {
-    return this.matching.getMatch(id);
+  get(@Param('id') id: string, @CurrentUser() user: { id: string }) {
+    return this.matching.getMatch(id, user.id);
   }
 
   @Post(':id/retry')

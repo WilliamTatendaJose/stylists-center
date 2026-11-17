@@ -177,7 +177,18 @@ export class MatchingService {
     }
   }
 
-  async getMatch(matchId: string): Promise<MatchRequestDto> {
+  /**
+   * With `viewerId`, only the client who made the request can read it — the
+   * same answer as a missing match otherwise, so ids cannot be probed.
+   */
+  async getMatch(matchId: string, viewerId?: string): Promise<MatchRequestDto> {
+    if (viewerId !== undefined) {
+      const owner = await this.prisma.matchRequest.findUnique({
+        where: { id: matchId },
+        select: { clientId: true },
+      });
+      if (owner?.clientId !== viewerId) throw new NotFoundException('Match not found');
+    }
     const dto = await getMatchRequestDto(this.prisma, matchId);
     if (!dto) throw new NotFoundException('Match not found');
     return dto;
