@@ -146,14 +146,20 @@ export class ProvidersService {
       throw new NotFoundException('Provider not found');
     }
 
-    const provider = await this.prisma.providerProfile.findUniqueOrThrow({
-      where: { id },
-      include: { services: true },
-    });
+    // The reviews are keyed by the stylist's user id, which `row` doesn't
+    // carry, so that read still follows the profile; the fee-standing check
+    // is independent and runs alongside it.
+    const [provider, restricted] = await Promise.all([
+      this.prisma.providerProfile.findUniqueOrThrow({
+        where: { id },
+        include: { services: true },
+      }),
+      this.standing?.isRestricted(id) ?? false,
+    ]);
 
     const reviews = await this.prisma.review.findMany({
       where: { rateeId: provider.userId },
-      include: { rater: true },
+      include: { rater: { select: { displayName: true } } },
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
@@ -193,7 +199,7 @@ export class ProvidersService {
       paymentPhone: provider.paymentPhone,
       // Paused for unpaid fees: the page still opens (links and chats point
       // at it) but must read as unavailable.
-      ...((await this.standing?.isRestricted(id)) ? { unavailable: true } : {}),
+      ...(restricted ? { unavailable: true } : {}),
     };
   }
 

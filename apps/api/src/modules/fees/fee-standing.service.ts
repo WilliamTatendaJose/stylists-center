@@ -16,6 +16,15 @@ export interface UnpaidStatement {
   unpaidUsdCents: number;
 }
 
+/**
+ * How long the hidden-provider list is reused. Every search, map and shop
+ * request needs it, and computing it reads every unpaid statement with its
+ * payments (about 650 ms at 30k statements), so it is shared between requests
+ * instead. A provider who pays up reappears within this time; booking and
+ * ordering still check their standing live (`assertCanTrade`).
+ */
+const RESTRICTED_IDS_TTL_MS = 30_000;
+
 export interface FeeStanding {
   /** Past its due date and still unpaid. */
   overdueUsdCents: number;
@@ -57,8 +66,27 @@ export class FeeStandingService {
     return (await this.standing([providerId], now)).get(providerId)?.restricted ?? false;
   }
 
-  /** For listings: providers to hide from search and smart match. */
-  async restrictedProviderIds(now: Date = new Date()): Promise<string[]> {
+  private restrictedCache: { at: number; ids: Promise<string[]> } | null = null;
+
+  /**
+   * For listings: providers to hide from search and smart match. Without an
+   * explicit `now` the answer is shared for 30 seconds (concurrent callers
+   * share one computation); passing `now` always computes it fresh.
+   */
+  async restrictedProviderIds(now?: Date): Promise<string[]> {
+    if (now) return this.computeRestrictedIds(now);
+    const cached = this.restrictedCache;
+    if (cached && Date.now() - cached.at < RESTRICTED_IDS_TTL_MS) return cached.ids;
+    const ids = this.computeRestrictedIds(new Date());
+    this.restrictedCache = { at: Date.now(), ids };
+    // A failed computation must not be served for the next 30 seconds.
+    ids.catch(() => {
+      if (this.restrictedCache?.ids === ids) this.restrictedCache = null;
+    });
+    return ids;
+  }
+
+  private async computeRestrictedIds(now: Date): Promise<string[]> {
     const all = await this.standing(undefined, now);
     return [...all].filter(([, standing]) => standing.restricted).map(([id]) => id);
   }

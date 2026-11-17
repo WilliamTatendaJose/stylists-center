@@ -672,6 +672,59 @@ describe('MarketService against the database', () => {
       );
     });
 
+    it('sorts, filters by radius and pages the catalogue by the distance to each shop', async () => {
+      const token = `Sortable${String(Date.now())}`;
+      const shop = async (lat: number, pin: number | null, priceUsdCents: number) => {
+        const vendor = await makeVendor('approved', { lat, lng: 31.03 });
+        await prisma.product.update({
+          where: { id: vendor.productId },
+          data: { name: `${token} ${String(priceUsdCents)}`, priceUsdCents },
+        });
+        // A shop pin overrides where the profile says the shop is.
+        if (pin !== null) {
+          await prisma.vendorApplication.update({
+            where: { providerId: vendor.providerId },
+            data: { shopLat: pin, shopLng: 31.03 },
+          });
+        }
+        return vendor.productId;
+      };
+      // Buyer is at -17.8. Distances: here 0 km, pinned 1.1 km, far ~4.4 km.
+      const far = await shop(-17.76, null, 500);
+      const pinned = await shop(-17.8, -17.79, 900);
+      const here = await shop(-17.8, null, 700);
+      const find = (extra: {
+        radiusKm?: number;
+        sort?: 'price_asc' | 'price_desc';
+        limit?: number;
+        offset?: number;
+      }) =>
+        market.listProducts({
+          lat: -17.8,
+          lng: 31.03,
+          searchTerm: token,
+          limit: 10,
+          offset: 0,
+          ...extra,
+        });
+      const ids = async (extra: Parameters<typeof find>[0]) =>
+        (await find(extra)).items.map((p) => p.id);
+
+      expect(await ids({})).toEqual([here, pinned, far]);
+      expect(await ids({ radiusKm: 2 })).toEqual([here, pinned]);
+      expect(await ids({ radiusKm: 0.5 })).toEqual([here]);
+      expect(await ids({ sort: 'price_asc' })).toEqual([far, here, pinned]);
+      expect(await ids({ sort: 'price_desc' })).toEqual([pinned, here, far]);
+
+      const page = await find({ limit: 1, offset: 1 });
+      expect(page.items.map((p) => p.id)).toEqual([pinned]);
+      expect(page.nextOffset).toBe(2);
+      expect((await find({ limit: 1, offset: 2 })).nextOffset).toBeNull();
+
+      const [nearest] = (await find({})).items;
+      expect(nearest?.distanceKm).toBeLessThan(0.01);
+    });
+
     it('hides the products of a restricted vendor', async () => {
       const shop = await makeVendor('approved');
       expect(await list()).toContain(shop.productId);

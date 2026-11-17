@@ -20,6 +20,7 @@ import { apiFetch } from '../client.js';
 import { confirmAfterTimeout } from '../confirmAfterTimeout.js';
 import { ME_QUERY_KEY } from './useMe.js';
 import { useSessionStore } from '../../state/index.js';
+import { useFocusPolling, useRefetchOnRefocus } from '../../hooks/useFocusPolling.js';
 
 /**
  * How often the "Available now" list re-checks who is actually available.
@@ -43,7 +44,8 @@ export function useNearbyProviders() {
   const location = useSessionStore((s) => s.location);
   const maxDistanceKm = useSessionStore((s) => s.maxDistanceKm);
 
-  return useInfiniteQuery({
+  const poll = useFocusPolling(AVAILABILITY_POLL_MS);
+  const query = useInfiniteQuery({
     queryKey: ['providers', 'nearby', location.lat, location.lng, maxDistanceKm],
     initialPageParam: 0,
     getNextPageParam: (last: ProviderPageDto) => last.nextOffset,
@@ -57,8 +59,10 @@ export function useNearbyProviders() {
           offset: String(pageParam),
         }).toString()}`,
       ),
-    refetchInterval: AVAILABILITY_POLL_MS,
+    refetchInterval: poll.refetchInterval,
   });
+  useRefetchOnRefocus(poll, query);
+  return query;
 }
 
 /** Shortest query worth a round trip — mirrors the API's own `q` minimum. */
