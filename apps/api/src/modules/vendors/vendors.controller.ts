@@ -34,8 +34,11 @@ export class VendorsController {
   /** Premises photos: the stylist upload route needs a stylist page, which an applicant may not have. */
   @Post('images')
   @UseInterceptors(FileInterceptor('image', { limits: { files: 1, fileSize: MAX_IMAGE_BYTES } }))
-  uploadImage(@UploadedFile() file: UploadedImageFile | undefined) {
-    return this.images.save(file);
+  uploadImage(
+    @CurrentUser() user: { id: string },
+    @UploadedFile() file: UploadedImageFile | undefined,
+  ) {
+    return this.images.save(file, user.id);
   }
 
   @Get('me')

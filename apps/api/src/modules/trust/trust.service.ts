@@ -80,6 +80,11 @@ export class TrustService {
         where: { id: userId },
         data: { tokenVersion: { increment: 1 } },
       }),
+      // Refresh tokens outlive the access token; end those sessions too.
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revoked: false },
+        data: { revoked: true },
+      }),
     ]);
 
     this.logger.warn(`Automatic ban applied to user ${userId} after ${String(strikes)} incidents`);
@@ -116,6 +121,11 @@ export class TrustService {
       this.prisma.user.update({
         where: { id: userId },
         data: { tokenVersion: { increment: 1 } },
+      }),
+      // Refresh tokens outlive the access token; end those sessions too.
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revoked: false },
+        data: { revoked: true },
       }),
     ]);
 

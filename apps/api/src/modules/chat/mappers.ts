@@ -5,6 +5,8 @@ export function toMessageDto(
   message: Message & { attachments: MessageAttachment[] },
   viewerId: string,
   counterpartyLastReadAt: Date,
+  /** Turns a stored attachment URL into the signed link participants may use (see UploadAccessService). */
+  signUrl: (url: string) => string = (url) => url,
 ): MessageDto {
   return {
     id: message.id,
@@ -15,7 +17,7 @@ export function toMessageDto(
     read: message.authorId !== viewerId || message.createdAt <= counterpartyLastReadAt,
     attachments: message.attachments.map((attachment) => ({
       id: attachment.id,
-      url: attachment.url,
+      url: signUrl(attachment.url),
       name: attachment.name,
       mimeType: attachment.mimeType,
       sizeBytes: attachment.sizeBytes,

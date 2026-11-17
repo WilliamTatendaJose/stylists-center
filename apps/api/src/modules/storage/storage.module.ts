@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import type { Env } from '../../config/env';
 import { LocalDiskStorage, OBJECT_STORAGE, S3Storage, type ObjectStorage } from './object-storage';
 import { UploadsController } from './uploads.controller';
+import { UploadAccessService } from './upload-access.service';
 
 export async function createObjectStorage(
   config: ConfigService<Env, true>,
@@ -36,7 +37,8 @@ export async function createObjectStorage(
       inject: [ConfigService],
       useFactory: createObjectStorage,
     },
+    UploadAccessService,
   ],
-  exports: [OBJECT_STORAGE],
+  exports: [OBJECT_STORAGE, UploadAccessService],
 })
 export class StorageModule {}

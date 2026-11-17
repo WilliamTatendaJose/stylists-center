@@ -1,8 +1,9 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { basename, extname } from 'node:path';
 import { detectImageExtension } from '../provider/image-storage.service';
 import { OBJECT_STORAGE, UPLOAD_URL_PREFIX, type ObjectStorage } from '../storage/object-storage';
+import { UploadAccessService } from '../storage/upload-access.service';
 
 export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 export const MAX_CHAT_ATTACHMENTS = 5;
@@ -71,17 +72,21 @@ function safeOriginalName(value: string): string {
 /** Stores chat files under random server names while preserving a safe display name. */
 @Injectable()
 export class AttachmentStorageService {
-  constructor(@Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage) {}
+  constructor(
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    @Optional() private readonly access?: UploadAccessService,
+  ) {}
 
-  async saveMany(files: UploadedAttachmentFile[]): Promise<StoredAttachment[]> {
+  /** Chat files are private from the start: only the two people in the thread get a link. */
+  async saveMany(files: UploadedAttachmentFile[], ownerId?: string): Promise<StoredAttachment[]> {
     if (files.length > MAX_CHAT_ATTACHMENTS) {
       throw new BadRequestException(`Attach up to ${String(MAX_CHAT_ATTACHMENTS)} files at a time`);
     }
 
-    return Promise.all(files.map((file) => this.save(file)));
+    return Promise.all(files.map((file) => this.save(file, ownerId)));
   }
 
-  private async save(file: UploadedAttachmentFile): Promise<StoredAttachment> {
+  private async save(file: UploadedAttachmentFile, ownerId?: string): Promise<StoredAttachment> {
     if (!file.buffer.length) throw new BadRequestException('Choose a file to attach');
     if (file.size > MAX_CHAT_ATTACHMENT_BYTES || file.buffer.length > MAX_CHAT_ATTACHMENT_BYTES) {
       throw new BadRequestException('Each attachment must be 10 MB or smaller');
@@ -95,6 +100,8 @@ export class AttachmentStorageService {
     }
 
     const storedName = `${randomUUID()}${extension === '.jpeg' ? '.jpg' : extension}`;
+    // Recorded before the bytes exist, so there is no moment the object is public.
+    await this.access?.record(storedName, ownerId, true);
     await this.storage.put(storedName, file.buffer, fileType.mimeType);
     return {
       url: `${UPLOAD_URL_PREFIX}${storedName}`,

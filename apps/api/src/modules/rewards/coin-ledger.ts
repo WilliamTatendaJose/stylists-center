@@ -30,6 +30,12 @@ export interface CoinBalance {
   cashOutable: number;
   /** Agent coins held back because the subscription has lapsed. */
   lockedAgent: number;
+  /**
+   * Cash coins received for a booking or order that has not completed yet.
+   * They count in `total` but can be neither spent nor cashed out until the
+   * job completes, because cancelling it hands them back to the client.
+   */
+  pendingCash: number;
   /** Soonest expiry among unspent earned coins. */
   nextExpiry: { at: Date; coins: number } | null;
 }
@@ -58,7 +64,7 @@ export async function coinBalance(
   opts: { agentActive: boolean; now?: Date },
 ): Promise<CoinBalance> {
   const now = opts.now ?? new Date();
-  const [pools, lapsed, soonest] = await Promise.all([
+  const [pools, lapsed, soonest, pendingCash] = await Promise.all([
     db.walletTransaction.groupBy({
       by: ['pool'],
       where: { userId },
@@ -74,6 +80,7 @@ export async function coinBalance(
       orderBy: { expiresAt: 'asc' },
       select: { expiresAt: true, remainingCoins: true },
     }),
+    pendingRedemptionCoins(db, userId),
   ]);
   const sum = (pool: CoinPool) => pools.find((p) => p.pool === pool)?._sum.coins ?? 0;
   const spend = Math.max(0, sum('spend') - (lapsed._sum.remainingCoins ?? 0));
@@ -81,16 +88,56 @@ export async function coinBalance(
   // paper; nobody is owed less than zero.
   const cash = Math.max(0, sum('cash'));
   const agent = Math.max(0, sum('agent'));
+  const settledCash = Math.max(0, cash - pendingCash);
   return {
     total: spend + cash + agent,
-    spendable: spend + cash,
-    cashOutable: cash + (opts.agentActive ? agent : 0),
+    spendable: spend + settledCash,
+    cashOutable: settledCash + (opts.agentActive ? agent : 0),
     lockedAgent: opts.agentActive ? 0 : agent,
+    pendingCash: Math.min(cash, pendingCash),
     nextExpiry:
       soonest?.expiresAt && soonest.remainingCoins
         ? { at: soonest.expiresAt, coins: soonest.remainingCoins }
         : null,
   };
+}
+
+/**
+ * Coins a client paid this person (redeem_credit) for a booking or order that
+ * has not completed and has not been refunded.
+ *
+ * The credit is written when the booking/order is created, but the client can
+ * still cancel until it completes, and a cancellation gives the client their
+ * coins back. Letting the receiver cash out or re-spend them in the meantime
+ * turned a client's spend-only coins into real money that the client then got
+ * back to do it again (book a colluding stylist with coins, cash out, cancel,
+ * repeat with another stylist account).
+ */
+export async function pendingRedemptionCoins(db: Db, userId: string): Promise<number> {
+  const rows = await db.$queryRaw<{ coins: number }[]>`
+    SELECT COALESCE(SUM(w."coins"), 0)::int AS "coins"
+    FROM "WalletTransaction" w
+    WHERE w."userId" = ${userId}
+      AND w."type" = 'redeem_credit'
+      AND NOT EXISTS (
+        SELECT 1 FROM "WalletTransaction" r WHERE r."dedupeKey" = 'refund:' || w."dedupeKey"
+      )
+      AND (
+        EXISTS (
+          SELECT 1 FROM "Booking" b
+          WHERE w."dedupeKey" LIKE 'redeem_credit:booking:%'
+            AND b."id" = substr(w."dedupeKey", length('redeem_credit:booking:') + 1)
+            AND b."status" <> 'completed'
+        )
+        OR EXISTS (
+          SELECT 1 FROM "Order" o
+          WHERE w."dedupeKey" LIKE 'redeem_credit:order:%'
+            AND o."id" = substr(w."dedupeKey", length('redeem_credit:order:') + 1)
+            AND o."status" NOT IN ('collected', 'delivered')
+        )
+      )
+  `;
+  return rows[0]?.coins ?? 0;
 }
 
 /** Writes an `expiry` row for each lapsed earning row. Call with the wallet locked. */

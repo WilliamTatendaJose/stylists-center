@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { UploadedImageDto } from '@sc/shared';
@@ -9,6 +9,7 @@ import {
   thumbnailName,
   type ObjectStorage,
 } from '../storage/object-storage';
+import { UploadAccessService } from '../storage/upload-access.service';
 
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -47,8 +48,15 @@ const THUMBNAIL_JPEG_QUALITY = 75;
  * without it phone photos would come out sideways). Transparent PNG/WebP are
  * flattened onto white because JPEG has no alpha channel.
  */
+/**
+ * A 5 MB upload can still declare enormous dimensions (a decompression bomb);
+ * sharp's default ceiling is ~268 MP, around a gigabyte of RAM to decode.
+ * Phone photos are well under this, and a refusal only skips the thumbnail.
+ */
+export const THUMBNAIL_MAX_INPUT_PIXELS = 50_000_000;
+
 export async function createThumbnail(buffer: Buffer): Promise<Buffer> {
-  return sharp(buffer)
+  return sharp(buffer, { limitInputPixels: THUMBNAIL_MAX_INPUT_PIXELS })
     .rotate()
     .resize(THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
     .flatten({ background: '#ffffff' })
@@ -63,9 +71,16 @@ const IMAGE_CONTENT_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/
 export class ImageStorageService {
   private readonly logger = new Logger(ImageStorageService.name);
 
-  constructor(@Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage) {}
+  constructor(
+    @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
+    @Optional() private readonly access?: UploadAccessService,
+  ) {}
 
-  async save(file: UploadedImageFile | undefined): Promise<UploadedImageDto> {
+  /**
+   * `ownerId` is recorded so the uploader, and only the uploader, can later
+   * make this object private (by submitting it as an identity document).
+   */
+  async save(file: UploadedImageFile | undefined, ownerId?: string): Promise<UploadedImageDto> {
     if (!file?.buffer.length) throw new BadRequestException('Choose an image to upload');
     if (file.size > MAX_IMAGE_BYTES || file.buffer.length > MAX_IMAGE_BYTES) {
       throw new BadRequestException('Image must be 5 MB or smaller');
@@ -78,6 +93,7 @@ export class ImageStorageService {
 
     const filename = `${randomUUID()}.${extension}`;
     await this.storage.put(filename, file.buffer, IMAGE_CONTENT_TYPES[extension]);
+    await this.access?.record(filename, ownerId);
     await this.storeThumbnail(filename, file.buffer);
     return { url: `${UPLOAD_URL_PREFIX}${filename}` };
   }

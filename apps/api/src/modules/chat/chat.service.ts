@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   CHAT_MESSAGES_DEFAULT_LIMIT,
@@ -20,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SocketEmitterService } from '../realtime/socket-emitter.service';
 import { PushService } from '../notifications/push.service';
 import { toConversationDto, toMessageDto } from './mappers';
+import { CHAT_LINK_SECONDS, UploadAccessService } from '../storage/upload-access.service';
 import {
   AttachmentStorageService,
   type UploadedAttachmentFile,
@@ -44,7 +46,12 @@ export class ChatService {
     private readonly socketEmitter: SocketEmitterService,
     private readonly attachments: AttachmentStorageService,
     private readonly push: PushService,
+    @Optional() private readonly uploadAccess?: UploadAccessService,
   ) {}
+
+  /** Attachment URLs go out signed: they are private to the two people in the thread. */
+  private readonly signAttachment = (url: string): string =>
+    this.uploadAccess?.sign(url, CHAT_LINK_SECONDS) ?? url;
 
   async list(viewerId: string): Promise<ConversationDto[]> {
     const conversations = await this.prisma.conversation.findMany({
@@ -299,7 +306,9 @@ export class ChatService {
       conversation.clientId === viewerId
         ? conversation.providerLastReadAt
         : conversation.clientLastReadAt;
-    return messages.map((m) => toMessageDto(m, viewerId, counterpartyLastReadAt));
+    return messages.map((m) =>
+      toMessageDto(m, viewerId, counterpartyLastReadAt, this.signAttachment),
+    );
   }
 
   async sendMessage(
@@ -319,7 +328,7 @@ export class ChatService {
     if (!text && files.length === 0) {
       throw new BadRequestException('Write a message or attach a file');
     }
-    const storedAttachments = await this.attachments.saveMany(files);
+    const storedAttachments = await this.attachments.saveMany(files, viewerId);
 
     const message = await this.prisma.$transaction(async (transaction) => {
       const created = await transaction.message.create({
@@ -342,7 +351,7 @@ export class ChatService {
       conversation.clientId === viewerId
         ? conversation.providerLastReadAt
         : conversation.clientLastReadAt;
-    const dto = toMessageDto(message, viewerId, counterpartyLastReadAt);
+    const dto = toMessageDto(message, viewerId, counterpartyLastReadAt, this.signAttachment);
     const counterpartyId =
       conversation.clientId === viewerId ? conversation.providerUserId : conversation.clientId;
     this.socketEmitter.emitToConversation(conversationId, 'message.created', dto);
