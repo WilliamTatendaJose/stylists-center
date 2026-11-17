@@ -509,6 +509,31 @@ describe('RewardsHooksService', () => {
       expect((await balance(client)).nextExpiry?.coins).toBe(4);
     });
 
+    it('with many one-coin earning rows, spends exactly the soonest-expiring ones', async () => {
+      const client = await makeUser('Client R4b');
+      const stylist = await makeUser('Stylist R4b');
+      // Ten one-coin rows; the later the row, the later it expires.
+      const lots = [];
+      for (let i = 0; i < 10; i += 1) {
+        lots.push(await earn(client, 1, new Date(Date.now() + (10 + i) * DAY)));
+      }
+
+      await inTx((tx) =>
+        hooks.redeemForBooking(tx, {
+          bookingId: `b-${uid()}`,
+          clientId: client,
+          providerUserId: stylist,
+          coins: 3,
+        }),
+      );
+      const remaining = async (id: string) =>
+        (await prisma.walletTransaction.findUniqueOrThrow({ where: { id } })).remainingCoins;
+      expect(await Promise.all(lots.map((lot) => remaining(lot.id)))).toEqual([
+        0, 0, 0, 1, 1, 1, 1, 1, 1, 1,
+      ]);
+      expect((await balance(client)).spendable).toBe(7);
+    });
+
     it('lets a stylist spend coins they received from clients', async () => {
       const client = await makeUser('Client R5');
       const stylist = await makeUser('Stylist R5');

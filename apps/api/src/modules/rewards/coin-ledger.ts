@@ -183,6 +183,9 @@ export async function spendCoins(
   const lots = await tx.walletTransaction.findMany({
     where: { userId, pool: 'spend', expiresAt: { gt: now }, remainingCoins: { gt: 0 } },
     orderBy: [{ expiresAt: 'asc' }, { createdAt: 'asc' }],
+    // Every lot has at least one coin left, so spending `coins` never needs
+    // more than that many lots: don't load a heavy earner's whole ledger.
+    take: coins,
   });
   let left = coins;
   const takes: { lotId: string; coins: number }[] = [];

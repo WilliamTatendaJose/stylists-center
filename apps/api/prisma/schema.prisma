@@ -427,6 +427,8 @@ model Booking {
   @@index([providerId])
   @@index([status])
   @@index([clientId, nonPaymentReportedAt])
+  /// Provider job list, newest first: a busy stylist's whole history is not sorted per request.
+  @@index([providerId, startsAt(sort: Desc)])
 }
 
 /// Append-only escrow ledger (plan §6). Never mutate a row in place — a
@@ -588,6 +590,8 @@ model Order {
   @@unique([buyerId, checkoutKey])
   @@index([buyerId])
   @@index([providerId])
+  /// Vendor order list, newest first.
+  @@index([providerId, createdAt(sort: Desc)])
 }
 
 /// A shop's application to sell, one per ProviderProfile. Only an approved
@@ -675,6 +679,7 @@ model Review {
 
   @@index([bookingId])
   @@index([rateeId])
+  @@index([rateeId, createdAt(sort: Desc)])
 }
 
 model Report {
@@ -841,6 +846,8 @@ model WalletTransaction {
   spentBy           WalletCoinSpend[]  @relation("SpendLot")
 
   @@index([userId])
+  /// The history list and the "last cash-out" lookup, newest first per user.
+  @@index([userId, createdAt(sort: Desc)])
 }
 
 model WalletCoinSpend {
