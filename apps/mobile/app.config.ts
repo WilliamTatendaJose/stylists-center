@@ -180,6 +180,17 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     'expo-updates',
+    // Crash and error reporting. The native part ships in the next build;
+    // on builds without it the JS side still reports JS errors. Source-map
+    // upload is off for now (SENTRY_DISABLE_AUTO_UPLOAD in eas.json), so a
+    // build never fails for want of a Sentry token.
+    [
+      '@sentry/react-native/expo',
+      {
+        organization: process.env.SENTRY_ORG ?? 'stylistscenter',
+        project: process.env.SENTRY_PROJECT ?? 'style-center-mobile',
+      },
+    ],
     [
       'expo-splash-screen',
       {
