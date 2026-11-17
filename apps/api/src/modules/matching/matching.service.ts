@@ -99,6 +99,7 @@ export class MatchingService {
   /** Runs the fan-out for whatever the MatchRequest row currently says (used by both create and retry). */
   private async fanOut(matchId: string): Promise<void> {
     const match = await this.prisma.matchRequest.findUniqueOrThrow({ where: { id: matchId } });
+    const maxOffers = await (this.settings ?? settingsFor(this.prisma)).get('smartMatchMaxOffers');
 
     const providers = await this.geo.findProvidersWithinRadius({
       lat: match.latitude,
@@ -110,6 +111,10 @@ export class MatchingService {
       onlyAcceptingBookings: true,
       // A stylist asking for a match must not be offered their own request.
       excludeUserId: match.clientId,
+      // Nearest first (the default sort), capped by the console setting so a
+      // busy area doesn't ping every stylist in range for one request.
+      sort: 'distance',
+      limit: maxOffers,
     });
 
     const respondBy = new Date(Date.now() + OFFER_RESPONSE_TTL_SECONDS * 1000);

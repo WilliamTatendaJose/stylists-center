@@ -141,6 +141,10 @@ const config: ExpoConfig = {
       monochromeImage: './assets/android-icon-monochrome.png',
     },
     predictiveBackGestureEnabled: false,
+    // Keep cached chats, wallet and profile data (react-query's persisted
+    // cache in AsyncStorage) out of the user's Google Drive backup. Sign-in
+    // tokens are in SecureStore, which Android never backs up anyway.
+    allowBackup: false,
     ...(googleServicesFile ? { googleServicesFile } : {}),
     // Live location is scoped to a single trip and terminates on check-in
     // (plan risk R8) — foreground-only, deliberately, so the app never
