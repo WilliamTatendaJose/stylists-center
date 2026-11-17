@@ -124,6 +124,8 @@ export const envSchema = z
     // devices — worth doing in production, where a leaked push token would
     // otherwise let anyone send notifications to your users.
     EXPO_ACCESS_TOKEN: z.string().min(1).optional(),
+    /** Sentry project DSN for error and performance reporting; unset turns it off (src/instrument.ts). */
+    SENTRY_DSN: z.string().optional(),
     // Where Expo's push API lives. A variable rather than a constant purely so
     // tests can point it at a local stub instead of the internet.
     EXPO_PUSH_API_URL: z.url().default('https://exp.host/--/api/v2/push/send'),

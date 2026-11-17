@@ -1,3 +1,5 @@
+// First, so errors while the rest of the app loads are caught too.
+import { setReportingUser, withSentry } from '../src/observability/sentry.js';
 import { useEffect } from 'react';
 import { AppState, Platform, StyleSheet } from 'react-native';
 import { Stack } from 'expo-router';
@@ -21,6 +23,7 @@ import { registerPushToken } from '../src/notifications/registerPushToken.js';
 import { useNotificationRouting } from '../src/notifications/useNotificationRouting.js';
 import { ThemeProvider } from '@sc/ui';
 import { useClaimReferral } from '../src/api/hooks/useWallet.js';
+import { useMe } from '../src/api/hooks/useMe.js';
 import { ApiError } from '../src/api/errors.js';
 import { TermsGate } from '../src/components/TermsGate.js';
 
@@ -46,7 +49,7 @@ const styles = StyleSheet.create({
  * (plan §7) so a screen still shows something before the first real fetch
  * resolves.
  */
-export default function RootLayout() {
+function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const subscription = AppState.addEventListener('change', (state) => {
@@ -105,6 +108,8 @@ export default function RootLayout() {
   );
 }
 
+export default withSentry(RootLayout);
+
 /** Rendered inside every provider above, so useAuthGate's useMe() call can actually find a QueryClient. */
 function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
   const isAuthHydrated = useAuthGate();
@@ -140,6 +145,12 @@ function AuthGatedNavigator({ fontsReady }: { fontsReady: boolean }) {
   // registration call needs the session, so running it only at launch left
   // anyone who signed in afterwards without notifications until a restart.
   const signedIn = accessToken !== null;
+  // Crash reports carry the account id only, so support can find the account.
+  const { data: me } = useMe();
+  const myId = signedIn ? (me?.id ?? null) : null;
+  useEffect(() => {
+    setReportingUser(myId);
+  }, [myId]);
   useEffect(() => {
     if (!isAuthHydrated || !signedIn) return;
     void registerPushToken().catch((error: unknown) => {

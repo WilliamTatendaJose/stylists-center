@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { SentryGlobalFilter, SentryModule } from '@sentry/nestjs/setup';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from './config/env';
@@ -47,6 +48,8 @@ import { ClientErrorsModule } from './modules/client-errors/client-errors.module
 
 @Module({
   imports: [
+    // Reports unhandled errors and request timings; a no-op without SENTRY_DSN (see instrument.ts).
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
@@ -108,6 +111,9 @@ import { ClientErrorsModule } from './modules/client-errors/client-errors.module
      * all returned 200.
      */
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Sends unexpected (5xx) errors to Sentry, then answers exactly as Nest's
+    // default filter would. Expected HTTP errors (4xx) are not reported.
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
   ],
 })
 export class AppModule {}

@@ -1,3 +1,5 @@
+// Must stay first: Sentry hooks libraries as they are loaded.
+import './instrument';
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';

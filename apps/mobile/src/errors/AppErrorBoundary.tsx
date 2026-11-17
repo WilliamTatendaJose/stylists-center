@@ -4,6 +4,7 @@ import Constants from 'expo-constants';
 import * as Updates from 'expo-updates';
 import { usePathname, type ErrorBoundaryProps } from 'expo-router';
 import { apiFetch } from '../api/client.js';
+import { reportError } from '../observability/sentry.js';
 import { color, space } from '@sc/tokens';
 import { Text, Button } from '@sc/ui';
 
@@ -48,6 +49,9 @@ function useReportCrash(error: Error, ref: string): void {
   // Rendered by expo-router inside the failed route, so the router context exists.
   const route = usePathname();
   useEffect(() => {
+    // Same reference code as the one on screen, so a report can be matched
+    // to what the person read out.
+    reportError(error, { ref, ...(route ? { route } : {}) });
     void apiFetch<void>('/v1/client-errors', {
       method: 'POST',
       body: {
