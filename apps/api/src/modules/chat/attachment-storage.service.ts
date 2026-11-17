@@ -1,8 +1,13 @@
-import { BadRequestException, Inject, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { basename, extname } from 'node:path';
-import { detectImageExtension } from '../provider/image-storage.service';
-import { OBJECT_STORAGE, UPLOAD_URL_PREFIX, type ObjectStorage } from '../storage/object-storage';
+import { createThumbnail, detectImageExtension } from '../provider/image-storage.service';
+import {
+  OBJECT_STORAGE,
+  UPLOAD_URL_PREFIX,
+  thumbnailName,
+  type ObjectStorage,
+} from '../storage/object-storage';
 import { UploadAccessService } from '../storage/upload-access.service';
 
 export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024;
@@ -72,6 +77,8 @@ function safeOriginalName(value: string): string {
 /** Stores chat files under random server names while preserving a safe display name. */
 @Injectable()
 export class AttachmentStorageService {
+  private readonly logger = new Logger(AttachmentStorageService.name);
+
   constructor(
     @Inject(OBJECT_STORAGE) private readonly storage: ObjectStorage,
     @Optional() private readonly access?: UploadAccessService,
@@ -103,11 +110,32 @@ export class AttachmentStorageService {
     // Recorded before the bytes exist, so there is no moment the object is public.
     await this.access?.record(storedName, ownerId, true);
     await this.storage.put(storedName, file.buffer, fileType.mimeType);
+    if (fileType.mimeType.startsWith('image/')) await this.storeThumbnail(storedName, file.buffer);
     return {
       url: `${UPLOAD_URL_PREFIX}${storedName}`,
       name,
       mimeType: fileType.mimeType,
       sizeBytes: file.buffer.length,
     };
+  }
+
+  /**
+   * A small copy for the chat thread, so a phone on mobile data doesn't
+   * download every full photo just to scroll the conversation. It inherits
+   * the original's privacy (the uploads route checks the original's name).
+   * Best effort: a failure only means the thread shows the original.
+   */
+  private async storeThumbnail(storedName: string, original: Buffer): Promise<void> {
+    try {
+      await this.storage.put(
+        thumbnailName(storedName),
+        await createThumbnail(original),
+        'image/jpeg',
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Thumbnail for ${storedName} was not stored: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

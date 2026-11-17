@@ -423,8 +423,6 @@ model Booking {
   reports  Report[]
   trips    Trip[]
 
-  @@index([clientId])
-  @@index([providerId])
   @@index([status])
   @@index([clientId, nonPaymentReportedAt])
   /// Provider job list, newest first: a busy stylist's whole history is not sorted per request.
@@ -588,8 +586,6 @@ model Order {
   productReviews ProductReview[]
 
   @@unique([buyerId, checkoutKey])
-  @@index([buyerId])
-  @@index([providerId])
   /// Vendor order list, newest first.
   @@index([providerId, createdAt(sort: Desc)])
 }
@@ -678,7 +674,6 @@ model Review {
   createdAt DateTime @default(now())
 
   @@index([bookingId])
-  @@index([rateeId])
   @@index([rateeId, createdAt(sort: Desc)])
 }
 
@@ -845,7 +840,6 @@ model WalletTransaction {
   spentFrom         WalletCoinSpend[]  @relation("SpendDebit")
   spentBy           WalletCoinSpend[]  @relation("SpendLot")
 
-  @@index([userId])
   /// The history list and the "last cash-out" lookup, newest first per user.
   @@index([userId, createdAt(sort: Desc)])
 }
