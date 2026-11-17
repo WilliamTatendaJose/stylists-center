@@ -8,9 +8,9 @@ describe('client error log sanitising', () => {
   });
 
   it('cannot forge a separate log line through a one-line field', () => {
-    expect(oneLine('boom\n[Nest] 1 - LOG [AdminAuth] owner signed in\u001b[2J')).not.toMatch(
-      /[\n\u001b]/,
-    );
+    const cleaned = oneLine('boom\n[Nest] 1 - LOG [AdminAuth] owner signed in\u001b[2J');
+    expect(cleaned.includes('\n')).toBe(false);
+    expect(cleaned.includes('\u001b')).toBe(false);
   });
 
   it('keeps stack lines but indents every one of them', () => {
