@@ -47,8 +47,15 @@ const THUMBNAIL_JPEG_QUALITY = 75;
  * without it phone photos would come out sideways). Transparent PNG/WebP are
  * flattened onto white because JPEG has no alpha channel.
  */
+/**
+ * A 5 MB upload can still declare enormous dimensions (a decompression bomb);
+ * sharp's default ceiling is ~268 MP, around a gigabyte of RAM to decode.
+ * Phone photos are well under this, and a refusal only skips the thumbnail.
+ */
+export const THUMBNAIL_MAX_INPUT_PIXELS = 50_000_000;
+
 export async function createThumbnail(buffer: Buffer): Promise<Buffer> {
-  return sharp(buffer)
+  return sharp(buffer, { limitInputPixels: THUMBNAIL_MAX_INPUT_PIXELS })
     .rotate()
     .resize(THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE, { fit: 'inside', withoutEnlargement: true })
     .flatten({ background: '#ffffff' })

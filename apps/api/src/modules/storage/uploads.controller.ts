@@ -8,6 +8,8 @@ import {
   type StoredObjectLocation,
 } from './object-storage';
 
+const IMAGE_NAME = /\.(?:jpe?g|png|webp)$/i;
+
 /**
  * Serves `/uploads/<name>` — the URL shape already stored in Postgres and
  * accepted by @sc/shared's imageUrlSchema — from whichever backend is
@@ -32,6 +34,11 @@ export class UploadsController {
 
     // The admin console loads these from a different origin.
     response.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    // Served from the API's own origin: never let a browser guess a type, and
+    // make anything that isn't an image download instead of rendering (a chat
+    // .txt/.pdf is the caller's bytes, not ours).
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    if (!IMAGE_NAME.test(name)) response.setHeader('Content-Disposition', 'attachment');
     if (location.kind === 'redirect') {
       // Cache the redirect for less time than the link lives, so a cached
       // redirect never points at an expired signature.

@@ -75,6 +75,18 @@ describe('UploadsController', () => {
     );
   });
 
+  it('serves a chat document as a download with sniffing off, but an image inline', async () => {
+    const doc = '3a6f010d-1d13-4a06-a747-0ae1b4be35d0.txt';
+    const { controller, response, res } = harness({ kind: 'file', path: `/data/${doc}` });
+    await controller.serve(doc, res);
+    expect(response.setHeader).toHaveBeenCalledWith('Content-Disposition', 'attachment');
+    expect(response.setHeader).toHaveBeenCalledWith('X-Content-Type-Options', 'nosniff');
+
+    const image = harness({ kind: 'file', path: `/data/${NAME}` });
+    await image.controller.serve(NAME, image.res);
+    expect(image.response.setHeader).not.toHaveBeenCalledWith('Content-Disposition', 'attachment');
+  });
+
   it('404s on a missing object', async () => {
     const { controller, res } = harness(null);
     await expect(controller.serve(NAME, res)).rejects.toBeInstanceOf(NotFoundException);
