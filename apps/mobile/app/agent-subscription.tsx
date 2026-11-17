@@ -24,6 +24,9 @@ import { describeError } from '../src/api/errorMessage.js';
 import { OnlinePaymentFields, payerPhoneError } from '../src/components/OnlinePaymentFields.js';
 import { PaymentActionPanel } from '../src/components/PaymentActionPanel.js';
 import { useBack } from '../src/navigation/useBack.js';
+import { useAppConfig } from '../src/api/hooks/useAppConfig.js';
+import { storeBillingActive } from '../src/billing/storeBilling.js';
+import { StoreSubscriptionScreen } from '../src/billing/StoreSubscriptionScreen.js';
 
 const POLL_TIMEOUT_MS = 90_000;
 /** InnBucks and O'mari need a switch of app or an SMS, which takes longer than a prompt. */
@@ -57,6 +60,30 @@ const styles = StyleSheet.create({
  * the subscription as active once Paynow confirms).
  */
 export default function AgentSubscriptionScreen() {
+  const { storeBilling, storeSubscriptionProductId } = useAppConfig();
+  // The store app sells the subscription through Google Play / App Store
+  // billing (store rules); test builds keep mobile money.
+  if (storeBillingActive(storeBilling)) {
+    return <StoreAgentSubscription productId={storeSubscriptionProductId} />;
+  }
+  return <MobileMoneyAgentSubscription />;
+}
+
+function StoreAgentSubscription({ productId }: { productId: string }) {
+  const onBack = useBack('/(tabs)/wallet');
+  const { data: subscription } = useAgentSubscription();
+  const { data: me } = useMe();
+  return (
+    <StoreSubscriptionScreen
+      subscription={subscription}
+      productId={productId}
+      userId={me?.id ?? null}
+      onBack={onBack}
+    />
+  );
+}
+
+function MobileMoneyAgentSubscription() {
   const { colors } = useTheme();
   const onBack = useBack('/(tabs)/wallet');
   const { data: subscription } = useAgentSubscription();

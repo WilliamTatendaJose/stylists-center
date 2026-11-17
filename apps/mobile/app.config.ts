@@ -222,6 +222,9 @@ const config: ExpoConfig = {
       },
     ],
     'expo-web-browser',
+    // Google Play Billing / StoreKit for the agent subscription (store app only;
+    // see src/billing/storeBilling.ts). Native: ships in the next build.
+    ['expo-iap', { android: { store: 'play' } }],
     [
       'expo-image-picker',
       {

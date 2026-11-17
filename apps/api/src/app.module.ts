@@ -21,6 +21,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { BookingsModule } from './modules/bookings/bookings.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { WalletModule } from './modules/wallet/wallet.module';
+import { StoreBillingModule } from './modules/store-billing/store-billing.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { MarketModule } from './modules/market/market.module';
 import { VendorsModule } from './modules/vendors/vendors.module';
@@ -81,6 +82,7 @@ import { ClientErrorsModule } from './modules/client-errors/client-errors.module
     BookingsModule,
     ChatModule,
     WalletModule,
+    StoreBillingModule,
     ReportsModule,
     MarketModule,
     VendorsModule,

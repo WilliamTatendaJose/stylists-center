@@ -1171,3 +1171,27 @@ model Upload {
 
   @@index([ownerId])
 }
+
+/// An agent subscription bought through Google Play or the App Store. The
+/// store is the source of truth; this row is what we last read from it, and
+/// what extends Agent.subscriptionPaidUntil.
+model StoreSubscription {
+  id             String   @id @default(uuid())
+  /// 'google_play' | 'app_store'
+  platform       String
+  /// Play purchase token, or Apple original transaction id.
+  externalId     String   @unique
+  userId         String
+  agentId        String
+  productId      String
+  /// active | grace | on_hold | paused | pending | expired | revoked
+  status         String
+  expiresAt      DateTime?
+  autoRenewing   Boolean  @default(false)
+  latestOrderId  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([agentId])
+  @@index([userId])
+}
