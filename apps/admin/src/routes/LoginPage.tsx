@@ -1,5 +1,5 @@
 import { useState, type SubmitEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../state/authStore';
 import { useLogin, useMfaLogin } from '../api/auth';
 import { ApiError } from '../api/client';
@@ -135,6 +135,12 @@ export function LoginPage() {
               <Button type="submit" disabled={login.isPending} className="w-full">
                 {login.isPending ? 'Signing in…' : 'Sign in'}
               </Button>
+              <Link
+                to="/forgot-password"
+                className="mt-3 block text-center text-sm text-neutral-600 hover:underline dark:text-dark-muted"
+              >
+                Forgot password?
+              </Link>
             </form>
           )}
         </Card>

@@ -7,6 +7,7 @@ import {
   adminMfaDisableSchema,
   adminMfaEnableSchema,
   adminMfaLoginSchema,
+  adminPasswordResetSchema,
 } from '@sc/shared';
 
 export class AdminLoginDto extends createZodDto(adminLoginSchema) {}
@@ -16,3 +17,4 @@ export class AdminMfaEnableDto extends createZodDto(adminMfaEnableSchema) {}
 export class AdminMfaDisableDto extends createZodDto(adminMfaDisableSchema) {}
 export class AdminMfaCodeDto extends createZodDto(z.object({ code: adminMfaCodeSchema })) {}
 export class AdminChangePasswordDto extends createZodDto(adminChangePasswordSchema) {}
+export class AdminPasswordResetDto extends createZodDto(adminPasswordResetSchema) {}

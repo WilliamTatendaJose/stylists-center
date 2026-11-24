@@ -16,6 +16,8 @@ export interface FirebaseIdentity {
   displayName: string | null;
   photoUrl: string | null;
   phoneNumber: string | null;
+  /** When the user last actually signed in to Firebase (not when the token was refreshed). */
+  authTime?: Date;
 }
 
 export type FirebaseAccountStatus = 'active' | 'disabled' | 'missing';
@@ -83,6 +85,7 @@ export class FirebaseIdentityService {
         displayName: typeof decoded.name === 'string' ? decoded.name : null,
         photoUrl: typeof decoded.picture === 'string' ? decoded.picture : null,
         phoneNumber: decoded.phone_number ?? null,
+        authTime: new Date(decoded.auth_time * 1000),
       };
     } catch {
       throw new UnauthorizedException('Firebase session is invalid or expired');

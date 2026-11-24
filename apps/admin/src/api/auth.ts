@@ -7,6 +7,7 @@ import type {
   AdminMfaDisableInput,
   AdminMfaLoginInput,
   AdminMfaSetup,
+  AdminPasswordResetInput,
   AdminRecoveryCodes,
   AdminSession,
 } from '@sc/shared';
@@ -147,5 +148,17 @@ export function useChangePassword() {
     onSuccess: (session) => {
       setSession(session.accessToken, session.admin);
     },
+  });
+}
+
+/** "Forgot password": a Firebase ID token proving the email, the new password, and a 2FA code if the account has it. */
+export function usePasswordReset() {
+  return useMutation({
+    mutationFn: (input: AdminPasswordResetInput) =>
+      apiFetch<{ ok: true }>('/v1/admin/auth/password/reset', {
+        method: 'POST',
+        body: input,
+        auth: false,
+      }),
   });
 }

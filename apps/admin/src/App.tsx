@@ -61,6 +61,12 @@ const SettingsPage = lazy(() =>
 const ContentPage = lazy(() =>
   import('./routes/ContentPage').then((m) => ({ default: m.ContentPage })),
 );
+const ForgotPasswordPage = lazy(() =>
+  import('./routes/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import('./routes/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })),
+);
 const AccountPage = lazy(() =>
   import('./routes/AccountPage').then((m) => ({ default: m.AccountPage })),
 );
@@ -98,6 +104,8 @@ export function App() {
     <Suspense fallback={<div className="p-6 text-neutral-600 dark:text-dark-muted">Loading…</div>}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route
           path="/"
           element={

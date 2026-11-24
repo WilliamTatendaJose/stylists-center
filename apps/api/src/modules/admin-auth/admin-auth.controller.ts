@@ -23,6 +23,7 @@ import {
   AdminMfaDisableDto,
   AdminMfaEnableDto,
   AdminMfaLoginDto,
+  AdminPasswordResetDto,
 } from './dto';
 import { AdminMfaService } from './admin-mfa.service';
 import { AllowWithoutMfa } from './allow-without-mfa.decorator';
@@ -107,6 +108,39 @@ export class AdminAuthController {
     await this.attempts.clear(lockKey);
     setAdminRefreshCookie(res, result.refreshToken, result.refreshTokenExpiresAt, this.isSecure());
     return { accessToken: result.accessToken, admin: result.admin };
+  }
+
+  /**
+   * "Forgot password", unauthenticated. The body carries a Firebase ID token
+   * from an email sign-in link sent to the account's address (see
+   * AdminAuthService.resolvePasswordResetAccount). 5 tries a minute per IP;
+   * wrong 2FA codes count toward the same per-account lockout as sign-in.
+   * On success the sign-in lockout for the email is cleared too, so a person
+   * who locked themselves out can sign in straight away.
+   */
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('password/reset')
+  @HttpCode(200)
+  async resetPassword(
+    @Body() dto: AdminPasswordResetDto,
+    @Req() req: Request & { admin?: { id: string } },
+  ) {
+    const admin = await this.adminAuth.resolvePasswordResetAccount(dto.idToken);
+    const lockKey = `mfa:${admin.id}`;
+    if (admin.totpEnabledAt) await this.attempts.assertNotLocked(lockKey);
+    try {
+      await this.adminAuth.resetPassword(admin, dto.newPassword, dto.code);
+    } catch (error) {
+      if (error instanceof UnauthorizedException && admin.totpEnabledAt && dto.code) {
+        await this.attempts.recordFailure(lockKey);
+      }
+      throw error;
+    }
+    if (admin.totpEnabledAt) await this.attempts.clear(lockKey);
+    await this.attempts.clear(admin.email);
+    // Lets the audit interceptor record whose password was reset.
+    req.admin = { id: admin.id };
+    return { ok: true };
   }
 
   @Post('mfa/setup')

@@ -305,15 +305,50 @@ does nothing.
 
 ## Admin access and password resets
 
-There are four cases, from most to least common:
+These are the cases, from most to least common:
 
-| Situation                                        | What to do                                                                                                                                           |
-| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| You want to change your own password             | **Your account** (your name, bottom left) → Password. Needs your current password; signs you out on every other device.                              |
-| A staff member forgot their password             | An owner opens **Staff → Reset password**. The new password signs out that person's existing sessions.                                               |
-| A staff member lost the phone with their 2FA app | An owner opens **Staff → Reset 2FA**. They're signed out and can set it up again from their account page. (Or they use one of their recovery codes.) |
-| A mobile user (client or stylist) forgot theirs  | They tap **Forgot password** on the sign-in screen. Firebase emails them a reset link. Nothing to do on the server.                                  |
-| No owner can sign in at all                      | Break-glass, below.                                                                                                                                  |
+| Situation                                        | What to do                                                                                                                                                     |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| You want to change your own password             | **Your account** (your name, bottom left) → Password. Needs your current password; signs you out on every other device.                                        |
+| A staff member forgot their password             | **Forgot password?** on the sign-in page emails them a link (setup below). Or an owner opens **Staff → Reset password**. Either way, their other sessions end. |
+| A staff member lost the phone with their 2FA app | An owner opens **Staff → Reset 2FA**. They're signed out and can set it up again from their account page. (Or they use one of their recovery codes.)           |
+| A mobile user (client or stylist) forgot theirs  | They tap **Forgot password** on the sign-in screen. Firebase emails them a reset link. Nothing to do on the server.                                            |
+| No owner can sign in at all                      | Break-glass, below.                                                                                                                                            |
+
+### Forgot password (emailed link)
+
+The sign-in page's **Forgot password?** sends a Firebase email sign-in link
+to the address. Opening it proves the person controls that inbox; the API
+(`POST /v1/admin/auth/password/reset`) then checks the Firebase ID token
+(valid, email verified by Firebase, signed in within the last 15 minutes),
+matches it to an active staff account and sets the new password. Accounts
+with 2FA must also enter an authenticator or recovery code, so a reset never
+bypasses it. Every session for the account ends, the sign-in lockout for the
+email is cleared, and the reset is in the audit log. No email provider is
+involved: Firebase sends the email.
+
+One-time setup, in the Firebase console for project `style-center-5162a`:
+
+1. **Authentication → Sign-in method → Email/Password → turn on "Email link
+   (passwordless sign-in)"**. Until this is on, the page says reset isn't
+   switched on yet.
+2. **Authentication → Settings → Authorized domains → add the admin
+   console's domain** (e.g. `admin-production-xxxx.up.railway.app`). Without
+   it Firebase refuses to send the link.
+3. Optional but recommended: **Authentication → Templates → Email address
+   sign-in**, set a custom sender domain, so the emails don't come from
+   `noreply@style-center-5162a.firebaseapp.com` and land in spam.
+
+Staff who use the link appear as users in Firebase Authentication (same
+project as app users); that's expected. The console uses the public Firebase
+web config from `apps/mobile/eas.json` by default; `VITE_FIREBASE_API_KEY`,
+`VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID` and
+`VITE_FIREBASE_APP_ID` build variables on `admin` override it. The API needs
+`FIREBASE_PROJECT_ID` (already set for app sign-in).
+
+Anyone who controls a staff member's mailbox can reset their password, as
+with any emailed reset. Turn on `ADMIN_MFA_REQUIRED=true` once everyone has
+2FA, so a mailbox alone is never enough.
 
 **Fresh or locked-out database, no shell needed.** On the `api` service set
 `ADMIN_BOOTSTRAP_EMAIL` and `ADMIN_BOOTSTRAP_PASSWORD` (12+ characters) and
@@ -460,9 +495,6 @@ in this repo has been set up for it yet.
 
 ## Known gaps, deliberately not solved here
 
-- **No emailed password-reset links for admins.** There's no email provider
-  configured. Admins change their own password from Your account; an owner
-  resets someone else's; break-glass covers the rest.
 - **The Payments page computes payout balances in memory** from every
   released payment, then pages the result. Fine for now; if that page gets
   slow, move the balance calculation into a SQL aggregate.

@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { FirebaseIdentityService } from '../auth/firebase-identity.service';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { AdminIdentity, AdminSession } from '@sc/shared';
@@ -13,6 +14,12 @@ const ACCESS_TOKEN_TTL = '15m';
 /** How long the password step stays good while the user fetches their phone. */
 const MFA_CHALLENGE_TTL = '5m';
 const REFRESH_TOKEN_TTL_MS = 12 * 60 * 60 * 1000; // 12h — a staff shift, not a month.
+/**
+ * How recently the Firebase email-link sign-in must have happened for a
+ * password reset. The ID token itself lives an hour; this keeps the proof of
+ * email ownership fresh rather than "someone signed in this hour".
+ */
+export const PASSWORD_RESET_PROOF_MAX_AGE_MS = 15 * 60 * 1000;
 
 interface IssuedRefreshToken {
   raw: string;
@@ -41,6 +48,7 @@ export class AdminAuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
     private readonly mfa: AdminMfaService,
+    private readonly firebase: FirebaseIdentityService,
   ) {}
 
   /**
@@ -205,6 +213,73 @@ export class AdminAuthService {
       }),
     ]);
     return this.startSession(updated);
+  }
+
+  /**
+   * First half of "forgot password": turns a Firebase ID token from an email
+   * sign-in link into the staff account it proves ownership of. Kept separate
+   * from resetPassword so the controller can apply the per-account code
+   * lockout before any 2FA code is checked.
+   *
+   * Asking the person to control the inbox is the same trust any emailed
+   * reset link relies on; the freshness check and the 2FA requirement in
+   * resetPassword are what keep it from being weaker than that.
+   */
+  async resolvePasswordResetAccount(idToken: string, now = new Date()): Promise<AdminRow> {
+    const identity = await this.firebase.verifyIdToken(idToken);
+    if (!identity.email || !identity.emailVerified) {
+      throw new UnauthorizedException(
+        'This link did not confirm an email address. Request a new one.',
+      );
+    }
+    if (
+      !identity.authTime ||
+      now.getTime() - identity.authTime.getTime() > PASSWORD_RESET_PROOF_MAX_AGE_MS
+    ) {
+      throw new UnauthorizedException('This reset link has expired. Request a new one.');
+    }
+    const admin = await this.prisma.adminUser.findFirst({
+      where: { email: { equals: identity.email.trim(), mode: 'insensitive' } },
+    });
+    if (!admin || admin.disabled || admin.deletedAt) {
+      // Safe to say plainly: only the owner of the inbox can get this far.
+      throw new UnauthorizedException('There is no active staff account for this email address.');
+    }
+    return admin;
+  }
+
+  /**
+   * Second half: sets the new password. Accounts with 2FA must also give a
+   * current authenticator or recovery code. Every session ends (tokenVersion
+   * bump + refresh tokens revoked); no new session is issued, so the person
+   * signs in normally afterwards, through 2FA if they have it.
+   */
+  async resetPassword(
+    admin: AdminRow,
+    newPassword: string,
+    code: string | undefined,
+  ): Promise<void> {
+    if (admin.totpEnabledAt) {
+      if (!code) {
+        throw new UnauthorizedException(
+          'This account uses two-factor sign-in. Enter a code from your authenticator app or a recovery code.',
+        );
+      }
+      if (!(await this.mfa.verifySignInCode(admin.id, code))) {
+        throw new UnauthorizedException("That code didn't match");
+      }
+    }
+    const passwordHash = await hashPassword(newPassword);
+    await this.prisma.$transaction([
+      this.prisma.adminRefreshToken.updateMany({
+        where: { adminUserId: admin.id, revoked: false },
+        data: { revoked: true },
+      }),
+      this.prisma.adminUser.update({
+        where: { id: admin.id },
+        data: { passwordHash, tokenVersion: { increment: 1 } },
+      }),
+    ]);
   }
 
   async logout(refreshTokenRaw: string): Promise<void> {

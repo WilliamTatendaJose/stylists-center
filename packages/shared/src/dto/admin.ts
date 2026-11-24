@@ -112,6 +112,19 @@ export const adminChangePasswordSchema = z
   });
 export type AdminChangePasswordInput = z.infer<typeof adminChangePasswordSchema>;
 
+/**
+ * "Forgot password" for staff. The console proves the person controls the
+ * account's email address with a Firebase email sign-in link, then sends the
+ * resulting Firebase ID token here with the new password. `code` is required
+ * when the account has two-factor sign-in on: a reset never bypasses it.
+ */
+export const adminPasswordResetSchema = z.object({
+  idToken: z.string().min(1),
+  newPassword: z.string().min(12, 'Use at least 12 characters').max(200),
+  code: adminMfaCodeSchema.optional(),
+});
+export type AdminPasswordResetInput = z.infer<typeof adminPasswordResetSchema>;
+
 export const adminAccessTokenSchema = z.object({
   accessToken: z.string(),
 });

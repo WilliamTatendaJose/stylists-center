@@ -15,6 +15,7 @@
     "@sc/shared": "workspace:*",
     "@sc/tokens": "workspace:*",
     "@tanstack/react-query": "^5.90.5",
+    "firebase": "^12.18.0",
     "lucide-react": "^0.545.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",

@@ -74,6 +74,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.90.5
         version: 5.101.4(react@19.2.3)
+      firebase:
+        specifier: ^12.18.0
+        version: 12.18.0(@react-native-async-storage/async-storage@3.1.1(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.17)(react@19.2.3))(react@19.2.3))
       lucide-react:
         specifier: ^0.545.0
         version: 0.545.0(react@19.2.3)
@@ -11226,9 +11229,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
